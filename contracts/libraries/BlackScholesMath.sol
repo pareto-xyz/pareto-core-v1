@@ -146,7 +146,14 @@ library BlackScholesMath {
     }
 
     /**
-     * @notice Get implied volatility from backsolving with a price
+     * @notice Get implied volatility from backsolving call price
      */
-    function getImpliedVol() external pure returns (uint256 sigma) {}
+    function getIVFromCallPrice() external pure returns (uint256 sigma) {
+    }
+
+    /**
+     * @notice Get implied volatility from backsolving put price
+     */
+    function getIVFromPutPrice() external pure returns (uint256 sigma) {
+    }
 }
