@@ -172,15 +172,10 @@ library BlackScholesMath {
         int128 termB = spotX64.add(strikeX64);
 
         int128 termC = termA.add(
-            (
-                termA.pow(2).sub(
-                    ONE_EIGHTY_FIVE_INT.mul(
-                        termB.mul((strikeX64.sub(spotX64)).pow(2)).div(
-                            PI_INT.mul((strikeX64.mul(spotX64)).sqrt())
-                        )
-                    )
-                )
-            ).sqrt()
+            (termA.pow(2).sub(
+                ONE_EIGHTY_FIVE_INT.mul(termB).mul((strikeX64.sub(spotX64)).pow(2))
+                .div(PI_INT.mul((strikeX64.mul(spotX64)).sqrt()))
+            )).sqrt()
         );
         int128 termD = (TWO_INT.mul(PI_INT)).sqrt().div(termB.add(TWO_INT));
         int128 sigmaX64 = termD.mul(termC).div(tauX64.sqrt());
