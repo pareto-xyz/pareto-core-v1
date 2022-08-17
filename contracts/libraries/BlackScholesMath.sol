@@ -27,7 +27,7 @@ library BlackScholesMath {
      * S = spot price, K = strike price, sigma = implied volatility
      * @param spotX64 Spot price of the asset as 64x64 number
      * @param strikeX64 Strike price of the asset as 64x64 number
-     * @param sigmaX64 Normalized implied volatility (annualized) as 64x64 number
+     * @param sigmaX64 Normalized volatility of returns (annualized) as 64x64 number
      * @param tauX64 Time to expiry (in years) as 64x64 number. Expiry time T minus the current time t
      * @param rateX64 Risk-free rate as 64x64 number
      * @return d1 Probability factor one 
@@ -58,7 +58,7 @@ library BlackScholesMath {
      * @dev C = SN(d1)-Ke^{-rt}N(d2)
      * @param spot Spot price of the asset 
      * @param strike Strike price of the asset 
-     * @param sigma Implied volatility (annualized), not a percentage
+     * @param sigma Volatility of returns (annualized), not a percentage
      * @param tau Time to expiry (in seconds), not in years
      * @param rate Risk-free rate
      * @param scaleFactor Unsigned 256-bit integer scaling factor
@@ -104,7 +104,7 @@ library BlackScholesMath {
      * @dev P = Ke^{-rt}N(-d2)-SN(-d1)
      * @param spot Spot price of the asset 
      * @param strike Strike price of the asset 
-     * @param sigma Implied volatility (annualized), not a percentage
+     * @param sigma Volatility of returns (annualized), not a percentage
      * @param tau Time to expiry (in seconds), not in years
      * @param rate Risk-free rate
      * @param scaleFactor Unsigned 256-bit integer scaling factor

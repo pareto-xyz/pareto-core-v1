@@ -19,6 +19,7 @@ import "./libraries/BlackScholesMath.sol";
  * this contract. Further, they are not performed on-chain. The owner
  * will post matched orders as positions. 
  * @dev This contract is upgradeable with UUPS design. See
+ * https://docs.openzeppelin.com/upgrades-plugins/1.x/writing-upgradeable
  * https://blog.logrocket.com/using-uups-proxy-pattern-upgrade-smart-contracts/
  */
 contract ParetoV1Margin is
@@ -78,6 +79,7 @@ contract ParetoV1Margin is
      */
     event OptionRecorded(
         string bookId,
+        uint256 tradePrice,
         address underlying,
         uint256 strike,
         uint256 expiry,
@@ -120,7 +122,7 @@ contract ParetoV1Margin is
     }
 
     /**
-     * @notice Withdraw the maximum amount allowed
+     * @notice Withdraw the maximum amount allowed currently
      */
     function withdrawMax() external nonReentrant {
     }
@@ -185,6 +187,7 @@ contract ParetoV1Margin is
      */
     function recordOption(
         string memory bookId,
+        uint256 tradePrice,
         address underlying,
         uint256 strike,
         uint256 expiry,
@@ -207,6 +210,7 @@ contract ParetoV1Margin is
 
         Derivative.Option memory option = Derivative.Option(
             bookId,
+            tradePrice,
             underlying,
             strike,
             expiry,
@@ -225,6 +229,7 @@ contract ParetoV1Margin is
         // Emit event 
         emit OptionRecorded(
             bookId,
+            tradePrice,
             underlying,
             strike,
             expiry,

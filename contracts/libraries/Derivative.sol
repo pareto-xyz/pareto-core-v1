@@ -8,6 +8,7 @@ library Derivative {
     /**
      * @notice A matched option order from a Pareto bookorder
      * @param bookId Identifier of the orderbook the order came from
+     * @param tradePrice Actual price that the option was matched at
      * @param underlying Address of the underlying token e.g. WETH
      * @param strike Strike price of the option
      * @param expiry Expiry in epoch time of the option
@@ -16,6 +17,7 @@ library Derivative {
      */
     struct Option {
         string bookId;
+        uint256 tradePrice;
         address underlying;
         uint256 strike;
         uint256 expiry;
@@ -35,6 +37,7 @@ library Derivative {
     {
         hash_ = keccak256(abi.encodePacked(
             option.bookId,
+            option.tradePrice,
             option.underlying, 
             option.strike,
             option.expiry,
