@@ -19,6 +19,8 @@ library BlackScholesMath {
 
     int128 internal constant ONE_INT = 0x10000000000000000;
     int128 internal constant TWO_INT = 0x20000000000000000;
+    int128 internal constant ONE_EIGHTY_FIVE_INT = 0x1d99999999999999a;
+    int128 internal constant PI_INT = 0x3243f6a8885a308d3;
 
     /**
      * @notice Compute Black Scholes d1 parameter
@@ -146,14 +148,63 @@ library BlackScholesMath {
     }
 
     /**
-     * @notice Get implied volatility from backsolving call price
+     * @notice Approximate volatility from trade price for a call option
+     * @dev See "An Improved Estimator For Black-Scholes-Merton Implied Volatility" by Hallerbach (2004)
+     * @param spot Spot price in stable asset
+     * @param strike Strike price in stable asset
+     * @param tau Time to expiry (in seconds), not in years
+     * @param tradePrice Actual price that the option was sold/bought
+     * @param scaleFactor Unsigned 256-bit integer scaling factor
      */
-    function getIVFromCallPrice() external pure returns (uint256 sigma) {
+    function approxIVFromCallPrice(
+        uint256 spot,
+        uint256 strike,
+        uint256 tau,
+        uint256 tradePrice,
+        uint256 scaleFactor
+    ) public pure returns (uint256 sigma) {
+        int128 spotX64 = spot.scaleToX64(scaleFactor);
+        int128 strikeX64 = strike.scaleToX64(scaleFactor);
+        int128 tauX64 = tau.toYears();
+        int128 priceX64 = tradePrice.scaleToX64(scaleFactor);
+
+        int128 termA = priceX64.mul(TWO_INT).add(strikeX64).sub(spotX64);
+        int128 termB = spotX64.add(strikeX64);
+
+        int128 termC = termA.add(
+            (
+                termA.pow(2).sub(
+                    ONE_EIGHTY_FIVE_INT.mul(
+                        termB.mul((strikeX64.sub(spotX64)).pow(2)).div(
+                            PI_INT.mul((strikeX64.mul(spotX64)).sqrt())
+                        )
+                    )
+                )
+            ).sqrt()
+        );
+        int128 termD = (TWO_INT.mul(PI_INT)).sqrt().div(termB.add(TWO_INT));
+        int128 sigmaX64 = termD.mul(termC).div(tauX64.sqrt());
+
+        sigma = sigmaX64.scaleFromX64(scaleFactor);
     }
 
     /**
-     * @notice Get implied volatility from backsolving put price
+     * @notice Approximate volatility from trade price for a put option
+     * @dev See https://quant.stackexchange.com/questions/35462/what-is-the-closed-form-implied-volatility-estimator-as-defined-by-hallerbach-2
+     * @param spot Spot price in stable asset
+     * @param strike Strike price in stable asset
+     * @param tau Time to expiry (in seconds), not in years
+     * @param tradePrice Actual price that the option was sold/bought
+     * @param scaleFactor Unsigned 256-bit integer scaling factor
      */
-    function getIVFromPutPrice() external pure returns (uint256 sigma) {
+    function approxIVFromPutPrice(
+        uint256 spot,
+        uint256 strike,
+        uint256 tau,
+        uint256 tradePrice,
+        uint256 scaleFactor
+    ) public pure returns (uint256 sigma) {
+        // Same formula but reverse roles of spot and strike
+        sigma = approxIVFromCallPrice(strike, spot, tau, tradePrice, scaleFactor);
     }
 }
