@@ -24,22 +24,6 @@ library Derivative {
     }
 
     /**
-     * @notice A matched future order from a Pareto bookorder
-     * @param bookId Identifier of the orderbook the order came from
-     * @param underlying Address of the underlying token e.g. WETH
-     * @param expiry Expiry in epoch time of the future
-     * @param buyer Address of the buyer; the short position
-     * @param seller Address of the seller; the long position
-     */
-    struct Future {
-        string bookId;
-        address underlying;
-        uint256 expiry;
-        address buyer;
-        address seller;
-    }
-
-    /**
      * @notice Hash option into byte string
      * @param option Option object 
      * @param hash_ SHA-3 hash of the future object
@@ -59,22 +43,24 @@ library Derivative {
         ));
     }
 
-    /**
-     * @notice Hash future into byte string
-     * @param future Future object 
-     * @param hash_ SHA-3 hash of the future object
-     */
-    function hashFuture(Future memory future)
+    function getMarkPrice(Option memory option) 
         public
         pure
-        returns(bytes32 hash_) 
+        returns (uint256 initialMargin) 
     {
-        hash_ = keccak256(abi.encodePacked(
-            future.bookId,
-            future.underlying,
-            future.expiry,
-            future.buyer,
-            future.seller
-        ));
+    }
+
+    function getInitialMargin(Option memory option) 
+        public
+        pure
+        returns (uint256 initialMargin) 
+    {
+    }
+
+    function getMaintainenceMargin(Option memory option) 
+        public
+        pure
+        returns (uint256 initialMargin) 
+    {
     }
 }

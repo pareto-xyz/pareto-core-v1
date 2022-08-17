@@ -13,7 +13,7 @@ import "./libraries/Derivative.sol";
  * this contract. Further, they are not performed on-chain. The owner
  * will post matched orders as positions. 
  */
-contract ParetoMargin {
+contract ParetoV1Margin {
 
     /************************************************
      * Constants and Immutables
@@ -30,11 +30,9 @@ contract ParetoMargin {
 
     /// @notice Stores hashes of open positions for every user
     mapping(address => mapping(bytes32 => bool)) private optionsPositions;
-    mapping(address => mapping(bytes32 => bool)) private futuresPositions;
 
     /// @notice Stores hash to derivative object
-    mapping(bytes32 => Derivative.Option) private optionsHashMap;
-    mapping(bytes32 => Derivative.Future) private futuresHashMap;
+    mapping(bytes32 => Derivative.Option) private optionsHashs;
 
     /// @notice Track total balance (used for checks)
     uint256 private totalBalance;
@@ -76,24 +74,12 @@ contract ParetoMargin {
         address indexed seller
     );
 
-    /**
-     * @notice Event when an future is recorded
-     * @dev See `Derivative.Future` docs
-     */
-    event FutureRecorded(
-        string bookId,
-        address underlying,
-        uint256 expiry,
-        address indexed buyer,
-        address indexed seller
-    );
-
     /************************************************
      * External functions
      ***********************************************/
 
     /**
-     * @notice Deposit new assets into the account
+     * @notice Deposit new assets into margin account
      * @dev Requires approval from `msg.sender`
      * @param amount Amount of USDC to deposit
      */
@@ -114,13 +100,76 @@ contract ParetoMargin {
         );
     }
 
+    /**
+     * @notice Withdraw assets from margin account
+     * @dev Only successful if margin accounts remain satisfied post withdraw
+     * @param amount Amount to withdraw
+     */
+    function withdraw(uint256 amount) external {
+    }
+
+    /**
+     * @notice Withdraw the maximum amount allowed
+     */
+    function withdrawMax() external {
+    }
+
+    /**
+     * @notice Check if a user's account is below margin
+     * @dev The margin requirement is: AB + UP > IM + MM where 
+     * AB = account balance, UP = unrealized PnL
+     * IM/MM = initial and maintainence margins
+     * @param user Address of the account to check
+     * @param diff |AB + UP - IM - MM|, always positive
+     * @param satisfied True if AB + UP > IM + MM, else false
+     */
+    function checkMargin(address user)
+        external
+        returns (
+            uint256 diff, 
+            bool satisfied
+        ) 
+    {
+        uint256 balance = balances[user];
+        uint256 initial = getInitialMargin(user);
+        uint256 maintainence = getMaintainenceMargin(user);
+
+        satisfied = balance > (initial + maintainence);
+
+        if (satisfied) {
+            diff = balance - initial - maintainence;
+        } else {
+            diff = initial + maintainence - balance;
+        }
+        return (diff, satisfied);
+    }
+
+    /************************************************
+     * Internal functions
+     ***********************************************/
+
+    /**
+     * @notice Compute the initial margin for all positions owned by user
+     * @param user Address to compute IM for
+     */
+    function getInitialMargin(address user) internal returns (uint256) {
+    }
+
+    /**
+     * @notice Compute the maintainence margin for all positions owned by user
+     * @param user Address to compute MM for
+     */
+    function getMaintainenceMargin(address user) internal returns (uint256) {
+    }
+
     /************************************************
      * Admin functions
      ***********************************************/
 
     /**
      * @notice Record a matched option from off-chain orderbook
-     * @dev Saves the option to storage variables
+     * @dev Saves the option to storage variables. Only the owner can call
+     * this function
      */
     function recordOption(
         string memory bookId,
@@ -136,7 +185,10 @@ contract ParetoMargin {
         require(bytes(bookId).length > 0, "recordOption: bookId is empty");
         require(underlying != address(0), "recordOption: underlying is empty");
         require(strike > 0, "recordOption: strike must be positive");
-        require(expiry > block.timestamp, "recordOption: expiry must be > current time");
+        require(
+            expiry > block.timestamp,
+            "recordOption: expiry must be > current time"
+        );
         require(buyer != address(0), "recordOption: buyer is empty");
         require(seller != address(0), "recordOption: seller is empty");
 
@@ -151,7 +203,7 @@ contract ParetoMargin {
         bytes32 hash_ = Derivative.hashOption(option);
 
         // Save the option object
-        optionsHashMap[hash_] = option;
+        optionsHashs[hash_] = option;
 
         // Save that the buyer/seller have this position
         optionsPositions[buyer][hash_] = true;
@@ -162,52 +214,6 @@ contract ParetoMargin {
             bookId,
             underlying,
             strike,
-            expiry,
-            buyer,
-            seller
-        );
-    }
-
-    /**
-     * @notice Record a matched future from off-chain orderbook
-     * @dev Saves the future to storage variables
-     */
-    function recordFuture(
-        string memory bookId,
-        address underlying,
-        uint256 expiry,
-        address buyer,
-        address seller
-    ) 
-        external
-        onlyOwner 
-    {
-        require(bytes(bookId).length > 0, "recordOption: bookId is empty");
-        require(underlying != address(0), "recordOption: underlying is empty");
-        require(expiry > block.timestamp, "recordOption: expiry must be > current time");
-        require(buyer != address(0), "recordOption: buyer is empty");
-        require(seller != address(0), "recordOption: seller is empty");
-
-        Derivative.Future memory future = Derivative.Future(
-            bookId,
-            underlying,
-            expiry,
-            buyer,
-            seller
-        );
-        bytes32 hash_ = Derivative.hashFuture(future);
-
-        // Save the option object
-        futuresHashMap[hash_] = future;
-
-        // Save that the buyer/seller have this position
-        futuresPositions[buyer][hash_] = true;
-        futuresPositions[seller][hash_] = true;
-
-        // Emit event 
-        emit FutureRecorded(
-            bookId,
-            underlying,
             expiry,
             buyer,
             seller
