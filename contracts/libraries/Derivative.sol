@@ -70,12 +70,14 @@ library Derivative {
             for (uint256 i = 0; i < moneyness.length; i++) {
                 uint256 spot = (option.strike * moneyness[i]) / 100;
                 uint256 vol = BlackScholesMath.approxIVFromCallPrice(
-                    spot,
-                    option.strike,
-                    option.expiry - curTime,
-                    0,  // FIXME: get risk-free rate
-                    option.tradePrice,
-                    scaleFactor
+                    BlackScholesMath.VolCalculationInput(
+                        spot,
+                        option.strike,
+                        option.expiry - curTime,
+                        0,  // FIXME: get risk-free rate
+                        scaleFactor,
+                        option.tradePrice
+                    )
                 );
                 smile.ivAtMoneyness[i] = vol;
             }
@@ -83,12 +85,14 @@ library Derivative {
             for (uint256 i = 0; i < moneyness.length; i++) {
                 uint256 spot = (option.strike * moneyness[i]) / 100;
                 uint256 vol = BlackScholesMath.approxIVFromPutPrice(
-                    spot,
-                    option.strike,
-                    option.expiry - curTime,
-                    0,  // FIXME: get risk-free rate
-                    option.tradePrice,
-                    scaleFactor
+                    BlackScholesMath.VolCalculationInput(
+                        spot,
+                        option.strike,
+                        option.expiry - curTime,
+                        0,  // FIXME: get risk-free rate
+                        scaleFactor,
+                        option.tradePrice
+                    )
                 );
                 smile.ivAtMoneyness[i] = vol;
             }
