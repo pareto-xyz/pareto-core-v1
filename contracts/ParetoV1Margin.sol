@@ -232,13 +232,14 @@ contract ParetoV1Margin is
         optionsPositions[buyer][hash_] = true;
         optionsPositions[seller][hash_] = true;
 
-        uint256 scaleFactor = 10**(18-IERC20(underlying).decimals());
+        uint8 decimals = IERC20(underlying).decimals();
         if (optionSmiles[hash_].exists_) {
             // Update the volatility smile
-            Derivative.updateSmile(option, optionSmiles[hash_], scaleFactor);
+            // FIXME: replace `1 ether` with spot price
+            Derivative.updateSmile(1 ether, option, optionSmiles[hash_], decimals);
         } else {
             // Create a new volatility smile
-            optionSmiles[hash_] = Derivative.createSmile(option, scaleFactor);
+            optionSmiles[hash_] = Derivative.createSmile(option, decimals);
         }
 
         // Emit event 

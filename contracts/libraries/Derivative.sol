@@ -2,6 +2,7 @@
 pragma solidity ^0.8.9;
 
 import "./BlackScholesMath.sol";
+
 import {IERC20} from "../interfaces/IERC20.sol";
 
 /**
@@ -51,16 +52,19 @@ library Derivative {
      * @notice Create a new volatility smile, which uses `BlackScholesMath.sol` 
      * to approximate the implied volatility 
      * @param option Option object
-     * @param scaleFactor Unsigned 256-bit integer scaling factor
+     * @param decimals Decimals for the underlying token
      * @return smile A volatility smile
      */
-    function createSmile(Option memory option, uint256 scaleFactor)
+    function createSmile(Option memory option, uint8 decimals)
         external
         view
         returns (VolatilitySmile memory smile) 
     {
         require(option.expiry >= block.timestamp, "createSmile: option expired");
         uint256 curTime = block.timestamp;
+
+        // Compute scale factor
+        uint256 scaleFactor = 10**(18-decimals);
 
         /// @notice Default five points for moneyness. Same as in Zeta.
         uint8[5] memory moneyness = [50, 75, 100, 125, 150];
@@ -106,14 +110,16 @@ library Derivative {
     /**
      * @notice Update the volatility smile with information from a new trade
      * @dev We find the closest two points and update via interpolation
+     * @param spot Spot price
      * @param option Option object
      * @param smile Current volatility smile stored on-chain
-     * @param scaleFactor Unsigned 256-bit integer scaling factor
+     * @param decimals Decimals for the underlying token
      */
     function updateSmile(
+        uint256 spot,
         Option memory option,
         VolatilitySmile storage smile,
-        uint256 scaleFactor
+        uint8 decimals
     )
         external
         view
@@ -121,8 +127,11 @@ library Derivative {
         require(option.expiry >= block.timestamp, "createSmile: option expired");
         uint256 curTime = block.timestamp;
 
-        /// @notice Default five points for moneyness. Same as in Zeta.
+        // Default five points for moneyness. Same as in Zeta.
         uint8[5] memory moneyness = [50, 75, 100, 125, 150];
+
+        // Compute current moneyness
+        uint256 curMoneyness = (spot * 10**decimals) / option.strike;
     }
 
     /**
@@ -145,6 +154,51 @@ library Derivative {
             option.buyer,
             option.seller
         ));
+    }
+
+    /**
+     * @notice Given a query point, find the indices of the closest two points 
+     * @param sortedData Data to search amongst. Assume it is sorted
+     * @param query Data point to search with
+     * @param indexLower Index of the largest point less than `query`
+     * @param indexUpper Index of the smallest point greater than `query`
+     */
+    function findClosestTwoIndices(
+        uint256[5] sortedData,
+        uint256 query
+    ) internal returns (uint256 indexLower, uint256 indexUpper) {
+        // If the query is below the smallest number, return 0 for both indices
+        if (query < sortedData[0]) {
+            indexLower = 0;
+            indexUpper = 0;
+            return;
+        }
+        if (query > sortedData[4]) {
+            indexLower = 4;
+            indexUpper = 4;
+            return;
+        }
+
+        for (uint256 i = 0; i < 5; i++) {
+            // If the query is exactly one of the points, return only 
+            // that point
+            if (query == sortedData[i]) {
+                indexLower = i;
+                indexUpper = i;
+                return;
+            } else if (query < sortedData[i]) {
+                // Just keep overwriting the lower index
+                indexLower = i;
+            } else if (query > sortedData[i]) {
+                // If we found a point bigger which we are guaranteed to find, 
+                // then pick the first one this happens
+                indexUpper = i;
+                // We can return since we definitely have found `indexLower`
+                // by the time we reach here
+                return;
+            }
+        }
+        return;
     }
 
     function getMarkPrice(Option memory option) 
