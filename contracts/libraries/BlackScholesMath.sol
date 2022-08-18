@@ -27,7 +27,7 @@ library BlackScholesMath {
      * @notice Compute Black Scholes d1 parameter
      * @dev d1 = (log(S/K) + (r + sigma^2/2*tau)) / (sigma*sqrt(tau))
      * where tau = T - t = time to maturity, r = rate of return,
-     * S = spot price, K = strike price, sigma = implied volatility
+     * S = spot price, K = strike price, sigma = stdev of returns (volatility)
      * @param inputsX64 Black Scholes parameters in 64.64 numbers
      * @return d1 Probability factor one 
      * @return d2 Probability factor one 
@@ -42,9 +42,8 @@ library BlackScholesMath {
         // log (S/K)
         int128 logRatioX64 = inputsX64.spotX64.div(inputsX64.strikeX64).ln();
         // rate + sigma^2/2*tau
-        int128 crossTermX64 = inputsX64.rateX64.add(
-            inputsX64.tauX64.mul(sigmaSqrX64).div(TWO_INT)
-        );
+        int128 crossTermX64 = inputsX64.rateX64
+            .add(inputsX64.tauX64.mul(sigmaSqrX64).div(TWO_INT));
         // sigma * sqrt(tau)
         int128 volX64 = inputsX64.sigmaX64.mul(sqrtTauX64);
         d1 = logRatioX64.add(crossTermX64).div(volX64);
@@ -55,7 +54,7 @@ library BlackScholesMath {
      * @notice Struct that groups together inputs for computing BS price
      * @param spot Spot price
      * @param strike Strike price of the asset 
-     * @param sigma Volatility of returns (annualized), not a percentage
+     * @param sigma Stdev of returns (volatility), not a percentage
      * @param tau Time to expiry (in seconds), not in years
      * @param rate Risk-free rate
      * @param scaleFactor Unsigned 256-bit integer scaling factor
@@ -208,12 +207,47 @@ library BlackScholesMath {
     }
 
     /**
+     * @notice Convert implied volatility to sigma by dividing by root tau
+     * @param vol The implied volatility i.e., sigma * sqrt(tau)
+     * @param tau The time to expiry in seconds
+     * @return sigma Standard deviation of returns (volatility)
+     */
+    function volToSigma(uint256 vol, uint256 tau)
+        internal
+        pure
+        returns (uint256 sigma) 
+    {
+        int128 volX64 = vol.percentageToX64();
+        int128 sqrtTauX64 = tau.toYears().sqrt();
+        int128 sigmaX64 = volX64.div(sqrtTauX64);
+        sigma = sigmaX64.percentageFromX64();
+    }
+
+    /**
+     * @notice Convert sigma to implied volatility by multiplying by root tau
+     * @param sigma Standard deviation of returns (volatility)
+     * @param tau The time to expiry in seconds
+     * @param vol The implied volatility i.e., sigma * sqrt(tau)
+     */
+    function sigmaToVol(uint256 sigma, uint256 tau)
+        internal
+        pure
+        returns (uint256 vol) 
+    {
+        int128 sqrtTauX64 = tau.toYears().sqrt();
+        int128 sigmaX64 = sigma.percentageToX64();
+        int128 volX64 = sigmaX64.mul(sqrtTauX64);
+        vol = volX64.percentageFromX64();
+    }
+
+    /**
      * @notice Approximate volatility from trade price for a call option
      * @dev See "An Improved Estimator For Black-Scholes-Merton Implied Volatility" by Hallerbach (2004)
      * @param inputs Black Scholes model parameters
-     * @return vol Implied volatility over the time to expiry: sigma*sqrt(tau)
+     * @return vol Implied volatility over the time to expiry: `sigma*sqrt(tau)`
+     * @dev This does not return `sigma`
      */
-    function approxIVFromCallPrice(VolCalculationInput memory inputs)
+    function approxVolFromCallPrice(VolCalculationInput memory inputs)
         public
         pure
         returns (uint256 vol) 
@@ -244,16 +278,43 @@ library BlackScholesMath {
      * @dev See https://quant.stackexchange.com/questions/35462/what-is-the-closed-form-implied-volatility-estimator-as-defined-by-hallerbach-2
      * @param inputs Black Scholes model parameters
      * @return vol Implied volatility over the time to expiry: sigma*sqrt(tau)
+     * @dev This does not return `sigma`
      */
-    function approxIVFromPutPrice(VolCalculationInput memory inputs)
+    function approxVolFromPutPrice(VolCalculationInput memory inputs)
         public
         pure
         returns (uint256 vol)
     {
         // Same formula but reverse roles of spot and strike
         (inputs.strike, inputs.spot) = (inputs.spot, inputs.strike);
-        vol = approxIVFromCallPrice(inputs);
+        vol = approxVolFromCallPrice(inputs);
         // Swap back to original in case inputs are being used again
         (inputs.strike, inputs.spot) = (inputs.spot, inputs.strike);
+    }
+
+    /**
+     * @notice Compute vega of an option (change in option price given 1% change in IV)
+     * @dev vega = e^{-r tau} * S * sqrt{tau} * N(d1)
+     * @dev http://www.columbia.edu/~mh2078/FoundationsFE/BlackScholes.pdf
+     * @dev Vega of the call and the put on the same strike and expiration is the same
+     * @return vega The greek vega
+     */
+    function getVega(PriceCalculationInput memory inputs) 
+        external
+        pure
+        returns (uint256 vega) 
+    {
+        PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);
+        // Compute probability factors
+        (int128 d1,) = getProbabilityFactors(inputsX64);
+        // Compute S * sqrt(tau)
+        int128 spotSqrtTau = inputsX64.spotX64.mul(inputsX64.tauX64.sqrt());
+        int128 discountX64 = 
+            (inputsX64.rateX64.mul(inputsX64.tauX64)).neg().exp();
+        int128 vegaX64 = discountX64
+            .mul(spotSqrtTau)
+            .mul(CumulativeNormalDistribution.getCDF(d1));
+        // vega is a delta in price so scale from price factor
+        vega = vegaX64.scaleFromX64(inputs.scaleFactor);
     }
 }
