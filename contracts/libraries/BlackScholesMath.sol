@@ -56,31 +56,41 @@ library BlackScholesMath {
     }
 
     /**
-     * @notice Compute Black Scholes call price
-     * @dev C = SN(d1)-Ke^{-rt}N(d2)
-     * @param spot Spot price of the asset 
+     * @notice Struct that groups together inputs for computing BS price
+     * @param spot Spot price
      * @param strike Strike price of the asset 
      * @param sigma Volatility of returns (annualized), not a percentage
      * @param tau Time to expiry (in seconds), not in years
      * @param rate Risk-free rate
      * @param scaleFactor Unsigned 256-bit integer scaling factor
+     */
+    struct PriceCalculationInput {
+        uint256 spot;
+        uint256 strike;
+        uint256 sigma;
+        uint256 tau;
+        uint256 rate;
+        uint256 scaleFactor;
+    }
+
+    /**
+     * @notice Compute Black Scholes call price
+     * @dev C = SN(d1)-Ke^{-rt}N(d2)
+     * @param inputs Black Scholes model parameters
      * @return price Black Scholes price of call
      */
-    function getCallPrice(
-        uint256 spot,
-        uint256 strike,
-        uint256 sigma,
-        uint256 tau,
-        uint256 rate,
-        uint256 scaleFactor
-    ) external pure returns (uint256 price) {
-        int128 spotX64 = spot.scaleToX64(scaleFactor);
-        int128 strikeX64 = strike.scaleToX64(scaleFactor);
-        int128 rateX64 = rate.scaleToX64(scaleFactor);
+    function getCallPrice(PriceCalculationInput memory inputs) 
+        external
+        pure 
+        returns (uint256 price) 
+    {
+        int128 spotX64 = inputs.spot.scaleToX64(inputs.scaleFactor);
+        int128 strikeX64 = inputs.strike.scaleToX64(inputs.scaleFactor);
+        int128 rateX64 = inputs.rate.scaleToX64(inputs.scaleFactor);
         /// Convert time to expiry to years
-        int128 tauX64 = tau.toYears();
+        int128 tauX64 = inputs.tau.toYears();
         // Normalize sigma to percentage
-        int128 sigmaX64 = sigma.percentageToX64();
+        int128 sigmaX64 = inputs.sigma.percentageToX64();
         // Compute probability factors
         (int128 d1, int128 d2) = getProbabilityFactors(
             spotX64, strikeX64, sigmaX64, tauX64, rateX64
@@ -98,35 +108,27 @@ library BlackScholesMath {
         // Should be > 0
         int128 priceX64 = term1X64.sub(term2X64);
         // Convert back to uint256
-        price = priceX64.scaleFromX64(scaleFactor);
+        price = priceX64.scaleFromX64(inputs.scaleFactor);
     }
 
     /**
      * @notice Compute Black Scholes put price
      * @dev P = Ke^{-rt}N(-d2)-SN(-d1)
-     * @param spot Spot price of the asset 
-     * @param strike Strike price of the asset 
-     * @param sigma Volatility of returns (annualized), not a percentage
-     * @param tau Time to expiry (in seconds), not in years
-     * @param rate Risk-free rate
-     * @param scaleFactor Unsigned 256-bit integer scaling factor
+     * @param inputs Black Scholes model parameters
      * @return price Black Scholes price of put
      */
-    function getPutPrice(
-        uint256 spot,
-        uint256 strike,
-        uint256 sigma,
-        uint256 tau,
-        uint256 rate,
-        uint256 scaleFactor
-    ) external pure returns (uint256 price) {
-        int128 spotX64 = spot.scaleToX64(scaleFactor);
-        int128 strikeX64 = strike.scaleToX64(scaleFactor);
-        int128 rateX64 = rate.scaleToX64(scaleFactor);
+    function getPutPrice(PriceCalculationInput memory inputs)
+        external
+        pure
+        returns (uint256 price) 
+    {
+        int128 spotX64 = inputs.spot.scaleToX64(inputs.scaleFactor);
+        int128 strikeX64 = inputs.strike.scaleToX64(inputs.scaleFactor);
+        int128 rateX64 = inputs.rate.scaleToX64(inputs.scaleFactor);
         /// Convert time to expiry to years
-        int128 tauX64 = tau.toYears();
+        int128 tauX64 = inputs.tau.toYears();
         // Normalize sigma to percentage
-        int128 sigmaX64 = sigma.percentageToX64();
+        int128 sigmaX64 = inputs.sigma.percentageToX64();
         // Compute probability factors
         (int128 d1, int128 d2) = getProbabilityFactors(
             spotX64, strikeX64, sigmaX64, tauX64, rateX64
@@ -144,73 +146,75 @@ library BlackScholesMath {
         // Should be > 0
         int128 priceX64 = term1X64.sub(term2X64);
         // Convert back to uint256
-        price = priceX64.scaleFromX64(scaleFactor);
+        price = priceX64.scaleFromX64(inputs.scaleFactor);
+    }
+
+    /**
+     * @notice Struct that groups together inputs for computing BS price
+     * @param spot Spot price in stable asset
+     * @param strike Strike price of the asset 
+     * @param tau Time to expiry (in seconds), not in years
+     * @param rate Risk-free rate
+     * @param scaleFactor Unsigned 256-bit integer scaling factor
+     * @param tradePrice Actual price that the option was sold/bought
+     */
+    struct VolCalculationInput {
+        uint256 spot;
+        uint256 strike;
+        uint256 tau;
+        uint256 rate;
+        uint256 scaleFactor;
+        uint256 tradePrice;
     }
 
     /**
      * @notice Approximate volatility from trade price for a call option
      * @dev See "An Improved Estimator For Black-Scholes-Merton Implied Volatility" by Hallerbach (2004)
-     * @param spot Spot price in stable asset
-     * @param strike Strike price in stable asset
-     * @param tau Time to expiry (in seconds), not in years
-     * @param rate Risk-free rate
-     * @param tradePrice Actual price that the option was sold/bought
-     * @param scaleFactor Unsigned 256-bit integer scaling factor
+     * @param inputs Black Scholes model parameters
      * @return vol Implied volatility over the time to expiry: sigma*sqrt(tau)
      */
-    function approxIVFromCallPrice(
-        uint256 spot,
-        uint256 strike,
-        uint256 tau,
-        uint256 rate,
-        uint256 tradePrice,
-        uint256 scaleFactor
-    ) public pure returns (uint256 vol) {
-        int128 spotX64 = spot.scaleToX64(scaleFactor);
-        int128 strikeX64 = strike.scaleToX64(scaleFactor);
-        int128 rateX64 = rate.scaleToX64(scaleFactor);
-        int128 tauX64 = tau.toYears();
-        int128 priceX64 = tradePrice.scaleToX64(scaleFactor);
-        
+    function approxIVFromCallPrice(VolCalculationInput memory inputs)
+        public
+        pure
+        returns (uint256 vol) 
+    {
+        int128 spotX64 = inputs.spot.scaleToX64(inputs.scaleFactor);
+        int128 strikeX64 = inputs.strike.scaleToX64(inputs.scaleFactor);
+        int128 rateX64 = inputs.rate.scaleToX64(inputs.scaleFactor);
+        int128 tauX64 = inputs.tau.toYears();
+        int128 priceX64 = inputs.tradePrice.scaleToX64(inputs.scaleFactor);
+
         // Compute discounted strike price
         int128 discountStrikeX64 = strikeX64.mul((rateX64.mul(tauX64)).neg().exp());
-
         int128 termA = priceX64.mul(TWO_INT).add(discountStrikeX64).sub(spotX64);
         int128 termB = spotX64.add(discountStrikeX64);
-        int128 termC = termA.add(
-            (termA.pow(2).sub(
-                ONE_EIGHTY_FIVE_INT.mul(termB).mul((discountStrikeX64.sub(spotX64)).pow(2))
-                .div(PI_INT.mul((discountStrikeX64.mul(spotX64)).sqrt()))
-            )).sqrt()
+        int128 volX64 = ((TWO_INT.mul(PI_INT)).sqrt().div(termB.add(TWO_INT))).mul(
+            termA.add(
+                (termA.pow(2).sub(
+                    ONE_EIGHTY_FIVE_INT.mul(termB).mul((discountStrikeX64.sub(spotX64)).pow(2))
+                    .div(PI_INT.mul((discountStrikeX64.mul(spotX64)).sqrt()))
+                )).sqrt()
+            )
         );
-        int128 termD = (TWO_INT.mul(PI_INT)).sqrt().div(termB.add(TWO_INT));
-        int128 volX64 = termD.mul(termC);
 
-        vol = volX64.scaleFromX64(scaleFactor);
+        vol = volX64.scaleFromX64(inputs.scaleFactor);
     }
 
     /**
      * @notice Approximate volatility from trade price for a put option
      * @dev See https://quant.stackexchange.com/questions/35462/what-is-the-closed-form-implied-volatility-estimator-as-defined-by-hallerbach-2
-     * @param spot Spot price in stable asset
-     * @param strike Strike price in stable asset
-     * @param tau Time to expiry (in seconds), not in years
-     * @param rate Risk-free rate
-     * @param tradePrice Actual price that the option was sold/bought
-     * @param scaleFactor Unsigned 256-bit integer scaling factor
+     * @param inputs Black Scholes model parameters
      * @return vol Implied volatility over the time to expiry: sigma*sqrt(tau)
      */
-    function approxIVFromPutPrice(
-        uint256 spot,
-        uint256 strike,
-        uint256 tau,
-        uint256 rate,
-        uint256 tradePrice,
-        uint256 scaleFactor
-    ) public pure returns (uint256 vol) {
+    function approxIVFromPutPrice(VolCalculationInput memory inputs)
+        public
+        pure
+        returns (uint256 vol) 
+    {
         // Same formula but reverse roles of spot and strike
-        vol = approxIVFromCallPrice(
-            strike, spot, tau, rate, tradePrice, scaleFactor
-        );
+        (inputs.strike, inputs.spot) = (inputs.spot, inputs.strike);
+        vol = approxIVFromCallPrice(inputs);
+        // Swap back to original in case inputs are being used again
+        (inputs.strike, inputs.spot) = (inputs.spot, inputs.strike);
     }
 }

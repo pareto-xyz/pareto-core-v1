@@ -54,9 +54,12 @@ library Derivative {
      */
     function createSmile(Option memory option, uint256 scaleFactor)
         public
-        pure
+        view
         returns (VolatilitySmile memory smile) 
     {
+        require(option.expiry >= block.timestamp, "createSmile: option expired");
+        uint256 curTime = block.timestamp;
+
         /// @notice Default five points for moneyness. Same as in Zeta.
         uint8[5] memory moneyness = [50, 75, 100, 125, 150];
 
@@ -69,6 +72,8 @@ library Derivative {
                 uint256 vol = BlackScholesMath.approxIVFromCallPrice(
                     spot,
                     option.strike,
+                    option.expiry - curTime,
+                    0,  // FIXME: get risk-free rate
                     option.tradePrice,
                     scaleFactor
                 );
@@ -80,6 +85,8 @@ library Derivative {
                 uint256 vol = BlackScholesMath.approxIVFromPutPrice(
                     spot,
                     option.strike,
+                    option.expiry - curTime,
+                    0,  // FIXME: get risk-free rate
                     option.tradePrice,
                     scaleFactor
                 );
