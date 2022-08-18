@@ -22,6 +22,7 @@ library Derivative {
      * @param expiry Expiry in epoch time of the option
      * @param buyer Address of the buyer; the short position
      * @param seller Address of the seller; the long position
+     * @param decimals Decimals for underlying
      */
     struct Option {
         string bookId;
@@ -32,19 +33,20 @@ library Derivative {
         uint256 expiry;
         address buyer;
         address seller;
+        uint8 decimals;
     }
 
     /**
      * @notice Stores a surface to track implied volatility for mark price
      * @param optionHash Keccack hash of the option. A separate smile should 
      * be stored for each option
-     * @param ivAtMoneyness Array of five implied volatility i.e. sigma*sqrt(tau)
+     * @param volAtMoneyness Array of five implied volatility i.e. sigma*sqrt(tau)
      * for the five moneyness points
      * @param exists_ is a helper attribute to check existence (default false)
      */
     struct VolatilitySmile {
         bytes32 optionHash;
-        uint256[5] ivAtMoneyness;
+        uint256[5] volAtMoneyness;
         bool exists_; 
     }
 
@@ -52,10 +54,9 @@ library Derivative {
      * @notice Create a new volatility smile, which uses `BlackScholesMath.sol` 
      * to approximate the implied volatility 
      * @param option Option object
-     * @param decimals Decimals for the underlying token
      * @return smile A volatility smile
      */
-    function createSmile(Option memory option, uint8 decimals)
+    function createSmile(Option memory option)
         external
         view
         returns (VolatilitySmile memory smile) 
@@ -64,7 +65,7 @@ library Derivative {
         uint256 curTime = block.timestamp;
 
         // Compute scale factor
-        uint256 scaleFactor = 10**(18-decimals);
+        uint256 scaleFactor = 10**(18-option.decimals);
 
         /// @notice Default five points for moneyness. Same as in Zeta.
         uint8[5] memory moneyness = [50, 75, 100, 125, 150];
@@ -76,7 +77,7 @@ library Derivative {
         if (option.optionType == OptionType.CALL) {
             for (uint256 i = 0; i < moneyness.length; i++) {
                 uint256 spot = (option.strike * moneyness[i]) / 100;
-                uint256 vol = BlackScholesMath.approxIVFromCallPrice(
+                uint256 vol = BlackScholesMath.approxVolFromCallPrice(
                     BlackScholesMath.VolCalculationInput(
                         spot,
                         option.strike,
@@ -86,12 +87,12 @@ library Derivative {
                         option.tradePrice
                     )
                 );
-                smile.ivAtMoneyness[i] = vol;
+                smile.volAtMoneyness[i] = vol;
             }
         } else {
             for (uint256 i = 0; i < moneyness.length; i++) {
                 uint256 spot = (option.strike * moneyness[i]) / 100;
-                uint256 vol = BlackScholesMath.approxIVFromPutPrice(
+                uint256 vol = BlackScholesMath.approxVolFromPutPrice(
                     BlackScholesMath.VolCalculationInput(
                         spot,
                         option.strike,
@@ -101,7 +102,7 @@ library Derivative {
                         scaleFactor
                     )
                 );
-                smile.ivAtMoneyness[i] = vol;
+                smile.volAtMoneyness[i] = vol;
             }
         }
         return smile;
@@ -118,8 +119,7 @@ library Derivative {
     function updateSmile(
         uint256 spot,
         Option memory option,
-        VolatilitySmile storage smile,
-        uint8 decimals
+        VolatilitySmile storage smile
     )
         external
         view
@@ -127,11 +127,18 @@ library Derivative {
         require(option.expiry >= block.timestamp, "createSmile: option expired");
         uint256 curTime = block.timestamp;
 
-        // Default five points for moneyness. Same as in Zeta.
-        uint8[5] memory moneyness = [50, 75, 100, 125, 150];
+        // Compute current moneyness (times by 100 for moneyness decimals)
+        uint256 curMoneyness = (spot * 10**option.decimals * 100) / option.strike;
 
-        // Compute current moneyness
-        uint256 curMoneyness = (spot * 10**decimals) / option.strike;
+        // Find closest two data points
+        (uint256 indexLower, uint256 indexUpper) = 
+            findClosestTwoIndices([50,75,100,125,150], curMoneyness);
+
+        if (indexLower == indexUpper) {
+            // A single point to update
+        } else {
+            // Two points to update
+        }
     }
 
     /**
@@ -160,32 +167,29 @@ library Derivative {
      * @notice Given a query point, find the indices of the closest two points 
      * @param sortedData Data to search amongst. Assume it is sorted
      * @param query Data point to search with
-     * @param indexLower Index of the largest point less than `query`
-     * @param indexUpper Index of the smallest point greater than `query`
+     * @return indexLower Index of the largest point less than `query`
+     * @return indexUpper Index of the smallest point greater than `query`
      */
-    function findClosestTwoIndices(
-        uint256[5] sortedData,
-        uint256 query
-    ) internal returns (uint256 indexLower, uint256 indexUpper) {
+    function findClosestTwoIndices(uint8[5] memory sortedData, uint256 query) 
+        internal
+        pure
+        returns (uint256, uint256) 
+    {
         // If the query is below the smallest number, return 0 for both indices
         if (query < sortedData[0]) {
-            indexLower = 0;
-            indexUpper = 0;
-            return;
+            return (0, 0);
         }
         if (query > sortedData[4]) {
-            indexLower = 4;
-            indexUpper = 4;
-            return;
+            return (4, 4);
         }
 
+        uint256 indexLower;
+        uint256 indexUpper;
         for (uint256 i = 0; i < 5; i++) {
             // If the query is exactly one of the points, return only 
             // that point
             if (query == sortedData[i]) {
-                indexLower = i;
-                indexUpper = i;
-                return;
+                return (i, i);
             } else if (query < sortedData[i]) {
                 // Just keep overwriting the lower index
                 indexLower = i;
@@ -195,30 +199,82 @@ library Derivative {
                 indexUpper = i;
                 // We can return since we definitely have found `indexLower`
                 // by the time we reach here
-                return;
+                return (indexLower, indexUpper);
             }
         }
-        return;
+        return (indexLower, indexUpper);
     }
 
-    function getMarkPrice(Option memory option) 
+    /**
+     * @notice Compute mark price using Black Scholes
+     * @param spot Current spot price
+     * @param option Option object containing strike, expiry, and price info
+     * @param smile Volatility smile from moneyness to vol
+     */
+    function getMarkPrice(
+        uint256 spot,
+        Option memory option,
+        VolatilitySmile storage smile
+    ) 
         public
-        pure
-        returns (uint256 initialMargin) 
+        view
+        returns (uint256 price) 
     {
+        require(option.expiry >= block.timestamp, "createSmile: option expired");
+        uint256 tau = option.expiry - block.timestamp;
+        // Times by extra 100 for moneyness decimals
+        uint256 curMoneyness = (spot * 10**option.decimals * 100) / option.strike;
+
+        uint256 vol = interpolate(
+            [50,75,100,125,150], smile.volAtMoneyness, curMoneyness);
+        uint256 sigma = BlackScholesMath.volToSigma(vol, tau);
+        
+        if (option.optionType == OptionType.CALL) {
+            price = BlackScholesMath.getCallPrice(
+                BlackScholesMath.PriceCalculationInput(
+                    spot,
+                    option.strike,
+                    sigma,
+                    tau,
+                    0,  // FIXME: need to get rate
+                    10**(18-option.decimals)
+                )
+            );
+        } else {
+            price = BlackScholesMath.getPutPrice(
+                BlackScholesMath.PriceCalculationInput(
+                    spot,
+                    option.strike,
+                    sigma,
+                    tau,
+                    0,  // FIXME: need to get rate
+                    10**(18-option.decimals)
+                )
+            );
+        }
     }
 
-    function getInitialMargin(Option memory option) 
-        public
-        pure
-        returns (uint256 initialMargin) 
+    /**
+     * @notice Compute the interpolated value based on a query key
+     * @param sortedKeys Array of size 5 containing numeric keys sorted
+     * @param values Array of size 5 containing numeric values
+     * @param queryKey Key to search for
+     * @return queryValue Interpolated value for the queryKey
+     */
+    function interpolate(
+        uint8[5] memory sortedKeys,
+        uint256[5] memory values,
+        uint256 queryKey
+    )
+        internal
+        returns (uint256 queryValue)
     {
-    }
-
-    function getMaintainenceMargin(Option memory option) 
-        public
-        pure
-        returns (uint256 initialMargin) 
-    {
+        (uint256 indexLower, uint256 indexUpper) = 
+            findClosestTwoIndices(sortedKeys, queryKey);
+        if (indexLower == indexUpper) {
+            queryValue = values[indexLower];
+        } else {
+            queryValue = (values[indexLower] + values[indexUpper]) / 2;
+        }
     }
 }

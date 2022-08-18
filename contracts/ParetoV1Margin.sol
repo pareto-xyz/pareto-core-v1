@@ -213,6 +213,7 @@ contract ParetoV1Margin is
         require(buyer != address(0), "recordOption: buyer is empty");
         require(seller != address(0), "recordOption: seller is empty");
 
+        uint8 decimals = IERC20(underlying).decimals();
         Derivative.Option memory option = Derivative.Option(
             bookId,
             optionType,
@@ -221,7 +222,8 @@ contract ParetoV1Margin is
             strike,
             expiry,
             buyer,
-            seller
+            seller,
+            decimals
         );
         bytes32 hash_ = Derivative.hashOption(option);
 
@@ -232,14 +234,13 @@ contract ParetoV1Margin is
         optionsPositions[buyer][hash_] = true;
         optionsPositions[seller][hash_] = true;
 
-        uint8 decimals = IERC20(underlying).decimals();
         if (optionSmiles[hash_].exists_) {
             // Update the volatility smile
             // FIXME: replace `1 ether` with spot price
-            Derivative.updateSmile(1 ether, option, optionSmiles[hash_], decimals);
+            Derivative.updateSmile(1 ether, option, optionSmiles[hash_]);
         } else {
             // Create a new volatility smile
-            optionSmiles[hash_] = Derivative.createSmile(option, decimals);
+            optionSmiles[hash_] = Derivative.createSmile(option);
         }
 
         // Emit event 
