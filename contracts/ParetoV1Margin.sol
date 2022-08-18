@@ -77,10 +77,20 @@ contract ParetoV1Margin is
      ***********************************************/
     
     /**
+     * @notice Event when a deposit occurs
+     * @param depositor Address of the depositor
+     * @param amount Amount of USDC to deposit
+     */
+    event DepositEvent(
+        address indexed depositor,
+        uint256 amount
+    );
+
+    /**
      * @notice Event when an order is recorded
      * @dev See `Derivative.Order` docs
      */
-    event OrderRecorded(
+    event RecordOrderEvent(
         string indexed orderId,
         address indexed buyer,
         address indexed seller,
@@ -116,6 +126,9 @@ contract ParetoV1Margin is
             totalBalance == IERC20(usdc).balanceOf(address(this)),
             "deposit: Balance and reserves are out of sync"
         );
+
+        // Emit `DepositEvent`
+        emit DepositEvent(msg.sender, amount);
     }
 
     /**
@@ -249,7 +262,7 @@ contract ParetoV1Margin is
         }
 
         // Emit event 
-        emit OrderRecorded(
+        emit RecordOrderEvent(
             orderId,
             buyer,
             seller,
