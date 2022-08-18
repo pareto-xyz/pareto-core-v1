@@ -1,26 +1,43 @@
 {
-  "name": "pareto-core-v1",
-  "version": "1.0.0",
+  "name": "@pareto/v1-core",
   "description": "Core contracts for interacting with Pareto Options",
-  "main": "index.js",
+  "author": "Pareto Labs, Inc.",
+  "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pareto-xyz/pareto-core-v1.git"
+  },
+  "keywords": [
+    "pareto",
+    "pareto-v1",
+    "ethereum",
+    "arbitrum",
+    "options",
+    "orderbook"
+  ],
   "scripts": {
+    "clean": "npx hardhat clean",
+    "compile": "npx hardhat compile",
     "test": "npx hardhat test -w contracts -w test -e js,ts,sol",
     "coverage": "npx hardhat coverage -w contracts -w test -e js,ts,sol",
     "prettier": "npx prettier --write 'contracts/**/*.sol'"
   },
-  "author": "grubiroth",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^1.0.2",
     "@nomiclabs/hardhat-etherscan": "^3.1.0",
     "@openzeppelin/contracts": "^4.7.2",
+    "@openzeppelin/hardhat-upgrades": "^1.20.0",
     "dotenv": "^16.0.1",
     "hardhat": "^2.10.1",
-    "prettier-plugin-solidity": "^1.0.0-dev.22"
+    "prettier-plugin-solidity": "^1.0.0-dev.22",
+    "typescript": "^4.7.4"
   },
   "engines": {
     "node": ">=16.13.0"
   },
   "dependencies": {
+    "@openzeppelin/contracts-upgradeable": "^4.7.3",
     "evm-bn": "^1.1.2"
-  }
+  },
+  "license": "GPL-3.0-or-later"
 }
