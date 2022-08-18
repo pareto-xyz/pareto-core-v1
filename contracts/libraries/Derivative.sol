@@ -90,8 +90,8 @@ library Derivative {
                         option.strike,
                         option.expiry - curTime,
                         0,  // FIXME: get risk-free rate
-                        scaleFactor,
-                        option.tradePrice
+                        option.tradePrice,
+                        scaleFactor
                     )
                 );
                 smile.ivAtMoneyness[i] = vol;
