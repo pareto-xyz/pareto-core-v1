@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.9;
 
-import {IERC20} from "../interfaces/IERC20.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
+import "./interfaces/IERC20.sol";
 import "./libraries/Derivative.sol";
 import "./libraries/BlackScholesMath.sol";
 
@@ -233,6 +233,8 @@ contract ParetoV1Margin is
         optionsPositions[seller][hash_] = true;
 
         // Create a new volatility smile
+        uint256 scaleFactor = 10**(18-IERC20(underlying).decimals());
+        optionSmiles[hash_] = Derivative.createSmile(option, scaleFactor);
 
         // Emit event 
         emit OptionRecorded(

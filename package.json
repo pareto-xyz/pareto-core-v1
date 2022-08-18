@@ -2,13 +2,16 @@
   "name": "pareto-core-v1",
   "version": "1.0.0",
   "description": "Core contracts for interacting with Pareto Options",
+  "author": "Pareto Labs, Inc.",
+  "license": "GNU v3",
   "main": "index.js",
   "scripts": {
+    "clean": "npx hardhat clean -w contracts -w test -e js,ts,sol",
+    "compile": "npx hardhat compile -w contracts -w test -e js,ts,sol",
     "test": "npx hardhat test -w contracts -w test -e js,ts,sol",
     "coverage": "npx hardhat coverage -w contracts -w test -e js,ts,sol",
     "prettier": "npx prettier --write 'contracts/**/*.sol'"
   },
-  "author": "grubiroth",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^1.0.2",
     "@nomiclabs/hardhat-etherscan": "^3.1.0",
@@ -24,5 +27,9 @@
   "dependencies": {
     "@openzeppelin/contracts-upgradeable": "^4.7.3",
     "evm-bn": "^1.1.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pareto-xyz/pareto-core-v1.git"
   }
 }

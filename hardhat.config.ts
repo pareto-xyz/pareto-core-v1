@@ -6,6 +6,11 @@ import "@openzeppelin/hardhat-upgrades";
 dotenv.config();
 
 const config: HardhatUserConfig = {
+  paths: {
+    sources: "./contracts",
+    tests: "./test",
+    artifacts: "./artifacts"
+  },
   solidity: {
     version: "0.8.9",
     settings: {
@@ -17,10 +22,9 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
-      accounts: {
-        count: 35,
-        accountsBalance: "1000000000000000000000000",
-      }
+      blockGasLimit: 18e6,
+      gas: 12e6,
+      allowUnlimitedContractSize: true
     },
     rinkeby: {
       url: process.env.RINKEBY_INFURA_URL || "",
