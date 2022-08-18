@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.9;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "../interfaces/IERC20.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -47,6 +47,9 @@ contract ParetoV1Margin is
     /// @notice Track total balance (used for checks)
     uint256 private totalBalance;
 
+    /// @notice Store volatility smiles per option
+    mapping(bytes32 => Derivative.VolatilitySmile) private optionSmiles;
+
     /************************************************
      * Initialization and Upgradeability
      ***********************************************/
@@ -79,6 +82,7 @@ contract ParetoV1Margin is
      */
     event OptionRecorded(
         string bookId,
+        Derivative.OptionType optionType,
         uint256 tradePrice,
         address underlying,
         uint256 strike,
@@ -187,6 +191,7 @@ contract ParetoV1Margin is
      */
     function recordOption(
         string memory bookId,
+        Derivative.OptionType optionType,
         uint256 tradePrice,
         address underlying,
         uint256 strike,
@@ -210,6 +215,7 @@ contract ParetoV1Margin is
 
         Derivative.Option memory option = Derivative.Option(
             bookId,
+            optionType,
             tradePrice,
             underlying,
             strike,
@@ -226,9 +232,12 @@ contract ParetoV1Margin is
         optionsPositions[buyer][hash_] = true;
         optionsPositions[seller][hash_] = true;
 
+        // Create a new volatility smile
+
         // Emit event 
         emit OptionRecorded(
             bookId,
+            optionType,
             tradePrice,
             underlying,
             strike,

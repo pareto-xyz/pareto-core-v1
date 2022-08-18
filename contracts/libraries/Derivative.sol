@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.9;
 
+import "./BlackScholesMath.sol";
+import {IERC20} from "../interfaces/IERC20.sol";
+
 /**
  * @notice Contains enums and structs representing Pareto derivatives
  */
 library Derivative {
+    /// @notice Two types of options - calls and puts
+    enum OptionType { CALL, PUT }
+
     /**
      * @notice A matched option order from a Pareto bookorder
      * @param bookId Identifier of the orderbook the order came from
+     * @param optionType Is this a call or put option?
      * @param tradePrice Actual price that the option was matched at
      * @param underlying Address of the underlying token e.g. WETH
      * @param strike Strike price of the option
@@ -17,12 +24,69 @@ library Derivative {
      */
     struct Option {
         string bookId;
+        OptionType optionType;
         uint256 tradePrice;
         address underlying;
         uint256 strike;
         uint256 expiry;
         address buyer;
         address seller;
+    }
+
+    /**
+     * @notice Stores a surface to track implied volatility for mark price
+     * @param optionHash Keccack hash of the option. A separate smile should 
+     * be stored for each option
+     * @param ivAtMoneyness Array of five implied volatility i.e. sigma*sqrt(tau)
+     * for the five moneyness points
+     */
+    struct VolatilitySmile {
+        bytes32 optionHash;
+        uint256[5] ivAtMoneyness;
+    }
+
+    /**
+     * @notice Create a new volatility smile, which uses `BlackScholesMath.sol` 
+     * to approximate the implied volatility 
+     * @param scaleFactor Unsigned 256-bit integer scaling factor
+     * @param option Option object
+     * @return smile A volatility smile
+     */
+    function createSmile(Option memory option, uint256 scaleFactor)
+        public
+        pure
+        returns (VolatilitySmile memory smile) 
+    {
+        /// @notice Default five points for moneyness. Same as in Zeta.
+        uint8[5] memory moneyness = [50, 75, 100, 125, 150];
+
+        // Set the hash for the new smile
+        smile.optionHash = hashOption(option);
+
+        if (option.optionType == OptionType.CALL) {
+            for (uint256 i = 0; i < moneyness.length; i++) {
+                uint256 spot = (option.strike * moneyness[i]) / 100;
+                uint256 vol = BlackScholesMath.approxIVFromCallPrice(
+                    spot,
+                    option.strike,
+                    option.tradePrice,
+                    scaleFactor
+                );
+                smile.ivAtMoneyness[i] = vol;
+            }
+        } else {
+            for (uint256 i = 0; i < moneyness.length; i++) {
+                uint256 spot = (option.strike * moneyness[i]) / 100;
+                uint256 vol = BlackScholesMath.approxIVFromPutPrice(
+                    spot,
+                    option.strike,
+                    option.tradePrice,
+                    scaleFactor
+                );
+                smile.ivAtMoneyness[i] = vol;
+            }
+        }
+        return smile;
     }
 
     /**
@@ -33,10 +97,11 @@ library Derivative {
     function hashOption(Option memory option)
         public
         pure
-        returns(bytes32 hash_) 
+        returns (bytes32 hash_) 
     {
         hash_ = keccak256(abi.encodePacked(
             option.bookId,
+            option.optionType,
             option.tradePrice,
             option.underlying, 
             option.strike,

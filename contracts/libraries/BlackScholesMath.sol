@@ -152,20 +152,18 @@ library BlackScholesMath {
      * @dev See "An Improved Estimator For Black-Scholes-Merton Implied Volatility" by Hallerbach (2004)
      * @param spot Spot price in stable asset
      * @param strike Strike price in stable asset
-     * @param tau Time to expiry (in seconds), not in years
      * @param tradePrice Actual price that the option was sold/bought
      * @param scaleFactor Unsigned 256-bit integer scaling factor
+     * @return vol Implied volatility over the time to expiry: sigma*sqrt(tau)
      */
     function approxIVFromCallPrice(
         uint256 spot,
         uint256 strike,
-        uint256 tau,
         uint256 tradePrice,
         uint256 scaleFactor
-    ) public pure returns (uint256 sigma) {
+    ) public pure returns (uint256 vol) {
         int128 spotX64 = spot.scaleToX64(scaleFactor);
         int128 strikeX64 = strike.scaleToX64(scaleFactor);
-        int128 tauX64 = tau.toYears();
         int128 priceX64 = tradePrice.scaleToX64(scaleFactor);
 
         int128 termA = priceX64.mul(TWO_INT).add(strikeX64).sub(spotX64);
@@ -178,9 +176,9 @@ library BlackScholesMath {
             )).sqrt()
         );
         int128 termD = (TWO_INT.mul(PI_INT)).sqrt().div(termB.add(TWO_INT));
-        int128 sigmaX64 = termD.mul(termC).div(tauX64.sqrt());
+        int128 volX64 = termD.mul(termC);
 
-        sigma = sigmaX64.scaleFromX64(scaleFactor);
+        vol = volX64.scaleFromX64(scaleFactor);
     }
 
     /**
@@ -188,18 +186,17 @@ library BlackScholesMath {
      * @dev See https://quant.stackexchange.com/questions/35462/what-is-the-closed-form-implied-volatility-estimator-as-defined-by-hallerbach-2
      * @param spot Spot price in stable asset
      * @param strike Strike price in stable asset
-     * @param tau Time to expiry (in seconds), not in years
      * @param tradePrice Actual price that the option was sold/bought
      * @param scaleFactor Unsigned 256-bit integer scaling factor
+     * @return vol Implied volatility over the time to expiry: sigma*sqrt(tau)
      */
     function approxIVFromPutPrice(
         uint256 spot,
         uint256 strike,
-        uint256 tau,
         uint256 tradePrice,
         uint256 scaleFactor
-    ) public pure returns (uint256 sigma) {
+    ) public pure returns (uint256 vol) {
         // Same formula but reverse roles of spot and strike
-        sigma = approxIVFromCallPrice(strike, spot, tau, tradePrice, scaleFactor);
+        vol = approxIVFromCallPrice(strike, spot, tradePrice, scaleFactor);
     }
 }
