@@ -9,6 +9,10 @@ import {IERC20} from "../interfaces/IERC20.sol";
  * @notice Contains enums and structs representing Pareto derivatives
  */
 library Derivative {
+    /************************************************
+     * Structs and Enums
+     ***********************************************/
+
     /// @notice Two types of options - calls and puts
     enum OptionType { CALL, PUT }
 
@@ -49,6 +53,10 @@ library Derivative {
         uint256[5] volAtMoneyness;
         bool exists_; 
     }
+
+    /************************************************
+     * Smile Functionality
+     ***********************************************/
 
     /**
      * @notice Create a new volatility smile, which uses `BlackScholesMath.sol` 
@@ -114,7 +122,6 @@ library Derivative {
      * @param spot Spot price
      * @param option Option object
      * @param smile Current volatility smile stored on-chain
-     * @param decimals Decimals for the underlying token
      */
     function updateSmile(
         uint256 spot,
@@ -141,69 +148,9 @@ library Derivative {
         }
     }
 
-    /**
-     * @notice Hash option into byte string
-     * @param option Option object 
-     * @param hash_ SHA-3 hash of the future object
-     */
-    function hashOption(Option memory option)
-        public
-        pure
-        returns (bytes32 hash_) 
-    {
-        hash_ = keccak256(abi.encodePacked(
-            option.bookId,
-            option.optionType,
-            option.tradePrice,
-            option.underlying, 
-            option.strike,
-            option.expiry,
-            option.buyer,
-            option.seller
-        ));
-    }
-
-    /**
-     * @notice Given a query point, find the indices of the closest two points 
-     * @param sortedData Data to search amongst. Assume it is sorted
-     * @param query Data point to search with
-     * @return indexLower Index of the largest point less than `query`
-     * @return indexUpper Index of the smallest point greater than `query`
-     */
-    function findClosestTwoIndices(uint8[5] memory sortedData, uint256 query) 
-        internal
-        pure
-        returns (uint256, uint256) 
-    {
-        // If the query is below the smallest number, return 0 for both indices
-        if (query < sortedData[0]) {
-            return (0, 0);
-        }
-        if (query > sortedData[4]) {
-            return (4, 4);
-        }
-
-        uint256 indexLower;
-        uint256 indexUpper;
-        for (uint256 i = 0; i < 5; i++) {
-            // If the query is exactly one of the points, return only 
-            // that point
-            if (query == sortedData[i]) {
-                return (i, i);
-            } else if (query < sortedData[i]) {
-                // Just keep overwriting the lower index
-                indexLower = i;
-            } else if (query > sortedData[i]) {
-                // If we found a point bigger which we are guaranteed to find, 
-                // then pick the first one this happens
-                indexUpper = i;
-                // We can return since we definitely have found `indexLower`
-                // by the time we reach here
-                return (indexLower, indexUpper);
-            }
-        }
-        return (indexLower, indexUpper);
-    }
+    /************************************************
+     * Pricing Functionality
+     ***********************************************/
 
     /**
      * @notice Compute mark price using Black Scholes
@@ -254,6 +201,36 @@ library Derivative {
         }
     }
 
+    /************************************************
+     * Utility Functions
+     ***********************************************/
+
+    /**
+     * @notice Hash option into byte string
+     * @param option Option object 
+     * @param hash_ SHA-3 hash of the future object
+     */
+    function hashOption(Option memory option)
+        public
+        pure
+        returns (bytes32 hash_) 
+    {
+        hash_ = keccak256(abi.encodePacked(
+            option.bookId,
+            option.optionType,
+            option.tradePrice,
+            option.underlying, 
+            option.strike,
+            option.expiry,
+            option.buyer,
+            option.seller
+        ));
+    }
+
+    /************************************************
+     * Internal Functions
+     ***********************************************/
+
     /**
      * @notice Compute the interpolated value based on a query key
      * @param sortedKeys Array of size 5 containing numeric keys sorted
@@ -267,6 +244,7 @@ library Derivative {
         uint256 queryKey
     )
         internal
+        pure
         returns (uint256 queryValue)
     {
         (uint256 indexLower, uint256 indexUpper) = 
@@ -276,5 +254,47 @@ library Derivative {
         } else {
             queryValue = (values[indexLower] + values[indexUpper]) / 2;
         }
+    }
+
+    /**
+     * @notice Given a query point, find the indices of the closest two points 
+     * @param sortedData Data to search amongst. Assume it is sorted
+     * @param query Data point to search with
+     * @return indexLower Index of the largest point less than `query`
+     * @return indexUpper Index of the smallest point greater than `query`
+     */
+    function findClosestTwoIndices(uint8[5] memory sortedData, uint256 query) 
+        internal
+        pure
+        returns (uint256, uint256) 
+    {
+        // If the query is below the smallest number, return 0 for both indices
+        if (query < sortedData[0]) {
+            return (0, 0);
+        }
+        if (query > sortedData[4]) {
+            return (4, 4);
+        }
+
+        uint256 indexLower;
+        uint256 indexUpper;
+        for (uint256 i = 0; i < 5; i++) {
+            // If the query is exactly one of the points, return only 
+            // that point
+            if (query == sortedData[i]) {
+                return (i, i);
+            } else if (query < sortedData[i]) {
+                // Just keep overwriting the lower index
+                indexLower = i;
+            } else if (query > sortedData[i]) {
+                // If we found a point bigger which we are guaranteed to find, 
+                // then pick the first one this happens
+                indexUpper = i;
+                // We can return since we definitely have found `indexLower`
+                // by the time we reach here
+                return (indexLower, indexUpper);
+            }
+        }
+        return (indexLower, indexUpper);
     }
 }
