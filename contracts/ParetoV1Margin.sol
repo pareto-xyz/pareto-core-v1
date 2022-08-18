@@ -232,9 +232,14 @@ contract ParetoV1Margin is
         optionsPositions[buyer][hash_] = true;
         optionsPositions[seller][hash_] = true;
 
-        // Create a new volatility smile
         uint256 scaleFactor = 10**(18-IERC20(underlying).decimals());
-        optionSmiles[hash_] = Derivative.createSmile(option, scaleFactor);
+        if (optionSmiles[hash_].exists_) {
+            // Update the volatility smile
+            Derivative.updateSmile(option, optionSmiles[hash_], scaleFactor);
+        } else {
+            // Create a new volatility smile
+            optionSmiles[hash_] = Derivative.createSmile(option, scaleFactor);
+        }
 
         // Emit event 
         emit OptionRecorded(

@@ -39,21 +39,23 @@ library Derivative {
      * be stored for each option
      * @param ivAtMoneyness Array of five implied volatility i.e. sigma*sqrt(tau)
      * for the five moneyness points
+     * @param exists_ is a helper attribute to check existence (default false)
      */
     struct VolatilitySmile {
         bytes32 optionHash;
         uint256[5] ivAtMoneyness;
+        bool exists_; 
     }
 
     /**
      * @notice Create a new volatility smile, which uses `BlackScholesMath.sol` 
      * to approximate the implied volatility 
-     * @param scaleFactor Unsigned 256-bit integer scaling factor
      * @param option Option object
+     * @param scaleFactor Unsigned 256-bit integer scaling factor
      * @return smile A volatility smile
      */
     function createSmile(Option memory option, uint256 scaleFactor)
-        public
+        external
         view
         returns (VolatilitySmile memory smile) 
     {
@@ -65,6 +67,7 @@ library Derivative {
 
         // Set the hash for the new smile
         smile.optionHash = hashOption(option);
+        smile.exists_ = true;
 
         if (option.optionType == OptionType.CALL) {
             for (uint256 i = 0; i < moneyness.length; i++) {
@@ -98,6 +101,28 @@ library Derivative {
             }
         }
         return smile;
+    }
+
+    /**
+     * @notice Update the volatility smile with information from a new trade
+     * @dev We find the closest two points and update via interpolation
+     * @param option Option object
+     * @param smile Current volatility smile stored on-chain
+     * @param scaleFactor Unsigned 256-bit integer scaling factor
+     */
+    function updateSmile(
+        Option memory option,
+        VolatilitySmile storage smile,
+        uint256 scaleFactor
+    )
+        external
+        view
+    {
+        require(option.expiry >= block.timestamp, "createSmile: option expired");
+        uint256 curTime = block.timestamp;
+
+        /// @notice Default five points for moneyness. Same as in Zeta.
+        uint8[5] memory moneyness = [50, 75, 100, 125, 150];
     }
 
     /**
