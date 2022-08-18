@@ -291,4 +291,30 @@ library BlackScholesMath {
         // Swap back to original in case inputs are being used again
         (inputs.strike, inputs.spot) = (inputs.spot, inputs.strike);
     }
+
+    /**
+     * @notice Compute vega of an option (change in option price given 1% change in IV)
+     * @dev vega = e^{-r tau} * S * sqrt{tau} * N(d1)
+     * @dev http://www.columbia.edu/~mh2078/FoundationsFE/BlackScholes.pdf
+     * @dev Vega of the call and the put on the same strike and expiration is the same
+     * @return vega The greek vega
+     */
+    function getVega(PriceCalculationInput memory inputs) 
+        external
+        pure
+        returns (uint256 vega) 
+    {
+        PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);
+        // Compute probability factors
+        (int128 d1,) = getProbabilityFactors(inputsX64);
+        // Compute S * sqrt(tau)
+        int128 spotSqrtTau = inputsX64.spotX64.mul(inputsX64.tauX64.sqrt());
+        int128 discountX64 = 
+            (inputsX64.rateX64.mul(inputsX64.tauX64)).neg().exp();
+        int128 vegaX64 = discountX64
+            .mul(spotSqrtTau)
+            .mul(CumulativeNormalDistribution.getCDF(d1));
+        // vega is a delta in price so scale from price factor
+        vega = vegaX64.scaleFromX64(inputs.scaleFactor);
+    }
 }

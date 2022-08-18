@@ -39,16 +39,16 @@ contract ParetoV1Margin is
     mapping(address => uint256) private balances;
 
     /// @notice Stores hashes of open positions for every user
-    mapping(address => mapping(bytes32 => bool)) private optionsPositions;
+    mapping(address => mapping(bytes32 => bool)) private orderPositions;
 
-    /// @notice Stores hash to derivative object
-    mapping(bytes32 => Derivative.Option) private optionsHashs;
+    /// @notice Stores hash to derivative order
+    mapping(bytes32 => Derivative.Order) private orderHashs;
 
     /// @notice Track total balance (used for checks)
     uint256 private totalBalance;
 
     /// @notice Store volatility smiles per option
-    mapping(bytes32 => Derivative.VolatilitySmile) private optionSmiles;
+    mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
 
     /************************************************
      * Initialization and Upgradeability
@@ -77,18 +77,19 @@ contract ParetoV1Margin is
      ***********************************************/
     
     /**
-     * @notice Event when an option is recorded
-     * @dev See `Derivative.Option` docs
+     * @notice Event when an order is recorded
+     * @dev See `Derivative.Order` docs
      */
-    event OptionRecorded(
-        string bookId,
-        Derivative.OptionType optionType,
+    event OrderRecorded(
+        string indexed orderId,
+        address indexed buyer,
+        address indexed seller,
         uint256 tradePrice,
+        uint256 quantity,
+        Derivative.OptionType optionType,
         address underlying,
         uint256 strike,
-        uint256 expiry,
-        address indexed buyer,
-        address indexed seller
+        uint256 expiry
     );
 
     /************************************************
@@ -185,74 +186,79 @@ contract ParetoV1Margin is
      ***********************************************/
 
     /**
-     * @notice Record a matched option from off-chain orderbook
-     * @dev Saves the option to storage variables. Only the owner can call
+     * @notice Record a matched order from off-chain orderbook
+     * @dev Saves the order to storage variables. Only the owner can call
      * this function
      */
-    function recordOption(
-        string memory bookId,
-        Derivative.OptionType optionType,
+    function recordOrder(
+        string memory orderId,
+        address buyer,
+        address seller,
         uint256 tradePrice,
-        address underlying,
+        uint256 quantity,
+        Derivative.OptionType optionType,
         uint256 strike,
         uint256 expiry,
-        address buyer,
-        address seller
+        address underlying
     ) 
         external
         nonReentrant
         onlyOwner 
     {
-        require(bytes(bookId).length > 0, "recordOption: bookId is empty");
-        require(underlying != address(0), "recordOption: underlying is empty");
-        require(strike > 0, "recordOption: strike must be positive");
+        require(bytes(orderId).length > 0, "recordOrder: bookId is empty");
+        require(tradePrice > 0, "recordOrder: tradePrice must be > 0");
+        require(quantity > 0, "recordOrder: quantity must be > 0");
+        require(underlying != address(0), "recordOrder: underlying is empty");
+        require(strike > 0, "recordOrder: strike must be positive");
         require(
             expiry > block.timestamp,
-            "recordOption: expiry must be > current time"
+            "recordOrder: expiry must be > current time"
         );
-        require(buyer != address(0), "recordOption: buyer is empty");
-        require(seller != address(0), "recordOption: seller is empty");
 
         uint8 decimals = IERC20(underlying).decimals();
-        Derivative.Option memory option = Derivative.Option(
-            bookId,
-            optionType,
-            tradePrice,
-            underlying,
-            strike,
-            expiry,
+        Derivative.Order memory order = Derivative.Order(
+            orderId,
             buyer,
             seller,
-            decimals
+            tradePrice,
+            quantity,
+            Derivative.Option(
+                optionType,
+                strike,
+                expiry,
+                underlying,
+                decimals
+            )
         );
-        bytes32 hash_ = Derivative.hashOption(option);
+        bytes32 hash_ = Derivative.hashOrder(order);
 
-        // Save the option object
-        optionsHashs[hash_] = option;
+        // Save the order object
+        orderHashs[hash_] = order;
 
         // Save that the buyer/seller have this position
-        optionsPositions[buyer][hash_] = true;
-        optionsPositions[seller][hash_] = true;
+        orderPositions[buyer][hash_] = true;
+        orderPositions[seller][hash_] = true;
 
-        if (optionSmiles[hash_].exists_) {
+        if (volSmiles[hash_].exists_) {
             // Update the volatility smile
             // FIXME: replace `1 ether` with spot price
-            Derivative.updateSmile(1 ether, option, optionSmiles[hash_]);
+            Derivative.updateSmile(1 ether, order, volSmiles[hash_]);
         } else {
             // Create a new volatility smile
-            optionSmiles[hash_] = Derivative.createSmile(option);
+            volSmiles[hash_] = Derivative.createSmile(order);
         }
 
         // Emit event 
-        emit OptionRecorded(
-            bookId,
-            optionType,
+        emit OrderRecorded(
+            orderId,
+            buyer,
+            seller,
             tradePrice,
+            quantity,
+            optionType,
             underlying,
             strike,
-            expiry,
-            buyer,
-            seller
+            expiry
         );
     }
 }
