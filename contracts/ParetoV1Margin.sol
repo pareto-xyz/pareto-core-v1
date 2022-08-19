@@ -103,10 +103,10 @@ contract ParetoV1Margin is
     );
 
     /**
-     * @notice Event when an order is recorded
+     * @notice Event when a position (matched order) is recorded
      * @dev See `Derivative.Order` docs
      */
-    event RecordOrderEvent(
+    event RecordPositionEvent(
         string indexed orderId,
         address indexed buyer,
         address indexed seller,
@@ -183,13 +183,13 @@ contract ParetoV1Margin is
 
     /**
      * @notice Check if a user's account is below margin
-     * @dev The margin requirement is: AB + UP > IM + MM where 
+     * @dev The margin requirement is: AB + UP > MM where 
      * AB = account balance, UP = unrealized PnL
-     * IM/MM = initial and maintainence margins
+     * MM = maintainence margin on open positions
      * @dev If the margin check fails, then the user margin account can be liquidated
      * @param user Address of the account to check
-     * @return diff |AB + UP - IM - MM|, always positive
-     * @return satisfied True if AB + UP > IM + MM, else false
+     * @return diff |AB + UP - MM|, always positive
+     * @return satisfied True if AB + UP > MM, else false
      */
     function checkMargin(address user)
         public
@@ -198,7 +198,6 @@ contract ParetoV1Margin is
     {
         uint256 spot = 1 ether;  // TODO: get real spot price
         uint256 balance = balances[user];
-        uint256 initial = getInitialMargin(user, spot);
         uint256 maintainence = getMaintainenceMargin(user, spot);
 
         // Compute the unrealized PnL (actually this is only unrealized losses)
@@ -208,7 +207,7 @@ contract ParetoV1Margin is
         (uint256 bpnl, bool bpnlIsNeg) = NegativeMath.add(balance, false, pnl, pnlIsNeg);
 
         // Compute `balance + PnL - IM - MM`
-        (uint256 diff, bool diffIsNeg) = NegativeMath.add(bpnl, bpnlIsNeg, initial + maintainence, true);
+        (uint256 diff, bool diffIsNeg) = NegativeMath.add(bpnl, bpnlIsNeg, maintainence, true);
 
         // if diff > 0, then satisfied = true
         return (diff, !diffIsNeg);
@@ -257,37 +256,6 @@ contract ParetoV1Margin is
     }
 
     /**
-     * @notice Compute the initial margin for all positions owned by user
-     * @dev The initial margin is equal to the sum of initial margins for all positions
-     * @dev TODO Support P&L netting
-     * @param user Address to compute IM for
-     * @param spot The spot price
-     * @return margin The initial margin summed for all positions
-     */
-    function getInitialMargin(address user, uint256 spot)
-        internal
-        view
-        returns (uint256) 
-    {
-        bytes32[] memory positions = orderPositions[user];
-        if (positions.length == 0) {
-            return 0;
-        }
-
-        Derivative.Order memory order;
-        Derivative.VolatilitySmile memory smile;
-        uint256 margin;
-
-        for (uint256 i = 0; i < positions.length; i++) {
-            order = orderHashs[positions[i]];
-            smile = volSmiles[positions[i]];
-            uint256 curMargin = MarginMath.getInitialMargin(user, spot, order, smile);
-            margin += curMargin;
-        }
-        return margin;
-    }
-
-    /**
      * @notice Compute the maintainence margin for all positions owned by user
      * @dev The maintainence margin is equal to the sum of maintainence margins for all positions
      * @dev TODO Support P&L netting
@@ -319,47 +287,30 @@ contract ParetoV1Margin is
     }
 
     /**
-     * @notice Margin check on new order
-     * @dev This check must be done before the order is created
-     * @dev The margin requirement is: AB + UP + min(0, IP) > IM where 
-     * AB = account balance, UP = unrealized PnL
-     * IP = instantaneous PnL from new order
-     * IM = initial margin requirements
-     * @dev This is also used when a liquidator takes over a position
-     */
-    function checkMarginOnNewOrder(Derivative.Order memory order)
-        internal
-        view
-        returns (uint256, bool)
-    {
-
-    }
-
-    /**
      * @notice Margin check on withdrawal
-     * @dev The margin requirement is: AB + min(0, UP) > IM  where 
+     * @dev Definitions:
      * AB = account balance, UP = unrealized PnL
-     * IM = initial margin requirements
+     * MM = maintainence margin requirements
      * @param user Address of the margin account to check
      * @param amount Amount requesting to be withdrawn from account
-     * @return diff |AB + min(UP, 0) - IM|, always positive
-     * @return satisfied True if AB + min(UP) > IM, else false
+     * @return diff |AB - amount + UP - MM|, always positive
+     * @return satisfied True if non-negative, else false
      */
     function checkMarginOnWithdrawal(address user, uint256 amount) 
         internal
-        view
         returns (uint256, bool) 
     {
         require(amount > 0, "checkMarginOnWithdrawal: amount must be > 0");
         require(amount < balances[user], "checkMarginOnWithdrawal: amount must be < balance");
 
         // Perform standard margin check
-        (uint256 diff, bool satisfied) = checkMargin(user);
+        (uint256 margin, bool satisfied) = checkMargin(user);
 
         // `satisfied = true` => `isNegative = false`, vice versa
-        bool isNegative = !satisfied;
+        bool isMarginNeg = !satisfied;
 
-
+        // Subtract the withdraw
+        return NegativeMath.add(margin, isMarginNeg, amount, true);
     }
 
     /************************************************
@@ -460,7 +411,7 @@ contract ParetoV1Margin is
         }
 
         // Emit event 
-        emit RecordOrderEvent(
+        emit RecordPositionEvent(
             orderId,
             buyer,
             seller,
