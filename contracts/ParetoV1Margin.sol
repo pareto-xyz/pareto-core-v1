@@ -158,7 +158,7 @@ contract ParetoV1Margin is
      * @return satisfied True if AB + UP > IM + MM, else false
      */
     function checkMargin(address user)
-        external
+        public
         nonReentrant
         returns (uint256, bool)
     {
@@ -167,10 +167,12 @@ contract ParetoV1Margin is
         uint256 initial = getInitialMargin(user, spot);
         uint256 maintainence = getMaintainenceMargin(user, spot);
 
-        // Compute the unrealized PnL
+        // Compute the unrealized PnL (actually this is losses)
         (uint256 pnl, bool pnlIsNeg) = getPayoff(user, spot);
+
         // Compute `balance + PnL`
         (uint256 bpnl, bool bpnlIsNeg) = NegativeMath.add(balance, false, pnl, pnlIsNeg);
+
         // Compute `balance + PnL - IM - MM`
         (uint256 diff, bool diffIsNeg) = NegativeMath.add(bpnl, bpnlIsNeg, initial + maintainence, true);
 
@@ -188,10 +190,11 @@ contract ParetoV1Margin is
      * @dev TODO Support P&L netting
      * @param user Address to compute IM for
      * @param spot The spot price
+     * @param onlyLoss Do not count unrealized profits from open positions
      * @return payoff The payoff summed for all positions
      * @return isNegative True if the payoff is less than 0, else false
      */
-    function getPayoff(address user, uint256 spot)
+    function getPayoff(address user, uint256 spot, bool onlyLoss)
         internal
         view
         returns (uint256, bool) 
@@ -208,6 +211,12 @@ contract ParetoV1Margin is
         for (uint256 i = 0; i < positions.length; i++) {
             order = orderHashs[positions[i]];
             (uint256 curPayoff, bool curIsNegative) = MarginMath.getPayoff(user, spot, order);
+
+            // If payoff is positive but we don't want to count positive open positions
+            if (onlyLoss && !curIsNegative) {
+                curPayoff = 0;
+            }
+
             (payoff, isNegative) = NegativeMath.add(payoff, isNegative, curPayoff, curIsNegative);
         }
         return (payoff, isNegative);
@@ -277,13 +286,19 @@ contract ParetoV1Margin is
 
     /**
      * @notice Margin check on new order
+     * @dev This check must be done before the order is created
      * @dev The margin requirement is: AB + UP + min(0, IP) > IM where 
      * AB = account balance, UP = unrealized PnL
      * IP = instantaneous PnL from new order
      * IM = initial margin requirements
      * @dev This is also used when a liquidator takes over a position
      */
-    function checkMarginOnNewOrder() internal view returns (uint256, bool) {
+    function checkMarginOnNewOrder(Derivative.Order memory order)
+        internal
+        view
+        returns (uint256, bool)
+    {
+
     }
 
     /**
@@ -311,13 +326,8 @@ contract ParetoV1Margin is
         // Compute balance after making withdrawal
         uint256 balancePostWithdraw = balances[user] - amount;
 
-        // Compute the unrealized PnL
-        (uint256 pnl, bool pnlIsNeg) = getPayoff(user, spot);
-
-        // Compute min(0, PnL) so if PnL >= 0, set it to 0
-        if (!pnlIsNeg) {
-            pnl = 0;
-        }
+        // Compute the unrealized PnL (actually only unrealized loss)
+        (uint256 pnl, bool pnlIsNeg) = getPayoff(user, spot, true);
 
         // Compute `balance + PnL`
         (uint256 bpnl, bool bpnlIsNeg) = NegativeMath.add(balancePostWithdraw, false, pnl, pnlIsNeg);

@@ -181,13 +181,13 @@ library MarginMath {
      * @param trader Address of the trader
      * @param spot Current spot price
      * @param order Order object containing option parameters and price/quantity
-     * @param payoff Profit or loss of position @ spot
-     * @param isNegative Is `payoff < 0` (true) or `payoff >= 0` (false)
+     * @return payoff Profit or loss of position @ spot
+     * @return isNegative Is `payoff < 0` (true) or `payoff >= 0` (false)
      */
     function getPayoff(
         address trader,
         uint256 spot,
-        Derivative.Order memory order
+        Derivative.Order memory order,
     ) 
         external
         pure
