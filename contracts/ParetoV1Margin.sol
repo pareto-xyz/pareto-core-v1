@@ -118,6 +118,26 @@ contract ParetoV1Margin is
         uint256 expiry
     );
 
+    /**
+     * @notice Event when owner adds keepers
+     * @param owner Owner who added keepers
+     * @param numKeepers Number of keepers added
+     */
+    event AddKeepersEvent(
+        address indexed owner,
+        uint256 numKeepers
+    );
+
+    /**
+     * @notice Event when owner removes keepers
+     * @param owner Owner who removed keepers
+     * @param numKeepers Number of keepers removed
+     */
+    event RemoveKeepersEvent(
+        address indexed owner,
+        uint256 numKeepers
+    );
+
     /************************************************
      * External functions
      ***********************************************/
@@ -356,6 +376,9 @@ contract ParetoV1Margin is
             require(!keepers[accounts[i]], "addKeeper: already a keeper");
             keepers[accounts[i]] = true;
         }
+
+        // Emit event
+        emit AddKeepersEvent(msg.sender, accounts.length);
     }
 
     /**
@@ -368,6 +391,9 @@ contract ParetoV1Margin is
             require(keepers[accounts[i]], "removeKeeper: not a keeper");
             keepers[accounts[i]] = false;
         }
+
+        // Emit event
+        emit RemoveKeepersEvent(msg.sender, accounts.length);
     }
 
     /**
