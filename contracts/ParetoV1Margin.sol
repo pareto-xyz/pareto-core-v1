@@ -205,18 +205,18 @@ contract ParetoV1Margin is
      * @dev Only successful if margin accounts remain satisfied post withdraw
      */
     function withdrawAll() external nonReentrant {
-        uint256 amount = balances[msg.sender];
-        require(amount > 0, "withdraw: empty balance");
+        uint256 balance = balances[msg.sender];
+        require(balance > 0, "withdraw: empty balance");
 
         // Check margin post withdrawal
-        (, bool satisfied) = checkMarginOnWithdrawal(msg.sender, amount);
+        (, bool satisfied) = checkMarginOnWithdrawal(msg.sender, balance);
         require(satisfied, "withdraw: margin check failed");
 
         // Transfer USDC to sender
-        IERC20(usdc).safeTransfer(msg.sender, amount);
+        IERC20(usdc).safeTransfer(msg.sender, balance);
 
         // Emit event
-        emit WithdrawEvent(msg.sender, amount);
+        emit WithdrawEvent(msg.sender, balance);
     }
 
     /**
@@ -244,7 +244,7 @@ contract ParetoV1Margin is
         // Compute `balance + PnL`
         (uint256 bpnl, bool bpnlIsNeg) = NegativeMath.add(balance, false, pnl, pnlIsNeg);
 
-        // Compute `balance + PnL - IM - MM`
+        // Compute `balance + PnL - MM`
         (uint256 diff, bool diffIsNeg) = NegativeMath.add(bpnl, bpnlIsNeg, maintainence, true);
 
         // if diff > 0, then satisfied = true
