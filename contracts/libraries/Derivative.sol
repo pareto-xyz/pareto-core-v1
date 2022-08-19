@@ -305,7 +305,7 @@ library Derivative {
     /**
      * @notice Hash order into byte string
      * @param order Order object 
-     * @param hash_ SHA-3 hash of the future object
+     * @param hash_ SHA-3 hash of the Order object
      */
     function hashOrder(Order memory order)
         public
@@ -318,10 +318,25 @@ library Derivative {
             order.seller,
             order.tradePrice,
             order.quantity,
-            order.option.optionType,
-            order.option.underlying, 
-            order.option.strike,
-            order.option.expiry
+            hashOption(order.option)
+        ));
+    }
+
+    /**
+     * @notice Hash option into byte string
+     * @param option Option object 
+     * @param hash_ SHA-3 hash of the Option object
+     */
+    function hashOption(Option memory option)
+        public
+        pure
+        returns (bytes32 hash_)
+    {
+        hash_ = keccak256(abi.encodePacked(
+            option.optionType,
+            option.underlying, 
+            option.strike,
+            option.expiry
         ));
     }
 

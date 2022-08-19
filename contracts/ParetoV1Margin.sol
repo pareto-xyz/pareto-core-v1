@@ -55,7 +55,7 @@ contract ParetoV1Margin is
     /// @notice Track total balance (used for checks)
     uint256 private totalBalance;
 
-    /// @notice Store volatility smiles per option
+    /// @notice Store volatility smiles per option (not order)
     mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
 
     /************************************************
@@ -251,6 +251,27 @@ contract ParetoV1Margin is
         return (diff, !diffIsNeg);
     }
 
+    /**
+     * @notice Get the impled volatility from the smile
+     * @dev Uses current oracle price for spot
+     * @param option Option object with expiry, strike, etc. This is not an `order` object
+     */
+    function getImpliedVol(Derivative.Option calldata option) 
+        external
+        view
+        returns (uint256 vol) 
+    {
+        Derivative.VolatilitySmile memory smile = volSmiles[Derivative.hashOption(option)];
+        require(smile.exists_, "getImpliedVol: smile does not exist");
+
+        // Compute current moneyness
+        uint256 spot = 1 ether;  // TODO: replace with oracle
+        uint256 curMoneyness = (spot * 10**option.decimals * 100) / option.strike;
+
+        // Compute volatility by interpolating
+        vol = Derivative.interpolate([50,75,100,125,150], smile.volAtMoneyness, curMoneyness);
+    }
+
     /************************************************
      * Internal functions
      ***********************************************/
@@ -314,10 +335,15 @@ contract ParetoV1Margin is
         Derivative.Order memory order;
         Derivative.VolatilitySmile memory smile;
         uint256 margin;
+        bytes32 optionHash;
 
         for (uint256 i = 0; i < positions.length; i++) {
             order = orderHashs[positions[i]];
-            smile = volSmiles[positions[i]];
+            optionHash = Derivative.hashOption(order.option);
+            smile = volSmiles[optionHash];
+
+            // Check that the smile exists and compute MM
+            require(smile.exists_, "getMaintainenceMargin: found unknown option");
             uint256 curMargin = MarginMath.getMaintainenceMargin(user, spot, order, smile);
             margin += curMargin;
         }
@@ -430,22 +456,24 @@ contract ParetoV1Margin is
                 decimals
             )
         );
-        bytes32 hash_ = Derivative.hashOrder(order);
+        bytes32 orderHash = Derivative.hashOrder(order);
+        bytes32 optionHash = Derivative.hashOption(order.option);
 
         // Save the order object
-        orderHashs[hash_] = order;
+        orderHashs[orderHash] = order;
 
         // Save that the buyer/seller have this position
-        orderPositions[buyer].push(hash_);
-        orderPositions[seller].push(hash_);
+        orderPositions[buyer].push(orderHash);
+        orderPositions[seller].push(orderHash);
 
-        if (volSmiles[hash_].exists_) {
+        /// @dev Smiles are unique to the option not the order
+        if (volSmiles[optionHash].exists_) {
             // Update the volatility smile
             // FIXME: replace `1 ether` with spot price
-            Derivative.updateSmile(1 ether, order, volSmiles[hash_]);
+            Derivative.updateSmile(1 ether, order, volSmiles[optionHash]);
         } else {
             // Create a new volatility smile
-            volSmiles[hash_] = Derivative.createSmile(order);
+            volSmiles[optionHash] = Derivative.createSmile(order);
         }
 
         // Emit event 
