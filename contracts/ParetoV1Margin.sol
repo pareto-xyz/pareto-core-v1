@@ -259,17 +259,21 @@ contract ParetoV1Margin is
     function getImpliedVol(Derivative.Option calldata option) 
         external
         view
-        returns (uint256 vol) 
+        returns (uint256 vol, uint256 sigma) 
     {
         Derivative.VolatilitySmile memory smile = volSmiles[Derivative.hashOption(option)];
         require(smile.exists_, "getImpliedVol: smile does not exist");
+
+        // Get time to expiry
+        uint256 tau = option.expiry - block.timestamp;
 
         // Compute current moneyness
         uint256 spot = 1 ether;  // TODO: replace with oracle
         uint256 curMoneyness = (spot * 10**option.decimals * 100) / option.strike;
 
-        // Compute volatility by interpolating
+        // Compute volatility by interpolating, then derive standard deviation
         vol = Derivative.interpolate([50,75,100,125,150], smile.volAtMoneyness, curMoneyness);
+        sigma = BlackScholesMath.volToSigma(vol, tau);
     }
 
     /************************************************
