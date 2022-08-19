@@ -76,7 +76,6 @@ library Derivative {
     {
         Option memory option = order.option;
         require(option.expiry >= block.timestamp, "createSmile: option expired");
-        uint256 curTime = block.timestamp;
 
         // Compute scale factor
         uint256 scaleFactor = 10**(18-option.decimals);
@@ -94,7 +93,7 @@ library Derivative {
                     BlackScholesMath.VolCalculationInput(
                         spot,
                         option.strike,
-                        option.expiry - curTime,
+                        option.expiry - block.timestamp,
                         0,  // FIXME: get risk-free rate
                         scaleFactor,
                         order.tradePrice
@@ -109,7 +108,7 @@ library Derivative {
                     BlackScholesMath.VolCalculationInput(
                         spot,
                         option.strike,
-                        option.expiry - curTime,
+                        option.expiry - block.timestamp,
                         0,  // FIXME: get risk-free rate
                         order.tradePrice,
                         scaleFactor
@@ -147,7 +146,10 @@ library Derivative {
 
         // Interpolate against existing smiles to get sigma
         uint256 vol = interpolate(
-            [50,75,100,125,150], smile.volAtMoneyness, curMoneyness);
+            [50,75,100,125,150],
+            smile.volAtMoneyness,
+            curMoneyness
+        );
         uint256 sigma = BlackScholesMath.volToSigma(vol, tau);
 
         // Compute mark price using current option
@@ -239,13 +241,13 @@ library Derivative {
             if (adjustPerc > 500) {
                 adjustPerc = 500;
             }
-            // Divide by 10**4 because 2 places for decimals and 2 for percentage
+            // Divide by 10000 because 2 places for decimals and 2 for percentage
             if (isNegative) {
                 smile.volAtMoneyness[index] = 
-                    curVol - (curVol * adjustPerc) / 10**4;
+                    curVol - (curVol * adjustPerc) / 10000;
             } else {
                 smile.volAtMoneyness[index] = 
-                    curVol + (curVol * adjustPerc) / 10**4;
+                    curVol + (curVol * adjustPerc) / 10000;
             }
         }
     } 

@@ -39,7 +39,7 @@ contract ParetoV1Margin is
     mapping(address => uint256) private balances;
 
     /// @notice Stores hashes of open positions for every user
-    mapping(address => mapping(bytes32 => bool)) private orderPositions;
+    mapping(address => bytes32[]) private orderPositions;
 
     /// @notice Stores hash to derivative order
     mapping(bytes32 => Derivative.Order) private orderHashs;
@@ -249,8 +249,8 @@ contract ParetoV1Margin is
         orderHashs[hash_] = order;
 
         // Save that the buyer/seller have this position
-        orderPositions[buyer][hash_] = true;
-        orderPositions[seller][hash_] = true;
+        orderPositions[buyer].push(hash_);
+        orderPositions[seller].push(hash_);
 
         if (volSmiles[hash_].exists_) {
             // Update the volatility smile

@@ -18,10 +18,18 @@ library BlackScholesMath {
     using Units for int128;
     using Units for uint256;
 
+    /************************************************
+     * Constants
+     ***********************************************/
+
     int128 internal constant ONE_INT = 0x10000000000000000;
     int128 internal constant TWO_INT = 0x20000000000000000;
     int128 internal constant ONE_EIGHTY_FIVE_INT = 0x1d99999999999999a;
     int128 internal constant PI_INT = 0x3243f6a8885a308d3;
+
+    /************************************************
+     * Computing Black Scholes Probabilities
+     ***********************************************/
 
     /**
      * @notice Compute Black Scholes d1 parameter
@@ -49,6 +57,10 @@ library BlackScholesMath {
         d1 = logRatioX64.add(crossTermX64).div(volX64);
         d2 = d1.sub(volX64);
     }
+
+    /************************************************
+     * Computing Options Prices
+     ***********************************************/
 
     /**
      * @notice Struct that groups together inputs for computing BS price
@@ -158,6 +170,10 @@ library BlackScholesMath {
         price = priceX64.scaleFromX64(inputs.scaleFactor);
     }
 
+    /************************************************
+     * Backsolving for Volatility
+     ***********************************************/
+
     /**
      * @notice Struct that groups together inputs for computing BS price
      * @param spot Spot price in stable asset
@@ -224,23 +240,6 @@ library BlackScholesMath {
     }
 
     /**
-     * @notice Convert sigma to implied volatility by multiplying by root tau
-     * @param sigma Standard deviation of returns (volatility)
-     * @param tau The time to expiry in seconds
-     * @param vol The implied volatility i.e., sigma * sqrt(tau)
-     */
-    function sigmaToVol(uint256 sigma, uint256 tau)
-        internal
-        pure
-        returns (uint256 vol) 
-    {
-        int128 sqrtTauX64 = tau.toYears().sqrt();
-        int128 sigmaX64 = sigma.percentageToX64();
-        int128 volX64 = sigmaX64.mul(sqrtTauX64);
-        vol = volX64.percentageFromX64();
-    }
-
-    /**
      * @notice Approximate volatility from trade price for a call option
      * @dev See "An Improved Estimator For Black-Scholes-Merton Implied Volatility" by Hallerbach (2004)
      * @param inputs Black Scholes model parameters
@@ -291,6 +290,10 @@ library BlackScholesMath {
         // Swap back to original in case inputs are being used again
         (inputs.strike, inputs.spot) = (inputs.spot, inputs.strike);
     }
+
+    /************************************************
+     * Computing Vega
+     ***********************************************/
 
     /**
      * @notice Compute vega of an option (change in option price given 1% change in IV)
