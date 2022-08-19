@@ -8,6 +8,7 @@ import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.
 
 import "./interfaces/IERC20.sol";
 import "./libraries/Derivative.sol";
+import "./libraries/MarginMath.sol";
 import "./libraries/BlackScholesMath.sol";
 
 /**
@@ -182,16 +183,63 @@ contract ParetoV1Margin is
 
     /**
      * @notice Compute the initial margin for all positions owned by user
+     * @dev The initial margin is equal to the sum of initial margins for all positions
+     * @dev TODO Support P&L netting
      * @param user Address to compute IM for
+     * @param spot The spot price
      */
-    function getInitialMargin(address user) internal returns (uint256) {
+    function getInitialMargin(address user, uint256 spot)
+        internal
+        view
+        returns (uint256) 
+    {
+        bytes32[] memory positions = orderPositions[user];
+        if (positions.length == 0) {
+            return 0;
+        }
+
+        Derivative.Order memory order;
+        Derivative.VolatilitySmile memory smile;
+        uint256 totalMargin;
+
+        for (uint256 i = 0; i < positions.length; i++) {
+            order = orderHashs[positions[i]];
+            smile = volSmiles[positions[i]];
+            
+            uint256 margin = 
+                MarginMath.getInitialMargin(user, spot, order, smile);
+            totalMargin += margin;
+        }
     }
 
     /**
      * @notice Compute the maintainence margin for all positions owned by user
+     * @dev The maintainence margin is equal to the sum of maintainence margins for all positions
+     * @dev TODO Support P&L netting
      * @param user Address to compute MM for
+     * @param spot The spot price
      */
-    function getMaintainenceMargin(address user) internal returns (uint256) {
+    function getMaintainenceMargin(address user, uint256 spot) 
+        internal
+        returns (uint256) 
+    {
+        bytes32[] memory positions = orderPositions[user];
+        if (positions.length == 0) {
+            return 0;
+        }
+
+        Derivative.Order memory order;
+        Derivative.VolatilitySmile memory smile;
+        uint256 totalMargin;
+
+        for (uint256 i = 0; i < positions.length; i++) {
+            order = orderHashs[positions[i]];
+            smile = volSmiles[positions[i]];
+            
+            uint256 margin = 
+                MarginMath.getMaintainenceMargin(user, spot, order, smile);
+            totalMargin += margin;
+        }
     }
 
     /************************************************
