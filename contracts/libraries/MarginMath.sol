@@ -187,7 +187,7 @@ library MarginMath {
     function getPayoff(
         address trader,
         uint256 spot,
-        Derivative.Order memory order,
+        Derivative.Order memory order
     ) 
         external
         pure

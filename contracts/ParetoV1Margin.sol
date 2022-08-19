@@ -37,6 +37,9 @@ contract ParetoV1Margin is
     /// @notice Stores the address for USDC
     address public usdc;
 
+    /// @notice List of keepers who can add positions
+    mapping(address => bool) private keepers;
+
     /// @notice Stores the amount of "cash" owned by users
     mapping(address => uint256) private balances;
 
@@ -65,6 +68,9 @@ contract ParetoV1Margin is
         // Initialize the upgradeable dependencies
         __ReentrancyGuard_init();
         __Ownable_init();
+
+        // The owner is a keeper
+        keepers[owner()] = true;
     }
 
     /**
@@ -73,6 +79,14 @@ contract ParetoV1Margin is
      * @dev required by the OZ UUPS module
      */
     function _authorizeUpgrade(address) internal override onlyOwner {}
+
+    /**
+     * @dev Throws if called by a non-keeper account.
+     */
+    modifier onlyKeeper() {
+        require(keepers[msg.sender], "onlyKeeper: caller is not a keeper");
+        _;
+    }
 
     /************************************************
      * Events
@@ -167,8 +181,8 @@ contract ParetoV1Margin is
         uint256 initial = getInitialMargin(user, spot);
         uint256 maintainence = getMaintainenceMargin(user, spot);
 
-        // Compute the unrealized PnL (actually this is losses)
-        (uint256 pnl, bool pnlIsNeg) = getPayoff(user, spot);
+        // Compute the unrealized PnL (actually this is only unrealized losses)
+        (uint256 pnl, bool pnlIsNeg) = getPayoff(user, spot, true);
 
         // Compute `balance + PnL`
         (uint256 bpnl, bool bpnlIsNeg) = NegativeMath.add(balance, false, pnl, pnlIsNeg);
@@ -318,24 +332,14 @@ contract ParetoV1Margin is
     {
         require(amount > 0, "checkMarginOnWithdrawal: amount must be > 0");
         require(amount < balances[user], "checkMarginOnWithdrawal: amount must be < balance");
-        uint256 spot = 1 ether;  // TODO: get real spot price
 
-        // Compute initial margin
-        uint256 margin = getInitialMargin(user, spot);
+        // Perform standard margin check
+        (uint256 diff, bool satisfied) = checkMargin(user);
 
-        // Compute balance after making withdrawal
-        uint256 balancePostWithdraw = balances[user] - amount;
+        // `satisfied = true` => `isNegative = false`, vice versa
+        bool isNegative = !satisfied;
 
-        // Compute the unrealized PnL (actually only unrealized loss)
-        (uint256 pnl, bool pnlIsNeg) = getPayoff(user, spot, true);
 
-        // Compute `balance + PnL`
-        (uint256 bpnl, bool bpnlIsNeg) = NegativeMath.add(balancePostWithdraw, false, pnl, pnlIsNeg);
-        // Compute `balance + PnL - IM - MM`
-        (uint256 diff, bool diffIsNeg) = NegativeMath.add(bpnl, bpnlIsNeg, margin, true);
-
-        // if diff > 0, then satisfied = true
-        return (diff, !diffIsNeg);
     }
 
     /************************************************
@@ -343,11 +347,35 @@ contract ParetoV1Margin is
      ***********************************************/
 
     /**
-     * @notice Record a matched order from off-chain orderbook
+     * @notice Add a keeper
+     * @dev Add as a list for gas efficiency
+     * @param accounts Addresses to add as keepers
+     */
+    function addKeepers(address[] calldata accounts) external onlyOwner {
+        for (uint256 i = 0; i < accounts.length; i++) {
+            require(!keepers[accounts[i]], "addKeeper: already a keeper");
+            keepers[accounts[i]] = true;
+        }
+    }
+
+    /**
+     * @notice Remove a keeper
+     * @dev Add as a list for gas efficiency
+     * @param accounts Addresses to remove as keepers
+     */
+    function removeKeepers(address[] calldata accounts) external onlyOwner {
+        for (uint256 i = 0; i < accounts.length; i++) {
+            require(keepers[accounts[i]], "removeKeeper: not a keeper");
+            keepers[accounts[i]] = false;
+        }
+    }
+
+    /**
+     * @notice Record a position (matched order) from off-chain orderbook
      * @dev Saves the order to storage variables. Only the owner can call
      * this function
      */
-    function recordOrder(
+    function addPosition(
         string memory orderId,
         address buyer,
         address seller,
@@ -360,16 +388,16 @@ contract ParetoV1Margin is
     ) 
         external
         nonReentrant
-        onlyOwner 
+        onlyKeeper 
     {
-        require(bytes(orderId).length > 0, "recordOrder: bookId is empty");
-        require(tradePrice > 0, "recordOrder: tradePrice must be > 0");
-        require(quantity > 0, "recordOrder: quantity must be > 0");
-        require(underlying != address(0), "recordOrder: underlying is empty");
-        require(strike > 0, "recordOrder: strike must be positive");
+        require(bytes(orderId).length > 0, "addPosition: bookId is empty");
+        require(tradePrice > 0, "addPosition: tradePrice must be > 0");
+        require(quantity > 0, "addPosition: quantity must be > 0");
+        require(underlying != address(0), "addPosition: underlying is empty");
+        require(strike > 0, "addPosition: strike must be positive");
         require(
             expiry > block.timestamp,
-            "recordOrder: expiry must be > current time"
+            "addPosition: expiry must be > current time"
         );
 
         uint8 decimals = IERC20(underlying).decimals();
