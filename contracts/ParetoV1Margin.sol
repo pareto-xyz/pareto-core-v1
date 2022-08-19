@@ -163,9 +163,10 @@ contract ParetoV1Margin is
             bool satisfied
         ) 
     {
+        uint256 spot = 1 ether;  // TODO: get real spot price
         uint256 balance = balances[user];
-        uint256 initial = getInitialMargin(user);
-        uint256 maintainence = getMaintainenceMargin(user);
+        uint256 initial = getInitialMargin(user, spot);
+        uint256 maintainence = getMaintainenceMargin(user, spot);
 
         satisfied = balance > (initial + maintainence);
 
