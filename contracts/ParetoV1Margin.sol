@@ -9,6 +9,7 @@ import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.
 import "./interfaces/IERC20.sol";
 import "./libraries/Derivative.sol";
 import "./libraries/MarginMath.sol";
+import "./libraries/NegativeMath.sol";
 import "./libraries/BlackScholesMath.sol";
 
 /**
@@ -151,31 +152,30 @@ contract ParetoV1Margin is
      * @dev The margin requirement is: AB + UP > IM + MM where 
      * AB = account balance, UP = unrealized PnL
      * IM/MM = initial and maintainence margins
+     * @dev If the margin check fails, then the user margin account can be liquidated
      * @param user Address of the account to check
-     * @param diff |AB + UP - IM - MM|, always positive
-     * @param satisfied True if AB + UP > IM + MM, else false
+     * @return diff |AB + UP - IM - MM|, always positive
+     * @return satisfied True if AB + UP > IM + MM, else false
      */
     function checkMargin(address user)
         external
         nonReentrant
-        returns (
-            uint256 diff, 
-            bool satisfied
-        ) 
+        returns (uint256, bool)
     {
         uint256 spot = 1 ether;  // TODO: get real spot price
         uint256 balance = balances[user];
         uint256 initial = getInitialMargin(user, spot);
         uint256 maintainence = getMaintainenceMargin(user, spot);
 
-        satisfied = balance > (initial + maintainence);
+        // Compute the unrealized PnL
+        (uint256 pnl, bool pnlIsNeg) = getPayoff(user, spot);
+        // Compute `balance + PnL`
+        (uint256 bpnl, bool bpnlIsNeg) = NegativeMath.add(balance, false, pnl, pnlIsNeg);
+        // Compute `balance + PnL - IM - MM`
+        (uint256 diff, bool diffIsNeg) = NegativeMath.add(bpnl, bpnlIsNeg, initial + maintainence, true);
 
-        if (satisfied) {
-            diff = balance - initial - maintainence;
-        } else {
-            diff = initial + maintainence - balance;
-        }
-        return (diff, satisfied);
+        // if diff > 0, then satisfied = true
+        return (diff, !diffIsNeg);
     }
 
     /************************************************
@@ -188,6 +188,38 @@ contract ParetoV1Margin is
      * @dev TODO Support P&L netting
      * @param user Address to compute IM for
      * @param spot The spot price
+     * @return payoff The payoff summed for all positions
+     * @return isNegative True if the payoff is less than 0, else false
+     */
+    function getPayoff(address user, uint256 spot)
+        internal
+        view
+        returns (uint256, bool) 
+    {
+        bytes32[] memory positions = orderPositions[user];
+        if (positions.length == 0) {
+            return (0, false);
+        }
+
+        Derivative.Order memory order;
+        uint256 payoff;
+        bool isNegative;
+
+        for (uint256 i = 0; i < positions.length; i++) {
+            order = orderHashs[positions[i]];
+            (uint256 curPayoff, bool curIsNegative) = MarginMath.getPayoff(user, spot, order);
+            (payoff, isNegative) = NegativeMath.add(payoff, isNegative, curPayoff, curIsNegative);
+        }
+        return (payoff, isNegative);
+    }
+
+    /**
+     * @notice Compute the initial margin for all positions owned by user
+     * @dev The initial margin is equal to the sum of initial margins for all positions
+     * @dev TODO Support P&L netting
+     * @param user Address to compute IM for
+     * @param spot The spot price
+     * @return margin The initial margin summed for all positions
      */
     function getInitialMargin(address user, uint256 spot)
         internal
@@ -201,16 +233,15 @@ contract ParetoV1Margin is
 
         Derivative.Order memory order;
         Derivative.VolatilitySmile memory smile;
-        uint256 totalMargin;
+        uint256 margin;
 
         for (uint256 i = 0; i < positions.length; i++) {
             order = orderHashs[positions[i]];
             smile = volSmiles[positions[i]];
-            
-            uint256 margin = 
-                MarginMath.getInitialMargin(user, spot, order, smile);
-            totalMargin += margin;
+            uint256 curMargin = MarginMath.getInitialMargin(user, spot, order, smile);
+            margin += curMargin;
         }
+        return margin;
     }
 
     /**
@@ -219,9 +250,11 @@ contract ParetoV1Margin is
      * @dev TODO Support P&L netting
      * @param user Address to compute MM for
      * @param spot The spot price
+     * @return margin The maintainence margin summed for all positions
      */
     function getMaintainenceMargin(address user, uint256 spot) 
         internal
+        view
         returns (uint256) 
     {
         bytes32[] memory positions = orderPositions[user];
@@ -231,16 +264,68 @@ contract ParetoV1Margin is
 
         Derivative.Order memory order;
         Derivative.VolatilitySmile memory smile;
-        uint256 totalMargin;
+        uint256 margin;
 
         for (uint256 i = 0; i < positions.length; i++) {
             order = orderHashs[positions[i]];
             smile = volSmiles[positions[i]];
-            
-            uint256 margin = 
-                MarginMath.getMaintainenceMargin(user, spot, order, smile);
-            totalMargin += margin;
+            uint256 curMargin = MarginMath.getMaintainenceMargin(user, spot, order, smile);
+            margin += curMargin;
         }
+        return margin;
+    }
+
+    /**
+     * @notice Margin check on new order
+     * @dev The margin requirement is: AB + UP + min(0, IP) > IM where 
+     * AB = account balance, UP = unrealized PnL
+     * IP = instantaneous PnL from new order
+     * IM = initial margin requirements
+     * @dev This is also used when a liquidator takes over a position
+     */
+    function checkMarginOnNewOrder() internal view returns (uint256, bool) {
+    }
+
+    /**
+     * @notice Margin check on withdrawal
+     * @dev The margin requirement is: AB + min(0, UP) > IM  where 
+     * AB = account balance, UP = unrealized PnL
+     * IM = initial margin requirements
+     * @param user Address of the margin account to check
+     * @param amount Amount requesting to be withdrawn from account
+     * @return diff |AB + min(UP, 0) - IM|, always positive
+     * @return satisfied True if AB + min(UP) > IM, else false
+     */
+    function checkMarginOnWithdrawal(address user, uint256 amount) 
+        internal
+        view
+        returns (uint256, bool) 
+    {
+        require(amount > 0, "checkMarginOnWithdrawal: amount must be > 0");
+        require(amount < balances[user], "checkMarginOnWithdrawal: amount must be < balance");
+        uint256 spot = 1 ether;  // TODO: get real spot price
+
+        // Compute initial margin
+        uint256 margin = getInitialMargin(user, spot);
+
+        // Compute balance after making withdrawal
+        uint256 balancePostWithdraw = balances[user] - amount;
+
+        // Compute the unrealized PnL
+        (uint256 pnl, bool pnlIsNeg) = getPayoff(user, spot);
+
+        // Compute min(0, PnL) so if PnL >= 0, set it to 0
+        if (!pnlIsNeg) {
+            pnl = 0;
+        }
+
+        // Compute `balance + PnL`
+        (uint256 bpnl, bool bpnlIsNeg) = NegativeMath.add(balancePostWithdraw, false, pnl, pnlIsNeg);
+        // Compute `balance + PnL - IM - MM`
+        (uint256 diff, bool diffIsNeg) = NegativeMath.add(bpnl, bpnlIsNeg, margin, true);
+
+        // if diff > 0, then satisfied = true
+        return (diff, !diffIsNeg);
     }
 
     /************************************************

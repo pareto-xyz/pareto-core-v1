@@ -176,6 +176,63 @@ library MarginMath {
         }
     }
 
+    /**
+     * @notice Computes payoff for option i.e. unrealized P&L
+     * @param trader Address of the trader
+     * @param spot Current spot price
+     * @param order Order object containing option parameters and price/quantity
+     * @param payoff Profit or loss of position @ spot
+     * @param isNegative Is `payoff < 0` (true) or `payoff >= 0` (false)
+     */
+    function getPayoff(
+        address trader,
+        uint256 spot,
+        Derivative.Order memory order
+    ) 
+        external
+        pure
+        returns (uint256 payoff, bool isNegative) 
+    {
+        require(
+            (trader == order.buyer) || (trader == order.seller),
+            "getInitialMargin: trader must be buyer or seller"
+        );
+        Derivative.Option memory option = order.option;
+
+        uint256 payoffNoPremium;
+
+        // Cover four cases: long/short call/put
+        if (isCall(order)) {
+            /**
+             * Case #1/2: trader bought/sold a call
+             * payoff = max(spot - strike, 0) 
+             * = max(strike, spot) - strike
+             */
+            payoffNoPremium = spot.max(option.strike) - option.strike;
+            (payoff, isNegative) = payoffNoPremium.absdiff(order.tradePrice);
+            
+            // If we are selling (shorting) the call, we just have to 
+            // flip the negative
+            if (!isLong(trader, order)) {
+                isNegative = !isNegative;
+            }
+        } else {
+            /**
+             * Case #3/4: trader bought/sold a put
+             * payoff = max(strike - spot, 0) 
+             * = max(strike, spot) - spot
+             */
+            payoffNoPremium = option.strike.max(spot) - spot;
+            (payoff, isNegative) = payoffNoPremium.absdiff(order.tradePrice);
+            
+            // If we are selling (shorting) the call, we just have to 
+            // flip the negative
+            if (!isLong(trader, order)) {
+                isNegative = !isNegative;
+            }
+        }
+    }
+
     /************************************************
      * Helper Functions
      ***********************************************/
