@@ -7,6 +7,7 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
 import "./interfaces/IERC20.sol";
+import "./libraries/SafeERC20.sol";
 import "./libraries/Derivative.sol";
 import "./libraries/MarginMath.sol";
 import "./libraries/NegativeMath.sol";
@@ -30,6 +31,8 @@ contract ParetoV1Margin is
     ReentrancyGuardUpgradeable,
     OwnableUpgradeable
 {
+    using SafeERC20 for IERC20;
+
     /************************************************
      * Constants and Immutables
      ***********************************************/
@@ -119,6 +122,16 @@ contract ParetoV1Margin is
     );
 
     /**
+     * @notice Event to withdraw tokens 
+     * @param user Address of the withdrawer
+     * @param amount Amount of USDC to withdraw
+     */
+    event WithdrawEvent(
+        address indexed user,
+        uint256 amount
+    );
+
+    /**
      * @notice Event when owner adds keepers
      * @param owner Owner who added keepers
      * @param numKeepers Number of keepers added
@@ -173,12 +186,37 @@ contract ParetoV1Margin is
      * @param amount Amount to withdraw
      */
     function withdraw(uint256 amount) external nonReentrant {
+        require(amount > 0, "withdraw: amount must be > 0");
+        require(amount <= balances[msg.sender], "withdraw: amount > balance");
+        
+        // Check margin post withdrawal
+        (, bool satisfied) = checkMarginOnWithdrawal(msg.sender, amount);
+        require(satisfied, "withdraw: margin check failed");
+
+        // Transfer USDC to sender
+        IERC20(usdc).safeTransfer(msg.sender, amount);
+
+        // Emit event
+        emit WithdrawEvent(msg.sender, amount);
     }
 
     /**
-     * @notice Withdraw the maximum amount allowed currently
+     * @notice Withdraw full balance. 
+     * @dev Only successful if margin accounts remain satisfied post withdraw
      */
-    function withdrawMax() external nonReentrant {
+    function withdrawAll() external nonReentrant {
+        uint256 amount = balances[msg.sender];
+        require(amount > 0, "withdraw: empty balance");
+
+        // Check margin post withdrawal
+        (, bool satisfied) = checkMarginOnWithdrawal(msg.sender, amount);
+        require(satisfied, "withdraw: margin check failed");
+
+        // Transfer USDC to sender
+        IERC20(usdc).safeTransfer(msg.sender, amount);
+
+        // Emit event
+        emit WithdrawEvent(msg.sender, amount);
     }
 
     /**
