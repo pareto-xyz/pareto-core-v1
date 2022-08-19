@@ -251,52 +251,6 @@ contract ParetoV1Margin is
         return (diff, !diffIsNeg);
     }
 
-    /**
-     * @notice Public function to get the impled volatility from the smile
-     * @dev Uses current oracle price for spot
-     * @param spot Spot price for underyling 
-     * @param option Option object with expiry, strike, etc. This is not an `order` object
-     */
-    function getImpliedVol(uint256 spot, Derivative.Option calldata option) 
-        public
-        view
-        returns (uint256 vol, uint256 sigma) 
-    {
-        Derivative.VolatilitySmile memory smile = volSmiles[Derivative.hashOption(option)];
-        require(smile.exists_, "getImpliedVol: smile does not exist");
-
-        // Get time to expiry
-        uint256 tau = option.expiry - block.timestamp;
-
-        // Compute current moneyness
-        uint256 curMoneyness = (spot * 10**option.decimals * 100) / option.strike;
-
-        // Compute volatility by interpolating, then derive standard deviation
-        vol = Derivative.interpolate([50,75,100,125,150], smile.volAtMoneyness, curMoneyness);
-        sigma = BlackScholesMath.volToSigma(vol, tau);
-    }
-
-    /**
-     * @notice Public function to get the mark price
-     * @dev Uses current oracle price for spot
-     * @param spot Spot price for underyling 
-     * @param option Option object with expiry, strike, etc. This is not an `order` object
-     */
-    function getMarkPrice(uint256 spot, Derivative.Option calldata option)
-        external
-        view
-        returns (uint256 markPrice)
-    {
-        // Get time to expiry
-        uint256 tau = option.expiry - block.timestamp;
-
-        // Compute standard deviation of returns
-        (, uint256 sigma) = getImpliedVol(spot, option);
-
-        // Compute mark price
-        markPrice = Derivative.getMarkPrice(option, spot, sigma, tau);
-    }
-
     /************************************************
      * Internal functions
      ***********************************************/
