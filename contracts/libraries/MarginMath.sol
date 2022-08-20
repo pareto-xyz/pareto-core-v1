@@ -17,18 +17,18 @@ library MarginMath {
      ***********************************************/
 
     /**
-     * @notice Compute maintainence margin
+     * @notice Compute maintainence margin for a single unit of underlying
      * @dev Separate heuristics for short/long call/put
-     * @param trader Address of the trader
      * @param spot Current spot price
-     * @param order Order object containing option parameters and price/quantity
+     * @param isBuyer Is the trader going long or short
+     * @param option Option object containing strike, expiry info
      * @param smile Volatility smile to get implied vol
      * @return margin Maintainence margin for position
      */
     function getMaintainenceMargin(
-        address trader,
         uint256 spot,
-        Derivative.Order memory order,
+        bool isBuyer,
+        Derivative.Option memory option,
         Derivative.VolatilitySmile memory smile
     ) 
         external
@@ -36,18 +36,13 @@ library MarginMath {
         returns (uint256 margin) 
     {
         require(
-            (trader == order.buyer) || (trader == order.seller),
-            "getInitialMargin: trader must be buyer or seller"
-        );
-        Derivative.Option memory option = order.option;
-        require(
             option.expiry > block.timestamp,
             "getInitialMargin: option is expired"
         );
 
         // Case 1: long position
         // min(100% of mark price, 6.5% of spot)
-        if (isLong(trader, order)) {
+        if (isBuyer) {
             // Compute time to expiry
             uint256 tau = option.expiry - block.timestamp;
 
@@ -70,7 +65,7 @@ library MarginMath {
 
         // Case 2: short call position 
         // max((10% - OTM Amount/spot)*spot, 8% * spot) 
-        } else if (isCall(order)) {
+        } else if (isCall(option)) {
             (uint256 otmAmount, bool isNegative) = option.strike.absdiff(spot);
             uint256 spot100SubOTM = isNegative ? (100 * spot + otmAmount) : (100 * spot - otmAmount);
             uint256 spot80 = 80 * spot;
@@ -116,12 +111,18 @@ library MarginMath {
             (trader == order.buyer) || (trader == order.seller),
             "getInitialMargin: trader must be buyer or seller"
         );
+
+        // Is the trader the buyer or seller? 
+        bool isBuyer = (trader == order.buyer) ? true : false;
+
+        // Fetch the option from the order
         Derivative.Option memory option = order.option;
 
+        // Declare variable for payoff w/o premium
         uint256 payoffNoPremium;
 
         // Cover four cases: long/short call/put
-        if (isCall(order)) {
+        if (isCall(order.option)) {
             /**
              * Case #1/2: trader bought/sold a call
              * payoff = max(spot - strike, 0) 
@@ -132,7 +133,7 @@ library MarginMath {
             
             // If we are selling (shorting) the call, we just have to 
             // flip the negative
-            if (!isLong(trader, order)) {
+            if (!isBuyer) {
                 isNegative = !isNegative;
             }
         } else {
@@ -146,7 +147,7 @@ library MarginMath {
             
             // If we are selling (shorting) the call, we just have to 
             // flip the negative
-            if (!isLong(trader, order)) {
+            if (!isBuyer) {
                 isNegative = !isNegative;
             }
         }
@@ -161,31 +162,13 @@ library MarginMath {
     
     /**
      * @notice Returns true if order contains a call, else false if a put
-     * @param order `Order` object containing an `Option` object
+     * @param option `Option` object containing strike, expiry info
      */
-    function isCall(Derivative.Order memory order)
+    function isCall(Derivative.Option memory option)
         internal
         pure
         returns (bool) 
     {
-        return order.option.optionType == Derivative.OptionType.CALL;
-    }
-
-    /**
-     * @notice Returns true if order is a long position, else false
-     * if order is a short position
-     * @param trader Address of the trader
-     * @param order `Order` object containing an `Option` object
-     */
-    function isLong(address trader, Derivative.Order memory order)
-        internal
-        pure
-        returns (bool) 
-    {
-        require(
-            (trader == order.buyer) || (trader == order.seller),
-            "isLong: trader must be buyer or seller"
-        );
-        return trader == order.buyer;
+        return option.optionType == Derivative.OptionType.CALL;
     }
 }

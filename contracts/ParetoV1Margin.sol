@@ -236,6 +236,7 @@ contract ParetoV1Margin is
     {
         uint256 spot = 1 ether;  // TODO: get real spot price
         uint256 balance = balances[user];
+
         uint256 maintainence = getMaintainenceMargin(user, spot);
 
         // Compute the unrealized PnL (actually this is only unrealized losses)
@@ -311,20 +312,59 @@ contract ParetoV1Margin is
             return 0;
         }
 
-        Derivative.Order memory order;
-        Derivative.VolatilitySmile memory smile;
+        // Track the total margin 
         uint256 margin;
-        bytes32 optionHash;
 
+        // Loop through open positions by user
         for (uint256 i = 0; i < positions.length; i++) {
-            order = orderHashs[positions[i]];
-            optionHash = Derivative.hashOption(order.option);
-            smile = volSmiles[optionHash];
+            Derivative.Order memory order = orderHashs[positions[i]];
+            Derivative.Option memory option = order.option;
+            bytes32 optionHash = Derivative.hashOption(option);
 
-            // Check that the smile exists and compute MM
-            require(smile.exists_, "getMaintainenceMargin: found unknown option");
-            uint256 curMargin = MarginMath.getMaintainenceMargin(user, spot, order, smile);
-            margin += curMargin;
+            // In the case of multiple positions for the same option, 
+            // compute the total amount the user wishes to buy and sell
+            uint256 totalBuyQuantity = 0;
+            uint256 totalSellQuantity = 0;
+
+            require(
+                (user == order.buyer) || (user == order.seller),
+                "getInitialMargin: trader must be buyer or seller"
+            );
+
+            // Check if the user is a buyer or seller for `order`
+            if (user == order.buyer) {
+                totalBuyQuantity += order.quantity;
+            } else {
+                totalSellQuantity += order.quantity;
+            }
+
+            // Nested loop to find the total quantity of this option.
+            // Consider case with multiple positions with same order
+            for (uint256 j = i + 1; j < positions.length; j++) {
+                Derivative.Order memory order2 = orderHashs[positions[j]];
+                bytes32 optionHash2 = Derivative.hashOption(order2.option);
+
+                if (optionHash == optionHash2) {
+                    if (user == order2.buyer) {
+                        totalBuyQuantity += order2.quantity;
+                    } else {
+                        totalSellQuantity += order2.quantity;
+                    }
+                }
+            }
+
+            // Compute total buy - total sell
+            (uint256 netQuantity, bool isSeller) = 
+                NegativeMath.add(totalBuyQuantity, false, totalSellQuantity, true);
+
+            if (netQuantity > 0) {
+                // Fetch smile and check it is valid
+                Derivative.VolatilitySmile memory smile = volSmiles[optionHash];
+                require(smile.exists_, "getMaintainenceMargin: found unknown option");
+
+                // Build margin using `netQuantity`
+                margin += (netQuantity * MarginMath.getMaintainenceMargin(spot, !isSeller, option, smile));
+            }
         }
         return margin;
     }
