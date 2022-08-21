@@ -18,19 +18,23 @@
   "scripts": {
     "clean": "npx hardhat clean",
     "compile": "npx hardhat compile",
+    "typechain": "npx hardhat typechain",
     "test": "npx hardhat test -w contracts -w test -e js,ts,sol",
     "coverage": "npx hardhat coverage -w contracts -w test -e js,ts,sol",
     "prettier": "npx prettier --write 'contracts/**/*.sol'"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^1.0.3",
     "@nomicfoundation/hardhat-toolbox": "^1.0.2",
     "@nomiclabs/hardhat-etherscan": "^3.1.0",
     "@openzeppelin/contracts": "^4.7.2",
     "@openzeppelin/hardhat-upgrades": "^1.20.0",
+    "@typechain/ethers-v5": "^10.1.0",
+    "@typechain/hardhat": "^6.1.2",
     "dotenv": "^16.0.1",
-    "ethereum-waffle": "^3.4.4",
     "hardhat": "^2.10.1",
     "prettier-plugin-solidity": "^1.0.0-dev.22",
+    "typechain": "^8.1.0",
     "typescript": "^4.7.4"
   },
   "engines": {
