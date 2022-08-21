@@ -1,12 +1,11 @@
 import hre from "hardhat";
-import { Contract } from "ethers";
-import expect from "../shared/expect";
-import { runTest } from "../shared/fixture";
+import { expect } from "chai";
+import { TestBasicMath } from "../../typechain-types";
 
-let basicMath: Contract;
+let basicMath: TestBasicMath;
 
-runTest("BasicMath", function () {
-  beforeEach(async function () {
+describe("BasicMath Library", () => {
+  beforeEach(async () => {
     const BasicMathFactory = await hre.ethers.getContractFactory("TestBasicMath");
     basicMath = await BasicMathFactory.deploy();
   });
