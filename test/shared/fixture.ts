@@ -4,8 +4,6 @@ import { MockERC20 } from "../../typechain-types";
 /**
  * @notice Prepares margin contract prior to running any tests. Future tests
  * will have access to the contracts.
- * @param description is a description of the test
- * @param runTests is a callback to run other tests
  */
 export async function setupFixture() {
   const wallets = await ethers.getSigners(); 
@@ -24,7 +22,6 @@ export async function setupFixture() {
   await usdc.mint(deployer.address, 100000);
   await usdc.mint(keeper.address, 100000);
   await usdc.mint(alice.address, 100000);
-
 
   return {
     paretoMargin: paretoMargin,
