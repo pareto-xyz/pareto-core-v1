@@ -8,8 +8,10 @@ import "../libraries/NegativeMath.sol";
  */
 contract TestNegativeMath {
     function add(uint256 a, bool isNegA, uint256 b, bool isNegB)
-        internal
-        pure returns (uint256, bool) {
+        external
+        pure
+        returns (uint256, bool) 
+    {
         return NegativeMath.add(a, isNegA, b, isNegB);
     }
 }

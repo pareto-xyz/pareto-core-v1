@@ -8,12 +8,11 @@ library NegativeMath {
     /**
      * @dev Returns the largest of two numbers.
      */
-    function add(
-        uint256 a,
-        bool isNegA,
-        uint256 b,
-        bool isNegB
-    ) internal pure returns (uint256, bool) {
+    function add(uint256 a, bool isNegA, uint256 b, bool isNegB)
+        internal
+        pure
+        returns (uint256, bool) 
+    {
         if (!isNegA && !isNegB) {
             return (a + b, false);
         } else if (isNegA && isNegB) {
