@@ -7,23 +7,78 @@ import "../libraries/BlackScholesMath.sol";
  * @notice Test contract to wrap around `CumulativeNormalDistribution.sol`
  */
 contract TestBlackScholesMath {
+    function getProbabilityFactors(
+        uint256 spot,
+        uint256 strike,
+        uint256 sigma,
+        uint256 tau,
+        uint256 rate,
+        uint256 scaleFactor
+    )
+        external
+        pure
+        returns (int128 d1, int128 d2) 
+    {
+        BlackScholesMath.PriceCalculationInput memory inputs = 
+            BlackScholesMath.PriceCalculationInput(
+                spot,
+                strike,
+                sigma,
+                tau,
+                rate,
+                scaleFactor
+            );
+        BlackScholesMath.PriceCalculationX64 memory inputsX64 = 
+            BlackScholesMath.priceInputToX64(inputs);
+
+        return BlackScholesMath.getProbabilityFactors(inputsX64);
+    }
+
     function getCallPrice(
-        BlackScholesMath.PriceCalculationInput memory inputs
+        uint256 spot,
+        uint256 strike,
+        uint256 sigma,
+        uint256 tau,
+        uint256 rate,
+        uint256 scaleFactor
     ) 
         external
         pure 
         returns (uint256 price)
     {
+        BlackScholesMath.PriceCalculationInput memory inputs = 
+            BlackScholesMath.PriceCalculationInput(
+                spot,
+                strike,
+                sigma,
+                tau,
+                rate,
+                scaleFactor
+            );
         return BlackScholesMath.getCallPrice(inputs);
     }
 
     function getPutPrice(
-        BlackScholesMath.PriceCalculationInput memory inputs
+        uint256 spot,
+        uint256 strike,
+        uint256 sigma,
+        uint256 tau,
+        uint256 rate,
+        uint256 scaleFactor
     )
         external
         pure
         returns (uint256 price)
     {
+        BlackScholesMath.PriceCalculationInput memory inputs = 
+            BlackScholesMath.PriceCalculationInput(
+                spot,
+                strike,
+                sigma,
+                tau,
+                rate,
+                scaleFactor
+            );
         return BlackScholesMath.getPutPrice(inputs);
     }
 
@@ -36,33 +91,75 @@ contract TestBlackScholesMath {
     }
 
     function approxVolFromCallPrice(
-        BlackScholesMath.VolCalculationInput memory inputs
+        uint256 spot,
+        uint256 strike,
+        uint256 tau,
+        uint256 rate,
+        uint256 tradePrice,
+        uint256 scaleFactor
     )
         external
         pure
         returns (uint256 vol) 
     {
+        BlackScholesMath.VolCalculationInput memory inputs = 
+            BlackScholesMath.VolCalculationInput(
+                spot,
+                strike,
+                tau,
+                rate,
+                tradePrice,
+                scaleFactor
+            );
         return BlackScholesMath.approxVolFromCallPrice(inputs);
 
     }
 
     function approxVolFromPutPrice(
-        BlackScholesMath.VolCalculationInput memory inputs
+        uint256 spot,
+        uint256 strike,
+        uint256 tau,
+        uint256 rate,
+        uint256 tradePrice,
+        uint256 scaleFactor
     )
         external
         pure
         returns (uint256 vol)
     {
+        BlackScholesMath.VolCalculationInput memory inputs = 
+            BlackScholesMath.VolCalculationInput(
+                spot,
+                strike,
+                tau,
+                rate,
+                tradePrice,
+                scaleFactor
+            );
         return BlackScholesMath.approxVolFromPutPrice(inputs);
     }
 
     function getVega(
-        BlackScholesMath.PriceCalculationInput memory inputs
+        uint256 spot,
+        uint256 strike,
+        uint256 sigma,
+        uint256 tau,
+        uint256 rate,
+        uint256 scaleFactor
     ) 
         external
         pure
         returns (uint256 vega) 
     {
+        BlackScholesMath.PriceCalculationInput memory inputs = 
+            BlackScholesMath.PriceCalculationInput(
+                spot,
+                strike,
+                sigma,
+                tau,
+                rate,
+                scaleFactor
+            );
         return BlackScholesMath.getVega(inputs);
     }
 }
