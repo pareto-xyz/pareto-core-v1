@@ -4,6 +4,7 @@ pragma solidity ^0.8.9;
 import "./CumulativeNormalDistribution.sol";
 import "./ABDKMath64x64.sol";
 import "./Units.sol";
+import "hardhat/console.sol";
 
 /**
  * @notice Library for Black Scholes Math
@@ -42,7 +43,7 @@ library BlackScholesMath {
      */
     function getProbabilityFactors(PriceCalculationX64 memory inputsX64)
         internal
-        pure
+        view
         returns (int128 d1, int128 d2) 
     {
         int128 sqrtTauX64 = inputsX64.tauX64.sqrt();
@@ -118,7 +119,7 @@ library BlackScholesMath {
      */
     function getCallPrice(PriceCalculationInput memory inputs) 
         external
-        pure 
+        view 
         returns (uint256 price)
     {
         PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);
@@ -148,7 +149,7 @@ library BlackScholesMath {
      */
     function getPutPrice(PriceCalculationInput memory inputs)
         external
-        pure
+        view
         returns (uint256 price)
     {
         PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);
@@ -304,7 +305,7 @@ library BlackScholesMath {
      */
     function getVega(PriceCalculationInput memory inputs) 
         external
-        pure
+        view
         returns (uint256 vega) 
     {
         PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);

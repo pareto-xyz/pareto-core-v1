@@ -2,6 +2,7 @@
 pragma solidity ^0.8.9;
 
 import "../libraries/BlackScholesMath.sol";
+import "hardhat/console.sol";
 
 /**
  * @notice Test contract to wrap around `CumulativeNormalDistribution.sol`
@@ -16,7 +17,7 @@ contract TestBlackScholesMath {
         uint256 scaleFactor
     )
         external
-        pure
+        view
         returns (int128 d1, int128 d2) 
     {
         BlackScholesMath.PriceCalculationInput memory inputs = 
@@ -43,7 +44,7 @@ contract TestBlackScholesMath {
         uint256 scaleFactor
     ) 
         external
-        pure 
+        view 
         returns (uint256 price)
     {
         BlackScholesMath.PriceCalculationInput memory inputs = 
@@ -67,7 +68,7 @@ contract TestBlackScholesMath {
         uint256 scaleFactor
     )
         external
-        pure
+        view
         returns (uint256 price)
     {
         BlackScholesMath.PriceCalculationInput memory inputs = 
@@ -148,7 +149,7 @@ contract TestBlackScholesMath {
         uint256 scaleFactor
     ) 
         external
-        pure
+        view
         returns (uint256 vega) 
     {
         BlackScholesMath.PriceCalculationInput memory inputs = 
