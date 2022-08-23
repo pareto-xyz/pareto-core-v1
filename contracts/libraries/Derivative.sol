@@ -270,7 +270,7 @@ library Derivative {
         uint256 tau
     ) 
         public
-        pure
+        view
         returns (uint256 price) 
     {   
         if (option.optionType == OptionType.CALL) {

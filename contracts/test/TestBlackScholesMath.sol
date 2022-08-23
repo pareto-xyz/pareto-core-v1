@@ -71,6 +71,7 @@ contract TestBlackScholesMath {
                 rate,
                 scaleFactor
             );
+            
         return BlackScholesMath.getCallPrice(inputs);
     }
 
