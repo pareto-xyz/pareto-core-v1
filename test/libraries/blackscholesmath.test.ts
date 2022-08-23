@@ -49,6 +49,10 @@ describe("BlackScholesMath Library", () => {
     );
     blackScholesMath = await BlackScholesMathFactory.deploy();
   });
+
+  /****************************************
+   * Probability factors
+   ****************************************/
   describe("Computing probability factors", () => {
     it("spot=1 ETH,strike=1.1 ETH,sigma=0.5,tau=1 week,rate=0", async () => {
       // 10**(18-18) = 10**0 = 1
@@ -107,6 +111,9 @@ describe("BlackScholesMath Library", () => {
       expect(d2).to.be.closeTo(d2ts, 0.001);
     });
   });
+  /****************************************
+   * Call prices
+   ****************************************/
   describe("Computing call price", () => {
     it("spot=1 ETH,strike=1.1 ETH,sigma=0.5,tau=1 week,rate=0", async () => {
       var priceBn = await blackScholesMath.getCallPrice(
@@ -152,6 +159,9 @@ describe("BlackScholesMath Library", () => {
       expect(price).to.be.closeTo(pricets, 0.001);
     });
   });
+  /****************************************
+   * Put prices
+   ****************************************/
   describe("Computing put price", () => {
     it("spot=2 ETH,strike=1 ETH,sigma=0.5,tau=1 week,rate=0", async () => {
       expect(true).to.be.false;
@@ -169,6 +179,9 @@ describe("BlackScholesMath Library", () => {
       expect(true).to.be.false;
     });
   });
+  /****************************************
+   * Volatility to standard deviation
+   ****************************************/
   describe("Converting vol to sigma", () => {
     it("vol=0.1,tau=1 week", async () => {
       expect(true).to.be.false;
@@ -180,10 +193,19 @@ describe("BlackScholesMath Library", () => {
       expect(true).to.be.false;
     });
   });
-  // describe("Approximating vol from call price", () => {
-  // });
-  // describe("Approximating vol from put price", () => {
-  // });
-  // describe("Computing vega", () => {
-  // });
+  /****************************************
+   * Volatility from calls
+   ****************************************/
+  describe("Approximating vol from call price", () => {
+  });
+  /****************************************
+   * Volatility from puts
+   ****************************************/
+  describe("Approximating vol from put price", () => {
+  });
+  /****************************************
+   * Vega
+   ****************************************/
+  describe("Computing vega", () => {
+  });
 });
