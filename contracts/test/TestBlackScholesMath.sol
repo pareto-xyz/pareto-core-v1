@@ -2,6 +2,7 @@
 pragma solidity ^0.8.9;
 
 import "../libraries/BlackScholesMath.sol";
+import "../libraries/Units.sol";
 import "hardhat/console.sol";
 
 /**
@@ -18,7 +19,7 @@ contract TestBlackScholesMath {
     )
         external
         view
-        returns (int128 d1, int128 d2) 
+        returns (uint256 d1abs, uint256 d2abs, bool d1IsNeg, bool d2IsNeg) 
     {
         BlackScholesMath.PriceCalculationInput memory inputs = 
             BlackScholesMath.PriceCalculationInput(
@@ -32,7 +33,21 @@ contract TestBlackScholesMath {
         BlackScholesMath.PriceCalculationX64 memory inputsX64 = 
             BlackScholesMath.priceInputToX64(inputs);
 
-        return BlackScholesMath.getProbabilityFactors(inputsX64);
+        (int128 d1, int128 d2) = BlackScholesMath.getProbabilityFactors(inputsX64);
+
+        if (d1 < 0) {
+            d1IsNeg = true;
+            d1abs = Units.scaleFromX64(-d1, scaleFactor);
+        } else {
+            d1abs = Units.scaleFromX64(d1, scaleFactor);
+        }
+
+        if (d2 < 0) {
+            d2IsNeg = true;
+            d2abs = Units.scaleFromX64(-d2, scaleFactor);
+        } else {
+            d2abs = Units.scaleFromX64(d2, scaleFactor);
+        }
     }
 
     function getCallPrice(
