@@ -131,6 +131,7 @@ library BlackScholesMath {
         // exp{-rt}
         int128 discountX64 = 
             (inputsX64.rateX64.mul(inputsX64.tauX64)).neg().exp();
+        // console.logInt(discountX64);
         // strike * termExp * N(d2)
         int128 discountStrikeProbX64 = inputsX64.strikeX64
             .mul(discountX64)

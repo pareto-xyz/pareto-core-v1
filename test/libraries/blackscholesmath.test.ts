@@ -113,20 +113,44 @@ describe("BlackScholesMath Library", () => {
         ONE_ETH, ONEONE_ETH, sigmaToBn(0.5), ONE_WEEK, 0, 1);
       var price = parseFloat(fromBn(priceBn, 18));
       const pricets = checkCallPrice(1, 1.1, 0.5, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 0.001);
+    });
+    it("spot=1 ETH,strike=1.1 ETH,sigma=0.1,tau=1 week,rate=0", async () => {
+      var priceBn = await blackScholesMath.getCallPrice(
+        ONE_ETH, ONEONE_ETH, sigmaToBn(0.1), ONE_WEEK, 0, 1);
+      var price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(1, 1.1, 0.1, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 0.001);
+    });
+    it("spot=1 ETH,strike=1.1 ETH,sigma=0.5,tau=1 day,rate=0", async () => {
+      var priceBn = await blackScholesMath.getCallPrice(
+        ONE_ETH, ONEONE_ETH, sigmaToBn(0.5), ONE_DAY, 0, 1);
+      var price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(1, 1.1, 0.5, ONE_DAY, 0);
+      expect(price).to.be.closeTo(pricets, 0.001);
+    });
+    it("spot=1.1 ETH,strike=1.1 ETH,sigma=0.5,tau=1 week,rate=0", async () => {
+      var priceBn = await blackScholesMath.getCallPrice(
+        ONEONE_ETH, ONEONE_ETH, sigmaToBn(0.5), ONE_WEEK, 0, 1);
+      var price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(1.1, 1.1, 0.5, ONE_WEEK, 0);
       expect(price).to.be.closeTo(pricets, 0.01);
     });
-    // it("spot=1 ETH,strike=2 ETH,sigma=0.1,tau=1 week,rate=0", async () => {
-    //   expect(true).to.be.false;
-    // });
-    // it("spot=1 ETH,strike=2 ETH,sigma=0.5,tau=1 day,rate=0", async () => {
-    //   expect(true).to.be.false;
-    // });
-    // it("spot=2 ETH,strike=2 ETH,sigma=0.5,tau=1 week,rate=0", async () => {
-    //   expect(true).to.be.false;
-    // });
-    // it("spot=1 ETH,strike=2 ETH,sigma=0.5,tau=1 week,rate=0.1 ETH", async () => {
-    //   expect(true).to.be.false;
-    // });
+    it("Reverts if rate is too big", async () => {
+      // Underflow error
+      expect(blackScholesMath.getCallPrice(
+        ONE_ETH, ONEONE_ETH, sigmaToBn(0.5), ONE_WEEK, ONE_ETH.div(10), 1)
+      ).to.be.rejected;
+      const pricets = checkCallPrice(1, 1.1, 0.5, ONE_WEEK, 0.1);
+      expect(pricets).to.be.lessThan(0);
+    });
+    it("spot=1.1 ETH,strike=1.1 ETH,sigma=0.5,tau=1 week,rate=0.01", async () => {
+      var priceBn = await blackScholesMath.getCallPrice(
+        ONE_ETH, ONEONE_ETH, sigmaToBn(0.5), ONE_WEEK, ONE_ETH.div(100), 1);
+      var price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(1, 1.1, 0.5, ONE_WEEK, 0.01);
+      expect(price).to.be.closeTo(pricets, 0.001);
+    });
   });
   describe("Computing put price", () => {
     it("spot=2 ETH,strike=1 ETH,sigma=0.5,tau=1 week,rate=0", async () => {
