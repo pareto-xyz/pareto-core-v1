@@ -43,7 +43,7 @@ library BlackScholesMath {
      */
     function getProbabilityFactors(PriceCalculationX64 memory inputsX64)
         internal
-        view
+        pure
         returns (int128 d1, int128 d2) 
     {
         int128 sqrtTauX64 = inputsX64.tauX64.sqrt();
@@ -119,7 +119,7 @@ library BlackScholesMath {
      */
     function getCallPrice(PriceCalculationInput memory inputs) 
         external
-        view 
+        pure 
         returns (uint256 price)
     {
         PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);
@@ -150,7 +150,7 @@ library BlackScholesMath {
      */
     function getPutPrice(PriceCalculationInput memory inputs)
         external
-        view
+        pure
         returns (uint256 price)
     {
         PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);
@@ -307,7 +307,7 @@ library BlackScholesMath {
      */
     function getVega(PriceCalculationInput memory inputs) 
         external
-        view
+        pure
         returns (uint256 vega) 
     {
         PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);

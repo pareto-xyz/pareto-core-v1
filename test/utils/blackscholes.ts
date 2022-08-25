@@ -2,7 +2,7 @@
  * @notice Utility script to compute black scholes in typescript
  * @dev Implementation of `BlackScholesMath.sol` in Typescript
  */
-import { erf } from "mathjs";
+import { erf, sqrt } from "mathjs";
 
 function normalCDF(
   x: number,
@@ -102,4 +102,13 @@ export function checkVolFromPutPrice(
   let piTerm = Math.sqrt(2 * Math.PI) / (2 * SX);
   let vol = piTerm * (TwoPSX + sqrtTerm);
   return vol;
+}
+
+export function checkVolToSigma(
+  vol: number,
+  tau: number,
+): number {
+  let tauInYears = tau / 31556952;
+  let sqrtTau = Math.sqrt(tauInYears);
+  return vol / sqrtTau;
 }

@@ -18,7 +18,7 @@ contract TestBlackScholesMath {
         uint256 scaleFactor
     )
         external
-        view
+        pure
         returns (uint256 d1abs, uint256 d2abs, bool d1IsNeg, bool d2IsNeg) 
     {
         BlackScholesMath.PriceCalculationInput memory inputs = 
@@ -59,7 +59,7 @@ contract TestBlackScholesMath {
         uint256 scaleFactor
     ) 
         external
-        view 
+        pure 
         returns (uint256 price)
     {
         BlackScholesMath.PriceCalculationInput memory inputs = 
@@ -84,7 +84,7 @@ contract TestBlackScholesMath {
         uint256 scaleFactor
     )
         external
-        view
+        pure
         returns (uint256 price)
     {
         BlackScholesMath.PriceCalculationInput memory inputs = 
@@ -165,7 +165,7 @@ contract TestBlackScholesMath {
         uint256 scaleFactor
     ) 
         external
-        view
+        pure
         returns (uint256 vega) 
     {
         BlackScholesMath.PriceCalculationInput memory inputs = 
