@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.9;
 
-import "./CumulativeNormalDistribution.sol";
+import "./GaussianMath.sol";
 import "./ABDKMath64x64.sol";
 import "./Units.sol";
 import "hardhat/console.sol";
@@ -15,7 +15,7 @@ import "hardhat/console.sol";
 library BlackScholesMath {
     using ABDKMath64x64 for int128;
     using ABDKMath64x64 for uint256;
-    using CumulativeNormalDistribution for int128;
+    using GaussianMath for int128;
     using Units for int128;
     using Units for uint256;
 
@@ -127,17 +127,17 @@ library BlackScholesMath {
         (int128 d1, int128 d2) = getProbabilityFactors(inputsX64);
         // spot * N(d1)
         int128 spotProbX64 = inputsX64.spotX64
-            .mul(CumulativeNormalDistribution.getCDF(d1));
+            .mul(GaussianMath.getCDF(d1));
         // exp{-rt}
         int128 discountX64 = 
             (inputsX64.rateX64.mul(inputsX64.tauX64)).neg().exp();
-        // console.logInt(discountX64);
         // strike * termExp * N(d2)
         int128 discountStrikeProbX64 = inputsX64.strikeX64
             .mul(discountX64)
-            .mul(CumulativeNormalDistribution.getCDF(d2));
+            .mul(GaussianMath.getCDF(d2));
         // Should be > 0
         int128 priceX64 = spotProbX64.sub(discountStrikeProbX64);
+        require(priceX64 >= 0, "getCallPrice: Price is negative");
         // Convert back to uint256
         price = priceX64.scaleFromX64(inputs.scaleFactor);
     }
@@ -162,12 +162,13 @@ library BlackScholesMath {
         // strike * exp{-rt} * N(-d2)
         int128 discountStrikeProbX64 = inputsX64.strikeX64
             .mul(discountX64)
-            .mul(CumulativeNormalDistribution.getCDF(d2.neg()));
+            .mul(GaussianMath.getCDF(d2.neg()));
         // spot * N(-d1)
         int128 spotProbX64 = inputsX64.spotX64
-            .mul(CumulativeNormalDistribution.getCDF(d1.neg()));
+            .mul(GaussianMath.getCDF(d1.neg()));
         // Should be > 0
         int128 priceX64 = discountStrikeProbX64.sub(spotProbX64);
+        require(priceX64 >= 0, "getPutPrice: Price is negative");
         // Convert back to uint256
         price = priceX64.scaleFromX64(inputs.scaleFactor);
     }
@@ -318,7 +319,7 @@ library BlackScholesMath {
             (inputsX64.rateX64.mul(inputsX64.tauX64)).neg().exp();
         int128 vegaX64 = discountX64
             .mul(spotSqrtTau)
-            .mul(CumulativeNormalDistribution.getCDF(d1));
+            .mul(GaussianMath.getCDF(d1));
         // vega is a delta in price so scale from price factor
         vega = vegaX64.scaleFromX64(inputs.scaleFactor);
     }

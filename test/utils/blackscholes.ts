@@ -21,7 +21,7 @@ export function checkProbabilityFactors(
   tau: number,
   rate: number,
 ): [number, number] {
-  let tauInYears = tau / 31536000;
+  let tauInYears = tau / 31556952;
   let logTerm = Math.log(spot / strike);
   let rateTerm = (rate + Math.pow(sigma, 2) / 2 * tauInYears);
   let vol = sigma * Math.sqrt(tauInYears);
@@ -39,7 +39,7 @@ export function checkCallPrice(
   rate: number,
 ): number {
   const [d1, d2] = checkProbabilityFactors(spot, strike, sigma, tau, rate);
-  let tauInYears = tau / 31536000;
+  let tauInYears = tau / 31556952;
   let spotProb = spot * normalCDF(d1, 0, 1);
   let discount = Math.exp(-rate * tauInYears);
   let discountStrikeProb = strike * discount * normalCDF(d2, 0, 1);
@@ -56,7 +56,7 @@ export function checkPutPrice(
   rate: number,
 ): number {
   const [d1, d2] = checkProbabilityFactors(spot, strike, sigma, tau, rate);
-  let tauInYears = tau / 31536000;
+  let tauInYears = tau / 31556952;
   let discount = Math.exp(-rate * tauInYears);
   let discountStrikeProb = strike * discount * normalCDF(-d2, 0, 1);
   let spotProb = spot * normalCDF(-d1, 0, 1);
@@ -71,7 +71,7 @@ export function checkVolFromCallPrice(
   rate: number,
   tradePrice: number,
 ): number {
-  let tauInYears = tau / 31536000;
+  let tauInYears = tau / 31556952;
   let C = tradePrice;
   let S = spot;
   let X = strike * Math.exp(-rate * tauInYears);
@@ -91,7 +91,7 @@ export function checkVolFromPutPrice(
   rate: number,
   tradePrice: number,
 ): number {
-  let tauInYears = tau / 31536000;
+  let tauInYears = tau / 31556952;
   let P = tradePrice;
   let S = spot;
   let X = strike * Math.exp(-rate * tauInYears);

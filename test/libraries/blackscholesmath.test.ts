@@ -7,7 +7,7 @@ import {
   checkCallPrice,
   checkPutPrice,
   checkProbabilityFactors,
-} from "../utils/BlackScholes";
+} from "../utils/blackscholes";
 
 /****************************************
  * Constants
@@ -120,7 +120,7 @@ describe("BlackScholesMath Library", () => {
         ONE_ETH, ONEONE_ETH, sigmaToBn(0.5), ONE_WEEK, 0, 1);
       var price = parseFloat(fromBn(priceBn, 18));
       const pricets = checkCallPrice(1, 1.1, 0.5, ONE_WEEK, 0);
-      expect(price).to.be.closeTo(pricets, 0.001);
+      expect(price).to.be.closeTo(pricets, 1e-5);
     });
     it("spot=1 ETH,strike=1.1 ETH,sigma=0.1,tau=1 week,rate=0", async () => {
       var priceBn = await blackScholesMath.getCallPrice(
@@ -163,20 +163,40 @@ describe("BlackScholesMath Library", () => {
    * Put prices
    ****************************************/
   describe("Computing put price", () => {
-    it("spot=2 ETH,strike=1 ETH,sigma=0.5,tau=1 week,rate=0", async () => {
-      expect(true).to.be.false;
+    it("spot=1.1 ETH,strike=1 ETH,sigma=0.5,tau=1 week,rate=0", async () => {
+      var priceBn = await blackScholesMath.getPutPrice(
+        ONEONE_ETH, ONE_ETH, sigmaToBn(0.5), ONE_WEEK, 0, 1);
+      var price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(1.1, 1, 0.5, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 0.001);
     });
-    it("spot=2 ETH,strike=1 ETH,sigma=0.1,tau=1 week,rate=0", async () => {
-      expect(true).to.be.false;
+    it("spot=1.1 ETH,strike=1 ETH,sigma=0.1,tau=1 week,rate=0", async () => {
+      var priceBn = await blackScholesMath.getPutPrice(
+        ONEONE_ETH, ONE_ETH, sigmaToBn(0.1), ONE_WEEK, 0, 1);
+      var price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(1.1, 1, 0.1, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 0.001);
     });
-    it("spot=2 ETH,strike=1 ETH,sigma=0.5,tau=1 day,rate=0", async () => {
-      expect(true).to.be.false;
+    it("spot=1.1 ETH,strike=1 ETH,sigma=0.5,tau=1 day,rate=0", async () => {
+      var priceBn = await blackScholesMath.getPutPrice(
+        ONEONE_ETH, ONE_ETH, sigmaToBn(0.1), ONE_DAY, 0, 1);
+      var price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(1.1, 1, 0.1, ONE_DAY, 0);
+      expect(price).to.be.closeTo(pricets, 0.001);
     });
     it("spot=1 ETH,strike=1 ETH,sigma=0.5,tau=1 week,rate=0", async () => {
-      expect(true).to.be.false;
+      var priceBn = await blackScholesMath.getPutPrice(
+        ONE_ETH, ONE_ETH, sigmaToBn(0.1), ONE_WEEK, 0, 1);
+      var price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(1, 1, 0.1, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 0.001);
     });
-    it("spot=2 ETH,strike=1 ETH,sigma=0.5,tau=1 week,rate=0.1 ETH", async () => {
-      expect(true).to.be.false;
+    it("spot=1.1 ETH,strike=1 ETH,sigma=0.5,tau=1 week,rate=0.01 ETH", async () => {
+      var priceBn = await blackScholesMath.getPutPrice(
+        ONEONE_ETH, ONE_ETH, sigmaToBn(0.5), ONE_WEEK, ONE_ETH.div(100), 1);
+      var price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(1.1, 1, 0.5, ONE_WEEK, 0.01);
+      expect(price).to.be.closeTo(pricets, 0.001);
     });
   });
   /****************************************
