@@ -248,6 +248,7 @@ library BlackScholesMath {
      * @param inputs Black Scholes model parameters
      * @return vol Implied volatility over the time to expiry: `sigma*sqrt(tau)`
      * @dev This does not return `sigma`
+     * @dev Returns vol in decimals of the strike/spot price
      */
     function approxVolFromCallPrice(VolCalculationInput memory inputs)
         public
@@ -263,15 +264,14 @@ library BlackScholesMath {
             .add(discountStrikeX64)
             .sub(inputsX64.spotX64);
         int128 SX = inputsX64.spotX64.add(discountStrikeX64);
-        int128 volX64 = ((TWO_INT.mul(PI_INT)).sqrt().div(SX.add(TWO_INT)))
-            .mul(TwoCXS.add(
-                (TwoCXS.pow(2).sub(
-                    ONE_EIGHTY_FIVE_INT
-                        .mul(SX)
-                        .mul((discountStrikeX64.sub(inputsX64.spotX64)).pow(2))
-                    .div(PI_INT.mul((discountStrikeX64.mul(inputsX64.spotX64)).sqrt()))
-                )).sqrt()
-            ));
+        int128 piTerm = (TWO_INT.mul(PI_INT)).sqrt().div(SX.mul(TWO_INT));
+        int128 sqrtTerm = (TwoCXS.pow(2).sub(
+            ONE_EIGHTY_FIVE_INT
+                .mul(SX)
+                .mul((discountStrikeX64.sub(inputsX64.spotX64)).pow(2))
+            .div(PI_INT.mul((discountStrikeX64.mul(inputsX64.spotX64)).sqrt()))
+        )).sqrt();
+        int128 volX64 = piTerm.mul(TwoCXS.add(sqrtTerm));
         vol = volX64.scaleFromX64(inputs.scaleFactor);
     }
 
@@ -281,6 +281,7 @@ library BlackScholesMath {
      * @param inputs Black Scholes model parameters
      * @return vol Implied volatility over the time to expiry: sigma*sqrt(tau)
      * @dev This does not return `sigma`
+     * @dev Returns vol in decimals of the strike/spot price
      */
     function approxVolFromPutPrice(VolCalculationInput memory inputs)
         public
