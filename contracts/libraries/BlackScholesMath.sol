@@ -291,8 +291,6 @@ library BlackScholesMath {
         // Same formula but reverse roles of spot and strike
         (inputs.strike, inputs.spot) = (inputs.spot, inputs.strike);
         vol = approxVolFromCallPrice(inputs);
-        // Swap back to original in case inputs are being used again
-        (inputs.strike, inputs.spot) = (inputs.spot, inputs.strike);
     }
 
     /************************************************
