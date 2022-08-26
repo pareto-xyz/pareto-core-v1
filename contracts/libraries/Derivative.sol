@@ -159,17 +159,32 @@ library Derivative {
         (uint256 indexLower, uint256 indexUpper) = 
             findClosestIndices([50,75,100,125,150], curMoneyness);
 
+        uint256 vega;
+
         // Compute vega of option
-        uint256 vega = BlackScholesMath.getVega(
-            BlackScholesMath.PriceCalculationInput(
-                spot,
-                option.strike,
-                sigma,
-                option.expiry - block.timestamp,
-                0, // FIXME: risk-free rate
-                10**(18-option.decimals)
-            )
-        );
+        if (option.optionType == OptionType.CALL) {
+            vega = BlackScholesMath.getCallVega(
+                BlackScholesMath.PriceCalculationInput(
+                    spot,
+                    option.strike,
+                    sigma,
+                    option.expiry - block.timestamp,
+                    0, // FIXME: risk-free rate
+                    10**(18-option.decimals)
+                )
+            );
+        } else {
+            vega = BlackScholesMath.getPutVega(
+                BlackScholesMath.PriceCalculationInput(
+                    spot,
+                    option.strike,
+                    sigma,
+                    option.expiry - block.timestamp,
+                    0, // FIXME: risk-free rate
+                    10**(18-option.decimals)
+                )
+            );
+        }
     
         if (indexLower == indexUpper) {
             // A single point to update

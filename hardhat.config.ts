@@ -1,18 +1,11 @@
 import * as dotenv from "dotenv";
 import { HardhatUserConfig } from "hardhat/config";
-import "@nomiclabs/hardhat-ethers";
-import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomicfoundation/hardhat-toolbox";
 import "@openzeppelin/hardhat-upgrades";
 
 dotenv.config();
 
 const config: HardhatUserConfig = {
-  paths: {
-    sources: "./contracts",
-    tests: "./test",
-    artifacts: "./artifacts"
-  },
   solidity: {
     version: "0.8.9",
     settings: {
@@ -28,13 +21,6 @@ const config: HardhatUserConfig = {
       gas: 12e6,
       allowUnlimitedContractSize: true
     },
-    rinkeby: {
-      url: process.env.RINKEBY_INFURA_URL || "",
-      accounts: [process.env.PRIVATE_KEY!],
-    },
-  },
-  etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY,
   },
 };
 

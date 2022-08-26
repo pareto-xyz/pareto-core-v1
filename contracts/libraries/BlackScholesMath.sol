@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.9;
 
-import "./CumulativeNormalDistribution.sol";
+import "./GaussianMath.sol";
 import "./ABDKMath64x64.sol";
 import "./Units.sol";
+import "hardhat/console.sol";
 
 /**
  * @notice Library for Black Scholes Math
@@ -14,7 +15,7 @@ import "./Units.sol";
 library BlackScholesMath {
     using ABDKMath64x64 for int128;
     using ABDKMath64x64 for uint256;
-    using CumulativeNormalDistribution for int128;
+    using GaussianMath for int128;
     using Units for int128;
     using Units for uint256;
 
@@ -126,16 +127,17 @@ library BlackScholesMath {
         (int128 d1, int128 d2) = getProbabilityFactors(inputsX64);
         // spot * N(d1)
         int128 spotProbX64 = inputsX64.spotX64
-            .mul(CumulativeNormalDistribution.getCDF(d1));
+            .mul(GaussianMath.getCDF(d1));
         // exp{-rt}
         int128 discountX64 = 
             (inputsX64.rateX64.mul(inputsX64.tauX64)).neg().exp();
         // strike * termExp * N(d2)
         int128 discountStrikeProbX64 = inputsX64.strikeX64
             .mul(discountX64)
-            .mul(CumulativeNormalDistribution.getCDF(d2));
+            .mul(GaussianMath.getCDF(d2));
         // Should be > 0
         int128 priceX64 = spotProbX64.sub(discountStrikeProbX64);
+        require(priceX64 >= 0, "getCallPrice: Price is negative");
         // Convert back to uint256
         price = priceX64.scaleFromX64(inputs.scaleFactor);
     }
@@ -160,12 +162,13 @@ library BlackScholesMath {
         // strike * exp{-rt} * N(-d2)
         int128 discountStrikeProbX64 = inputsX64.strikeX64
             .mul(discountX64)
-            .mul(CumulativeNormalDistribution.getCDF(d2.neg()));
+            .mul(GaussianMath.getCDF(d2.neg()));
         // spot * N(-d1)
         int128 spotProbX64 = inputsX64.spotX64
-            .mul(CumulativeNormalDistribution.getCDF(d1.neg()));
+            .mul(GaussianMath.getCDF(d1.neg()));
         // Should be > 0
         int128 priceX64 = discountStrikeProbX64.sub(spotProbX64);
+        require(priceX64 >= 0, "getPutPrice: Price is negative");
         // Convert back to uint256
         price = priceX64.scaleFromX64(inputs.scaleFactor);
     }
@@ -245,6 +248,7 @@ library BlackScholesMath {
      * @param inputs Black Scholes model parameters
      * @return vol Implied volatility over the time to expiry: `sigma*sqrt(tau)`
      * @dev This does not return `sigma`
+     * @dev Returns vol in decimals of the strike/spot price
      */
     function approxVolFromCallPrice(VolCalculationInput memory inputs)
         public
@@ -260,15 +264,14 @@ library BlackScholesMath {
             .add(discountStrikeX64)
             .sub(inputsX64.spotX64);
         int128 SX = inputsX64.spotX64.add(discountStrikeX64);
-        int128 volX64 = ((TWO_INT.mul(PI_INT)).sqrt().div(SX.add(TWO_INT)))
-            .mul(TwoCXS.add(
-                (TwoCXS.pow(2).sub(
-                    ONE_EIGHTY_FIVE_INT
-                        .mul(SX)
-                        .mul((discountStrikeX64.sub(inputsX64.spotX64)).pow(2))
-                    .div(PI_INT.mul((discountStrikeX64.mul(inputsX64.spotX64)).sqrt()))
-                )).sqrt()
-            ));
+        int128 piTerm = (TWO_INT.mul(PI_INT)).sqrt().div(SX.mul(TWO_INT));
+        int128 sqrtTerm = (TwoCXS.pow(2).sub(
+            ONE_EIGHTY_FIVE_INT
+                .mul(SX)
+                .mul((discountStrikeX64.sub(inputsX64.spotX64)).pow(2))
+            .div(PI_INT.mul((discountStrikeX64.mul(inputsX64.spotX64)).sqrt()))
+        )).sqrt();
+        int128 volX64 = piTerm.mul(TwoCXS.add(sqrtTerm));
         vol = volX64.scaleFromX64(inputs.scaleFactor);
     }
 
@@ -278,6 +281,7 @@ library BlackScholesMath {
      * @param inputs Black Scholes model parameters
      * @return vol Implied volatility over the time to expiry: sigma*sqrt(tau)
      * @dev This does not return `sigma`
+     * @dev Returns vol in decimals of the strike/spot price
      */
     function approxVolFromPutPrice(VolCalculationInput memory inputs)
         public
@@ -287,8 +291,6 @@ library BlackScholesMath {
         // Same formula but reverse roles of spot and strike
         (inputs.strike, inputs.spot) = (inputs.spot, inputs.strike);
         vol = approxVolFromCallPrice(inputs);
-        // Swap back to original in case inputs are being used again
-        (inputs.strike, inputs.spot) = (inputs.spot, inputs.strike);
     }
 
     /************************************************
@@ -296,13 +298,13 @@ library BlackScholesMath {
      ***********************************************/
 
     /**
-     * @notice Compute vega of an option (change in option price given 1% change in IV)
-     * @dev vega = e^{-r tau} * S * sqrt{tau} * N(d1)
+     * @notice Compute vega of a call option (change in option price given 1% change in IV)
+     * @dev vega = S * sqrt{tau} * N'(d1)
      * @dev http://www.columbia.edu/~mh2078/FoundationsFE/BlackScholes.pdf
-     * @dev Vega of the call and the put on the same strike and expiration is the same
+     * @dev https://en.wikipedia.org/wiki/Greeks_(finance)#Vega
      * @return vega The greek vega
      */
-    function getVega(PriceCalculationInput memory inputs) 
+    function getCallVega(PriceCalculationInput memory inputs) 
         external
         pure
         returns (uint256 vega) 
@@ -310,13 +312,33 @@ library BlackScholesMath {
         PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);
         // Compute probability factors
         (int128 d1,) = getProbabilityFactors(inputsX64);
-        // Compute S * sqrt(tau)
-        int128 spotSqrtTau = inputsX64.spotX64.mul(inputsX64.tauX64.sqrt());
-        int128 discountX64 = 
-            (inputsX64.rateX64.mul(inputsX64.tauX64)).neg().exp();
-        int128 vegaX64 = discountX64
-            .mul(spotSqrtTau)
-            .mul(CumulativeNormalDistribution.getCDF(d1));
+        // Compute S * sqrt(tau) * PDF(d1)
+        int128 spotSqrtTauX64 = inputsX64.spotX64.mul(inputsX64.tauX64.sqrt());
+        int128 vegaX64 = spotSqrtTauX64.mul(GaussianMath.getPDF(d1));
+        // vega is a delta in price so scale from price factor
+        vega = vegaX64.scaleFromX64(inputs.scaleFactor);
+    }
+
+    /**
+     * @notice Compute vega of a put option (change in option price given 1% change in IV)
+     * @dev vega = K * sqrt(tau) * e^{-rate * tau} * N'(d2)
+     * @dev http://www.columbia.edu/~mh2078/FoundationsFE/BlackScholes.pdf
+     * @dev https://en.wikipedia.org/wiki/Greeks_(finance)#Vega
+     * @return vega The greek vega
+     */
+    function getPutVega(PriceCalculationInput memory inputs)
+        external
+        pure
+        returns (uint256 vega)
+    {
+        PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);
+        // Compute probability factors
+        (,int128 d2) = getProbabilityFactors(inputsX64);
+        // K * sqrt(tau) * e^{-rate * tau} * PDF(d2)
+        int128 strikeSqrtTauX64 = inputsX64.strikeX64.mul(inputsX64.tauX64.sqrt());
+        // exp{-rt}
+        int128 discountX64 = (inputsX64.rateX64.mul(inputsX64.tauX64)).neg().exp();
+        int128 vegaX64 = (strikeSqrtTauX64.mul(discountX64)).mul(GaussianMath.getPDF(d2));
         // vega is a delta in price so scale from price factor
         vega = vegaX64.scaleFromX64(inputs.scaleFactor);
     }
