@@ -129,8 +129,9 @@ library MarginMath {
              * = max(strike, spot) - strike
              */
             payoffNoPremium = spot.max(option.strike) - option.strike;
+
             (payoff, isNegative) = payoffNoPremium.absdiff(order.tradePrice);
-            
+
             // If we are selling (shorting) the call, we just have to 
             // flip the negative
             if (!isBuyer) {
