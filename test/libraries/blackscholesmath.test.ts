@@ -336,6 +336,34 @@ describe("BlackScholesMath Library", () => {
       const vegats = checkCallVega(1, 1.1, 0.5, ONE_WEEK, 0);
       expect(vega).to.be.closeTo(vegats, 1e-5);
     });
+    it("spot=1.1,strike=1.1,sigma=0.5,tau=1 week,rate=0", async () => {
+      const vegaBn = await blackScholesMath.getCallVega(
+        ONEONE_ETH, ONEONE_ETH, sigmaToBn(0.5), ONE_WEEK, 0, 1);
+      const vega = parseFloat(fromBn(vegaBn, 18));
+      const vegats = checkCallVega(1.1, 1.1, 0.5, ONE_WEEK, 0);
+      expect(vega).to.be.closeTo(vegats, 1e-5);
+    });
+    it("spot=1,strike=1.1,sigma=0.1,tau=1 week,rate=0", async () => {
+      const vegaBn = await blackScholesMath.getCallVega(
+        ONE_ETH, ONEONE_ETH, sigmaToBn(0.8), ONE_WEEK, 0, 1);
+      const vega = parseFloat(fromBn(vegaBn, 18));
+      const vegats = checkCallVega(1, 1.1, 0.8, ONE_WEEK, 0);
+      expect(vega).to.be.closeTo(vegats, 1e-5);
+    });
+    it("spot=1,strike=1.1,sigma=0.5,tau=1 day,rate=0", async () => {
+      const vegaBn = await blackScholesMath.getCallVega(
+        ONE_ETH, ONEONE_ETH, sigmaToBn(0.5), ONE_DAY, 0, 1);
+      const vega = parseFloat(fromBn(vegaBn, 18));
+      const vegats = checkCallVega(1, 1.1, 0.5, ONE_DAY, 0);
+      expect(vega).to.be.closeTo(vegats, 1e-5);
+    });
+    it("spot=1,strike=1.1,sigma=0.5,tau=1 week,rate=0.01", async () => {
+      const vegaBn = await blackScholesMath.getCallVega(
+        ONE_ETH, ONEONE_ETH, sigmaToBn(0.5), ONE_WEEK, ONE_ETH.div(100), 1);
+      const vega = parseFloat(fromBn(vegaBn, 18));
+      const vegats = checkCallVega(1, 1.1, 0.5, ONE_WEEK, 0.01);
+      expect(vega).to.be.closeTo(vegats, 1e-5);
+    });
   });
 
   describe("Computing put vega", () => {

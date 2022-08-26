@@ -165,7 +165,7 @@ contract TestBlackScholesMath {
         uint256 scaleFactor
     ) 
         external
-        view
+        pure
         returns (uint256 vega) 
     {
         BlackScholesMath.PriceCalculationInput memory inputs = 

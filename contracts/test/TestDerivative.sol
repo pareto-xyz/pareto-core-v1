@@ -22,7 +22,7 @@ contract TestDerivative {
         uint256 tau
     ) 
         external
-        view
+        pure
         returns (uint256 price) 
     {
         return Derivative.getMarkPrice(option, spot, sigma, tau);
