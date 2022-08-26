@@ -13,7 +13,7 @@ contract TestGaussianMath {
 
     function getPDF(uint256 input, bool isNegative, uint8 decimals)
         external
-        view
+        pure
         returns (uint256 prob) 
     {
         uint256 scaleFactor = 10**(18 - decimals);
