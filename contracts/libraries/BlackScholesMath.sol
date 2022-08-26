@@ -298,13 +298,13 @@ library BlackScholesMath {
      ***********************************************/
 
     /**
-     * @notice Compute vega of an option (change in option price given 1% change in IV)
-     * @dev vega = e^{-r tau} * S * sqrt{tau} * N(d1)
+     * @notice Compute vega of a call option (change in option price given 1% change in IV)
+     * @dev vega = S * sqrt{tau} * N'(d1)
      * @dev http://www.columbia.edu/~mh2078/FoundationsFE/BlackScholes.pdf
-     * @dev Vega of the call and the put on the same strike and expiration is the same
+     * @dev https://en.wikipedia.org/wiki/Greeks_(finance)#Vega
      * @return vega The greek vega
      */
-    function getVega(PriceCalculationInput memory inputs) 
+    function getCallVega(PriceCalculationInput memory inputs) 
         external
         pure
         returns (uint256 vega) 
@@ -312,13 +312,33 @@ library BlackScholesMath {
         PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);
         // Compute probability factors
         (int128 d1,) = getProbabilityFactors(inputsX64);
-        // Compute S * sqrt(tau)
-        int128 spotSqrtTau = inputsX64.spotX64.mul(inputsX64.tauX64.sqrt());
-        int128 discountX64 = 
-            (inputsX64.rateX64.mul(inputsX64.tauX64)).neg().exp();
-        int128 vegaX64 = discountX64
-            .mul(spotSqrtTau)
-            .mul(GaussianMath.getCDF(d1));
+        // Compute S * sqrt(tau) * PDF(d1)
+        int128 spotSqrtTauX64 = inputsX64.spotX64.mul(inputsX64.tauX64.sqrt());
+        int128 vegaX64 = spotSqrtTauX64.mul(GaussianMath.getPDF(d1));
+        // vega is a delta in price so scale from price factor
+        vega = vegaX64.scaleFromX64(inputs.scaleFactor);
+    }
+
+    /**
+     * @notice Compute vega of a put option (change in option price given 1% change in IV)
+     * @dev vega = K * sqrt(tau) * e^{-rate * tau} * N'(d2)
+     * @dev http://www.columbia.edu/~mh2078/FoundationsFE/BlackScholes.pdf
+     * @dev https://en.wikipedia.org/wiki/Greeks_(finance)#Vega
+     * @return vega The greek vega
+     */
+    function getPutVega(PriceCalculationInput memory inputs)
+        external
+        pure
+        returns (uint256 vega)
+    {
+        PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);
+        // Compute probability factors
+        (,int128 d2) = getProbabilityFactors(inputsX64);
+        // K * sqrt(tau) * e^{-rate * tau} * PDF(d2)
+        int128 strikeSqrtTauX64 = inputsX64.strikeX64.mul(inputsX64.tauX64.sqrt());
+        // exp{-rt}
+        int128 discountX64 = (inputsX64.rateX64.mul(inputsX64.tauX64)).neg().exp();
+        int128 vegaX64 = (strikeSqrtTauX64.mul(discountX64)).mul(GaussianMath.getPDF(d2));
         // vega is a delta in price so scale from price factor
         vega = vegaX64.scaleFromX64(inputs.scaleFactor);
     }

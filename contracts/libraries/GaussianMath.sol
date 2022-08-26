@@ -15,12 +15,23 @@ library GaussianMath {
     int128 public constant TWO_INT = 0x20000000000000000;
     int128 public constant HALF_INT = 0x8000000000000000;
     int128 public constant SQRT_TWO_INT = 0x16a09e667f3bcc908;
+    int128 public constant SQRT_TWO_PI_INT = 0x281b263fec4e09d00;
     int128 public constant CONST_P = 0x53dd02a4f5ee2e46;
     int128 public constant CONST_A1 = 0x413c831bb169f874;
     int128 public constant CONST_A2 = -0x48d4c730f051a5fe;
     int128 public constant CONST_A3 = 0x16be1c55bae156b66;
     int128 public constant CONST_A4 = -0x17401c57014c38f14;
     int128 public constant CONST_A5 = 0x10fb844255a12d72e;
+
+    /**
+     * @dev 1/sqrt(2pi) * e^{-1/2*x^2}
+     * @return result Normal Probability Distribution Function of `x`
+     */
+    function getPDF(int128 x) internal pure returns (int128 result) {
+        int128 expTerm = (((x.mul(x)).neg()).mul(HALF_INT)).exp();
+        int128 piTerm = ONE_INT.div(SQRT_TWO_PI_INT);
+        return piTerm.mul(expTerm);
+    }
 
     /**
      * @notice Uses Abramowitz and Stegun approximation:

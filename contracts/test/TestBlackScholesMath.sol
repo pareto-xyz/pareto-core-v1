@@ -156,7 +156,31 @@ contract TestBlackScholesMath {
         return BlackScholesMath.approxVolFromPutPrice(inputs);
     }
 
-    function getVega(
+    function getCallVega(
+        uint256 spot,
+        uint256 strike,
+        uint256 sigma,
+        uint256 tau,
+        uint256 rate,
+        uint256 scaleFactor
+    ) 
+        external
+        view
+        returns (uint256 vega) 
+    {
+        BlackScholesMath.PriceCalculationInput memory inputs = 
+            BlackScholesMath.PriceCalculationInput(
+                spot,
+                strike,
+                sigma,
+                tau,
+                rate,
+                scaleFactor
+            );
+        return BlackScholesMath.getCallVega(inputs);
+    }
+
+    function getPutVega(
         uint256 spot,
         uint256 strike,
         uint256 sigma,
@@ -177,6 +201,6 @@ contract TestBlackScholesMath {
                 rate,
                 scaleFactor
             );
-        return BlackScholesMath.getVega(inputs);
+        return BlackScholesMath.getPutVega(inputs);
     }
 }

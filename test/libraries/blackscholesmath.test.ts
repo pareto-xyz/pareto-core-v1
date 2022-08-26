@@ -10,6 +10,8 @@ import {
   checkVolToSigma,
   checkVolFromCallPrice,
   checkVolFromPutPrice,
+  checkCallVega,
+  checkPutVega,
 } from "../utils/blackscholes";
 
 /****************************************
@@ -326,6 +328,23 @@ describe("BlackScholesMath Library", () => {
   /****************************************
    * Vega
    ****************************************/
-  describe("Computing vega", () => {
+  describe("Computing call vega", () => {
+    it("spot=1,strike=1.1,sigma=0.5,tau=1 week,rate=0", async () => {
+      const vegaBn = await blackScholesMath.getCallVega(
+        ONE_ETH, ONEONE_ETH, sigmaToBn(0.5), ONE_WEEK, 0, 1);
+      const vega = parseFloat(fromBn(vegaBn, 18));
+      const vegats = checkCallVega(1, 1.1, 0.5, ONE_WEEK, 0);
+      expect(vega).to.be.closeTo(vegats, 1e-5);
+    });
+  });
+
+  describe("Computing put vega", () => {
+    it("spot=1.1,strike=1,sigma=0.5,tau=1 week,rate=0", async () => {
+      const vegaBn = await blackScholesMath.getPutVega(
+        ONEONE_ETH, ONE_ETH, sigmaToBn(0.5), ONE_WEEK, 0, 1);
+      const vega = parseFloat(fromBn(vegaBn, 18));
+      const vegats = checkPutVega(1.1, 1, 0.5, ONE_WEEK, 0);
+      expect(vega).to.be.closeTo(vegats, 1e-5);
+    });
   });
 });

@@ -2,7 +2,7 @@
  * @notice Utility script to compute black scholes in typescript
  * @dev Implementation of `BlackScholesMath.sol` in Typescript
  */
-import { erf, sqrt } from "mathjs";
+import math, { erf, sqrt } from "mathjs";
 
 function normalCDF(
   x: number,
@@ -10,6 +10,11 @@ function normalCDF(
   sigma: number
 ): number {
   return (1 - erf((mean - x) / (Math.sqrt(2) * sigma))) / 2;
+}
+
+// 1/sqrt(2pi) * e^{-1/2*x^2}
+function normalPDF(x: number): number {
+  return 1 / Math.sqrt(2 * Math.PI) * Math.exp(-0.5 * Math.pow(x, 2));
 }
 
 // d1 = (log(S/K) + (r + sigma^2/2*tau)) / (sigma*sqrt(tau))
@@ -111,4 +116,33 @@ export function checkVolToSigma(
   let tauInYears = tau / 31556952;
   let sqrtTau = Math.sqrt(tauInYears);
   return vol / sqrtTau;
+}
+
+export function checkCallVega(
+  spot: number,
+  strike: number,
+  sigma: number,
+  tau: number,
+  rate: number,
+): number {
+  let [d1, _] = checkProbabilityFactors(spot, strike, sigma, tau, rate);
+  let tauInYears = tau / 31556952;
+  let spotSqrtTau = spot * Math.sqrt(tauInYears);
+  let vega = spotSqrtTau * normalPDF(d1);
+  return vega;
+}
+
+export function checkPutVega(
+  spot: number,
+  strike: number,
+  sigma: number,
+  tau: number,
+  rate: number,
+): number {
+  let [_, d2] = checkProbabilityFactors(spot, strike, sigma, tau, rate);
+  let tauInYears = tau / 31556952;
+  let strikeSqrtTau = strike * Math.sqrt(tauInYears);
+  let discountRate = Math.exp(-rate * tauInYears);
+  let vega = strikeSqrtTau * discountRate * normalPDF(d2);
+  return vega;
 }
