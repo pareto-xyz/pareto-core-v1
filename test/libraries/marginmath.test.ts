@@ -11,8 +11,16 @@ import {
   getPayoffShortPut,
 } from "../utils/payoff";
 
+/****************************************
+ * Constants
+ ****************************************/
+
 const ONE_ETH: BigNumber = ethers.utils.parseEther("1");
 const ONE_WEEK: number = 604800;
+
+/****************************************
+ * Tests
+ ****************************************/
 
 let marginMath: Contract;
 let alice: SignerWithAddress;
@@ -57,6 +65,9 @@ describe("MarginMath Library", () => {
     marginMath = await MarginMathFactory.deploy();
   });
 
+   /****************************************
+   * Check if a call or put
+   ****************************************/
   describe("Fetching option type", () => {
     it("Identifies call", async () => {
       const curTime = Math.floor(Date.now() / 1000);
@@ -84,6 +95,9 @@ describe("MarginMath Library", () => {
     });
   });
 
+   /****************************************
+   * Payoff computation
+   ****************************************/
   describe("Computing payoff", () => {
     beforeEach(async () => {
       // Create signers
@@ -357,9 +371,5 @@ describe("MarginMath Library", () => {
       expect(parseFloat(fromBn(payoff, 18))).to.be.closeTo(Math.abs(payoffts), 1e-5);
       expect(isNegative).to.be.equal(payoffts < 0);
     });
-  
-  });
-
-  describe("Computing maintainence margin", () => {
   });
 });
