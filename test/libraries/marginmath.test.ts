@@ -65,7 +65,7 @@ describe("MarginMath Library", () => {
     marginMath = await MarginMathFactory.deploy();
   });
 
-   /****************************************
+  /****************************************
    * Check if a call or put
    ****************************************/
   describe("Fetching option type", () => {
@@ -95,7 +95,7 @@ describe("MarginMath Library", () => {
     });
   });
 
-   /****************************************
+  /****************************************
    * Payoff computation
    ****************************************/
   describe("Computing payoff", () => {
