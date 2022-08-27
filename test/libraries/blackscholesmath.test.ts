@@ -430,6 +430,72 @@ describe("BlackScholesMath Library", () => {
       expect(sigma).to.be.closeTo(sigmaTrue, 1e-3);
     });
   });
+
+  describe("Approximating sigma from put price by Bisection Method", () => {
+    it("spot=1,strike=0.9,sigma=0.5,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.5;
+      const priceTrue = checkPutPrice(1, 0.9, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.getSigmaByBisection(
+        ONE_ETH, ONE_ETH.mul(9).div(10), ONE_WEEK, 0, priceTrueBn, 1, false);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      expect(sigma).to.be.closeTo(sigmaTrue, 0.01);
+    });
+    it("spot=1,strike=0.9,sigma=1.5,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 1.5;
+      const priceTrue = checkPutPrice(1, 0.9, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.getSigmaByBisection(
+        ONE_ETH, ONE_ETH.mul(9).div(10), ONE_WEEK, 0, priceTrueBn, 1, false);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      expect(sigma).to.be.closeTo(sigmaTrue, 0.01);
+    });
+    it("spot=1,strike=0.9,sigma=0.9,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.9;
+      const priceTrue = checkPutPrice(1, 0.9, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.getSigmaByBisection(
+        ONE_ETH, ONE_ETH.mul(9).div(10), ONE_WEEK, 0, priceTrueBn, 1, false);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      expect(sigma).to.be.closeTo(sigmaTrue, 0.01);
+    });
+    it("spot=1,strike=0.9,sigma=0.5,tau=1 week,rate=0.01", async () => {
+      const sigmaTrue = 0.5;
+      const priceTrue = checkPutPrice(1, 0.9, sigmaTrue, ONE_WEEK, 0.01);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.getSigmaByBisection(
+        ONE_ETH, ONE_ETH.mul(9).div(10), ONE_WEEK, ONE_ETH.div(100), priceTrueBn, 1, false);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      expect(sigma).to.be.closeTo(sigmaTrue, 0.01);
+    });
+    it("spot=0.9,strike=0.9,sigma=0.5,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.5;
+      const priceTrue = checkPutPrice(0.9, 0.9, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.getSigmaByBisection(
+        ONE_ETH.mul(9).div(10), ONE_ETH.mul(9).div(10), ONE_WEEK, 0, priceTrueBn, 1, false);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      expect(sigma).to.be.closeTo(sigmaTrue, 0.01);
+    });
+    it("spot=0.8,strike=0.9,sigma=0.5,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.5;
+      const priceTrue = checkPutPrice(0.8, 0.9, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.getSigmaByBisection(
+        ONE_ETH.mul(8).div(10), ONE_ETH.mul(9).div(10), ONE_WEEK, 0, priceTrueBn, 1, false);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      expect(sigma).to.be.closeTo(sigmaTrue, 0.01);
+    });
+    it("spot=110,strike=100,sigma=0.5,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.5;
+      const priceTrue = checkPutPrice(110, 100, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.getSigmaByBisection(
+        ONE_ETH.mul(110), ONE_ETH.mul(100), ONE_WEEK, 0, priceTrueBn, 1, false);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      expect(sigma).to.be.closeTo(sigmaTrue, 0.01);
+    });
+  });
   /****************************************
    * Vega
    ****************************************/
