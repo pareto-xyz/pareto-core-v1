@@ -254,19 +254,19 @@ library BlackScholesMath {
     /**
      * @notice Iterative methods like Newton Raphson require an initial guess
      * @dev The same formula is used for calls and puts
-     * @dev sqrt(2*pi / tau) * C / S
+     * @dev sqrt(2*pi / tau) * market / spot
      * @dev Brenner and Subrahmanyam (1988)
      * @dev https://quant.stackexchange.com/questions/7761/a-simple-formula-for-calculating-implied-volatility
      * @dev https://www.codearmo.com/blog/implied-volatility-european-call-python
      */
     function guessSigmaX64(VolCalculationX64 memory inputsX64)
         internal
-        view
+        pure
         returns (int128 sigmaX64)
     {
         // sqrt(2*pi / tau)
         int128 piTerm = (TWO_PI_INT.div(inputsX64.tauX64)).sqrt();
-        // C / S
+        // market / spot
         int128 priceTerm = inputsX64.priceX64.div(inputsX64.spotX64);
         sigmaX64 = piTerm.mul(priceTerm);
     }
@@ -285,9 +285,13 @@ library BlackScholesMath {
         uint256 maxIter
     ) 
         external
-        view
+        pure
         returns (uint256 sigma) 
     {
+        require(
+            inputs.tradePrice < inputs.strike, 
+            "solveSigmaFromCallPrice: will not converge"
+        );
         VolCalculationX64 memory inputsX64 = volInputToX64(inputs);
 
         // Use heuristic to make initial guess for Sigma
@@ -313,7 +317,7 @@ library BlackScholesMath {
             }
 
             // Calculate vega of call option
-            int128 vegaX64 = getCallVegaX64(dataX64);
+            int128 vegaX64 = getVegaX64(dataX64);
 
             // Newton Raphson to update estimate
             sigmaX64 = sigmaX64.sub(diffX64.div(vegaX64));
@@ -369,7 +373,7 @@ library BlackScholesMath {
             }
 
             // Calculate vega of put option
-            int128 vegaX64 = getPutVegaX64(dataX64);
+            int128 vegaX64 = getVegaX64(dataX64);
 
             // Newton Raphson to update estimate
             sigmaX64 = sigmaX64.sub(diffX64.div(vegaX64));
@@ -388,27 +392,28 @@ library BlackScholesMath {
      ***********************************************/
 
     /**
-     * @notice Compute vega of a call option (change in option price given 1% change in IV)
+     * @notice Compute vega of an option (change in option price given 1% change in IV)
      * @return vega The greek vega
      */
-    function getCallVega(PriceCalculationInput memory inputs) 
+    function getVega(PriceCalculationInput memory inputs) 
         external
         pure
         returns (uint256 vega) 
     {
         PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);
-        int128 vegaX64 = getCallVegaX64(inputsX64);
+        int128 vegaX64 = getVegaX64(inputsX64);
         // vega is a delta in price so scale from price factor
         vega = vegaX64.scaleFromX64(inputs.scaleFactor);
     }
 
     /**
-     * @notice Internal function for vega of a call option
+     * @notice Internal function for vega of an option. Given put/call duality
+     * the formula for vega in both is the same
      * @dev vega = S * sqrt{tau} * N'(d1)
      * @dev http://www.columbia.edu/~mh2078/FoundationsFE/BlackScholes.pdf
      * @dev https://en.wikipedia.org/wiki/Greeks_(finance)#Vega
      */
-    function getCallVegaX64(PriceCalculationX64 memory inputsX64)
+    function getVegaX64(PriceCalculationX64 memory inputsX64)
         internal
         pure
         returns (int128 vegaX64)
@@ -418,43 +423,5 @@ library BlackScholesMath {
         // Compute S * sqrt(tau) * PDF(d1)
         int128 spotSqrtTauX64 = inputsX64.spotX64.mul(inputsX64.tauX64.sqrt());
         vegaX64 = spotSqrtTauX64.mul(GaussianMath.getPDF(d1));
-    }
-
-    /**
-     * @notice Compute vega of a put option (change in option price given 1% change in IV)
-     * @dev vega = K * sqrt(tau) * e^{-rate * tau} * N'(d2)
-     * @dev http://www.columbia.edu/~mh2078/FoundationsFE/BlackScholes.pdf
-     * @dev https://en.wikipedia.org/wiki/Greeks_(finance)#Vega
-     * @return vega The greek vega
-     */
-    function getPutVega(PriceCalculationInput memory inputs)
-        external
-        pure
-        returns (uint256 vega)
-    {
-        PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);
-        int128 vegaX64 = getPutPriceX64(inputsX64);
-        // vega is a delta in price so scale from price factor
-        vega = vegaX64.scaleFromX64(inputs.scaleFactor);
-    }
-
-    /**
-     * @notice Internal function for vega of a put option
-     * @dev vega = K * sqrt(tau) * e^{-rate * tau} * N'(d2)
-     * @dev http://www.columbia.edu/~mh2078/FoundationsFE/BlackScholes.pdf
-     * @dev https://en.wikipedia.org/wiki/Greeks_(finance)#Vega
-     */
-    function getPutVegaX64(PriceCalculationX64 memory inputsX64)
-        internal
-        pure
-        returns (int128 vegaX64)
-    {
-        // Compute probability factors
-        (,int128 d2) = getProbabilityFactors(inputsX64);
-        // K * sqrt(tau) * e^{-rate * tau} * PDF(d2)
-        int128 strikeSqrtTauX64 = inputsX64.strikeX64.mul(inputsX64.tauX64.sqrt());
-        // exp{-rt}
-        int128 discountX64 = (inputsX64.rateX64.mul(inputsX64.tauX64)).neg().exp();
-        vegaX64 = (strikeSqrtTauX64.mul(discountX64)).mul(GaussianMath.getPDF(d2));
     }
 }

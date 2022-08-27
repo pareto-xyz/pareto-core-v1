@@ -85,7 +85,7 @@ export function checkSigmaFromCallPrice(
     if (Math.abs(diff) < tolerance) {
       break;
     }
-    var vega = checkCallVega(spot, strike, sigma, tau, rate);
+    var vega = checkVega(spot, strike, sigma, tau, rate);
     sigma = sigma - (diff / vega);
   }
   return sigma;
@@ -106,13 +106,13 @@ export function checkSigmaFromPutPrice(
     if (Math.abs(diff) < tolerance) {
       break;
     }
-    var vega = checkPutVega(spot, strike, sigma, tau, rate);
+    var vega = checkVega(spot, strike, sigma, tau, rate);
     sigma = sigma - (diff / vega);
   }
   return sigma;
 }
 
-export function checkCallVega(
+export function checkVega(
   spot: number,
   strike: number,
   sigma: number,
@@ -123,20 +123,5 @@ export function checkCallVega(
   let tauInYears = tau / 31556952;
   let spotSqrtTau = spot * Math.sqrt(tauInYears);
   let vega = spotSqrtTau * normalPDF(d1);
-  return vega;
-}
-
-export function checkPutVega(
-  spot: number,
-  strike: number,
-  sigma: number,
-  tau: number,
-  rate: number,
-): number {
-  let [_, d2] = checkProbabilityFactors(spot, strike, sigma, tau, rate);
-  let tauInYears = tau / 31556952;
-  let strikeSqrtTau = strike * Math.sqrt(tauInYears);
-  let discountRate = Math.exp(-rate * tauInYears);
-  let vega = strikeSqrtTau * discountRate * normalPDF(d2);
   return vega;
 }

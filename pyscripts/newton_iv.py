@@ -22,7 +22,13 @@ def get_call_price(spot, strike, rate, sigma, tau):
   price = spot * norm.cdf(d1) - strike * math.exp(-rate * tauInYears) * norm.cdf(d2)
   return price
 
-def get_imp_vol(spot, strike, rate, tau, market, tol=1e-6, maxIter=5):
+def get_put_price(spot, strike, rate, sigma, tau):
+  d1, d2 = get_prob_factors(spot, strike, rate, sigma, tau)
+  tauInYears = tauToYears(tau);
+  price = strike * math.exp(-rate * tauInYears) * norm.cdf(-d2) - spot * norm.cdf(-d1)
+  return price
+
+def get_call_imp_vol(spot, strike, rate, tau, market, tol=1e-6, maxIter=5):
   sigma = 1
   for _ in range(maxIter):
     diff = get_call_price(spot, strike, rate, sigma, tau) - market
@@ -35,4 +41,4 @@ def get_imp_vol(spot, strike, rate, tau, market, tol=1e-6, maxIter=5):
 
 
 if __name__ == "__main__":
-  iv = get_imp_vol(100, 115, 0.05, 31556952, 1pp)
+  iv = get_call_imp_vol(100, 115, 0.05, 31556952, 20)
