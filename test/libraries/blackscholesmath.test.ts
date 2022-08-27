@@ -213,58 +213,102 @@ describe("BlackScholesMath Library", () => {
         ONE_ETH, ONEONE_ETH, ONE_WEEK, 0, priceTrueBn, 1, true);
       const sigma = parseFloat(fromBn(sigmaBn, 18));
       const sigmats = checkBacksolveSigma(
-        1, 1.1, ONE_WEEK, 0, priceTrue, true, 1e-6, 10);
+        1, 1.1, ONE_WEEK, 0, priceTrue, true, 1e-10, 10);
       expect(sigma).to.be.closeTo(sigmats, 1e-3);
-      expect(sigma).to.be.closeTo(sigmaTrue, 1e-3)
+      expect(sigma).to.be.closeTo(sigmaTrue, 1e-3);
+    });
+    it("spot=1,strike=1.1,sigma=1.5,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 1.5;
+      const priceTrue = checkCallPrice(1, 1.1, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.backsolveSigma(
+        ONE_ETH, ONEONE_ETH, ONE_WEEK, 0, priceTrueBn, 1, true);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      const sigmats = checkBacksolveSigma(
+        1, 1.1, ONE_WEEK, 0, priceTrue, true, 1e-10, 10);
+      expect(sigma).to.be.closeTo(sigmats, 1e-3);
+      expect(sigma).to.be.closeTo(sigmaTrue, 1e-3);
+    });
+    it("spot=1,strike=1.1,sigma=0.9,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.9;
+      const priceTrue = checkCallPrice(1, 1.1, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.backsolveSigma(
+        ONE_ETH, ONEONE_ETH, ONE_WEEK, 0, priceTrueBn, 1, true);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      const sigmats = checkBacksolveSigma(
+        1, 1.1, ONE_WEEK, 0, priceTrue, true, 1e-10, 10);
+      expect(sigma).to.be.closeTo(sigmats, 1e-3);
+      expect(sigma).to.be.closeTo(sigmaTrue, 1e-3);
+    });
+    it("spot=1,strike=1.1,sigma=0.1,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.1;
+      const priceTrue = checkCallPrice(1, 1.1, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.backsolveSigma(
+        ONE_ETH, ONEONE_ETH, ONE_WEEK, 0, priceTrueBn, 1, true);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      const sigmats = checkBacksolveSigma(
+        1, 1.1, ONE_WEEK, 0, priceTrue, true, 1e-10, 10);
+      expect(sigma).to.be.closeTo(sigmats, 1e-3);
+      // Need much more iters to accurately solve
+      const sigmats2 = checkBacksolveSigma(
+        1, 1.1, ONE_WEEK, 0, priceTrue, true, 1e-100, 100);
+      expect(sigmats2).to.be.closeTo(sigmaTrue, 1e-3);
+    });
+    it("spot=1,strike=1.1,sigma=0.5,tau=1 week,rate=0.05", async () => {
+      const sigmaTrue = 0.5;
+      const priceTrue = checkCallPrice(1, 1.1, sigmaTrue, ONE_WEEK, 0.05);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.backsolveSigma(
+        ONE_ETH, ONEONE_ETH, ONE_WEEK, 0.05, priceTrueBn, 1, true);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      const sigmats = checkBacksolveSigma(
+        1, 1.1, ONE_WEEK, 0.05, priceTrue, true, 1e-10, 10);
+      expect(sigma).to.be.closeTo(sigmats, 1e-3);
+      expect(sigma).to.be.closeTo(sigmaTrue, 1e-3);
+    });
+    it("spot=1.1,strike=1.1,sigma=0.5,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.5;
+      const priceTrue = checkCallPrice(1.1, 1.1, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.backsolveSigma(
+        ONEONE_ETH, ONEONE_ETH, ONE_WEEK, 0, priceTrueBn, 1, true);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      const sigmats = checkBacksolveSigma(
+        1.1, 1.1, ONE_WEEK, 0, priceTrue, true, 1e-10, 10);
+      expect(sigma).to.be.closeTo(sigmats, 1e-3);
+      expect(sigma).to.be.closeTo(sigmaTrue, 1e-3);
+    });
+    it("spot=1.2,strike=1.1,sigma=0.5,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.5;
+      const priceTrue = checkCallPrice(1.2, 1.1, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.backsolveSigma(
+        ONE_ETH.mul(12).div(10), ONEONE_ETH, ONE_WEEK, 0, priceTrueBn, 1, true);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      const sigmats = checkBacksolveSigma(
+        1.2, 1.1, ONE_WEEK, 0, priceTrue, true, 1e-10, 10);
+      expect(sigma).to.be.closeTo(sigmats, 1e-3);
+      expect(sigma).to.be.closeTo(sigmaTrue, 1e-3);
+    });
+    it("spot=100,strike=110,sigma=0.5,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.5;
+      const priceTrue = checkCallPrice(100, 110, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.backsolveSigma(
+        ONE_ETH.mul(100), ONE_ETH.mul(110), ONE_WEEK, 0, priceTrueBn, 1, true);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      const sigmats = checkBacksolveSigma(
+        100, 110, ONE_WEEK, 0, priceTrue, true, 1e-10, 10);
+      expect(sigma).to.be.closeTo(sigmats, 1e-3);
+      expect(sigma).to.be.closeTo(sigmaTrue, 1e-3);
     });
   });
   /****************************************
    * Volatility from puts
    ****************************************/
   describe("Approximating sigma from put price", () => {
-    it("spot=1.1,strike=1,tau=1 week,rate=0,tradePrice=1", async () => {
-      const sigmaBn = await blackScholesMath.backsolveSigma(
-        ONEONE_ETH, ONE_ETH, ONE_WEEK, 0, ONE_ETH, 1, false);
-      const sigma = parseFloat(fromBn(sigmaBn, 18));
-      const sigmats = checkBacksolveSigma(
-        1.1, 1, ONE_WEEK, 0, 1, false, 0.001, 10);
-      expect(sigma).to.be.closeTo(sigmats, 1e-3);
-    });
-    // it("spot=1.1,strike=1,tau=1 day,rate=0,tradePrice=1", async () => {
-    //   const sigmaBn = await blackScholesMath.solveSigmaFromPutPrice(
-    //     ONEONE_ETH, ONE_ETH, ONE_DAY, 0, ONE_ETH, 1);
-    //   const sigma = parseFloat(fromBn(sigmaBn, 18));
-    //   const sigmats = checkSigmaFromPutPrice(1.1, 1, ONE_DAY, 0, 1, 0.001);
-    //   expect(sigma).to.be.closeTo(sigmats, 1e-2);
-    // });
-    // it("spot=1.1,strike=1,tau=1 week,rate=0,tradePrice=1.1", async () => {
-    //   const sigmaBn = await blackScholesMath.solveSigmaFromPutPrice(
-    //     ONEONE_ETH, ONE_ETH, ONE_WEEK, 0, ONEONE_ETH, 1);
-    //   const sigma = parseFloat(fromBn(sigmaBn, 18));
-    //   const sigmats = checkSigmaFromPutPrice(1.1, 1, ONE_WEEK, 0, 1.1, 0.001);
-    //   expect(sigma).to.be.closeTo(sigmats, 1e-2);
-    // });
-    // it("spot=1.1,strike=1,tau=1 week,rate=0,tradePrice=0.9", async () => {
-    //   const sigmaBn = await blackScholesMath.solveSigmaFromPutPrice(
-    //     ONEONE_ETH, ONE_ETH, ONE_WEEK, 0, ONE_ETH.mul(9).div(10), 1);
-    //   const sigma = parseFloat(fromBn(sigmaBn, 18));
-    //   const sigmats = checkSigmaFromPutPrice(1.1, 1, ONE_WEEK, 0, 0.9, 0.001);
-    //   expect(sigma).to.be.closeTo(sigmats, 1e-2);
-    // });
-    // it("spot=1.1,strike=1,tau=1 week,rate=0,tradePrice=1.2", async () => {
-    //   const sigmaBn = await blackScholesMath.solveSigmaFromPutPrice(
-    //     ONEONE_ETH, ONE_ETH, ONE_WEEK, 0, ONE_ETH.mul(12).div(10), 1);
-    //   const sigma = parseFloat(fromBn(sigmaBn, 18));
-    //   const sigmats = checkSigmaFromPutPrice(1.1, 1, ONE_WEEK, 0, 1.2, 0.001);
-    //   expect(sigma).to.be.closeTo(sigmats, 1e-2);
-    // });
-    // it("spot=1.1,strike=1,tau=1 week,rate=0.01,tradePrice=1", async () => {
-    //   const sigmaBn = await blackScholesMath.solveSigmaFromPutPrice(
-    //     ONEONE_ETH, ONE_ETH, ONE_WEEK, ONE_ETH.div(100), ONE_ETH, 1);
-    //   const sigma = parseFloat(fromBn(sigmaBn, 18));
-    //   const sigmats = checkSigmaFromPutPrice(1.1, 1, ONE_WEEK, 0, 1, 0.001);
-    //   expect(sigma).to.be.closeTo(sigmats, 1e-2);
-    // });
   });
   /****************************************
    * Vega

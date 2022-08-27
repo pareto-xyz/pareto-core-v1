@@ -27,8 +27,8 @@ library BlackScholesMath {
     int128 internal constant TWO_INT = 0x20000000000000000;
     int128 internal constant TWO_PI_INT = 0x6487ed5110b45ef48;
 
-    /// @notice Tolerance for Newton Raphson optimization (1e-6)
-    int128 internal constant OPT_TOL = 0x10c6f7a0b5ee;
+    /// @notice Tolerance for Newton Raphson optimization (1e-10)
+    int128 internal constant OPT_TOL = 0x6df37f67;
 
     /************************************************
      * Computing Black Scholes Probabilities
