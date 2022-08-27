@@ -100,7 +100,7 @@ library Derivative {
 
         for (uint256 i = 0; i < moneyness.length; i++) {
             uint256 spot = (option.strike * moneyness[i]) / 100;
-            uint256 sigma = BlackScholesMath.getSigmaByNewton(
+            uint256 sigma = BlackScholesMath.getSigmaByBisection(
                 BlackScholesMath.VolCalculationInput(
                     spot,
                     option.strike,
