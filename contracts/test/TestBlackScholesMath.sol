@@ -9,6 +9,7 @@ import "hardhat/console.sol";
  * @notice Test contract to wrap around `CumulativeNormalDistribution.sol`
  */
 contract TestBlackScholesMath {
+
     function getProbabilityFactors(
         uint256 spot,
         uint256 strike,
@@ -99,15 +100,7 @@ contract TestBlackScholesMath {
         return BlackScholesMath.getPutPrice(inputs);
     }
 
-    function volToSigma(uint256 vol, uint256 tau)
-        external
-        pure
-        returns (uint256 sigma) 
-    {
-        return BlackScholesMath.volToSigma(vol, tau);
-    }
-
-    function approxVolFromCallPrice(
+    function solveSigmaFromCallPrice(
         uint256 spot,
         uint256 strike,
         uint256 tau,
@@ -128,11 +121,11 @@ contract TestBlackScholesMath {
                 tradePrice,
                 scaleFactor
             );
-        return BlackScholesMath.approxVolFromCallPrice(inputs);
+        return BlackScholesMath.solveSigmaFromCallPrice(inputs, 10);
 
     }
 
-    function approxVolFromPutPrice(
+    function solveSigmaFromPutPrice(
         uint256 spot,
         uint256 strike,
         uint256 tau,
@@ -153,7 +146,7 @@ contract TestBlackScholesMath {
                 tradePrice,
                 scaleFactor
             );
-        return BlackScholesMath.approxVolFromPutPrice(inputs);
+        return BlackScholesMath.solveSigmaFromPutPrice(inputs, 10);
     }
 
     function getCallVega(

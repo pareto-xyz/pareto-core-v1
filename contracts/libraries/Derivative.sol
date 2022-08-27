@@ -15,6 +15,12 @@ library Derivative {
     using BasicMath for uint256;
 
     /************************************************
+     * Constants
+     ***********************************************/
+    
+    uint256 internal constant MAX_ITER = 10;
+
+    /************************************************
      * Structs and Enums
      ***********************************************/
 
@@ -56,12 +62,12 @@ library Derivative {
 
     /**
      * @notice Stores a surface to track implied volatility for mark price
-     * @param volAtMoneyness Array of five implied volatility i.e. sigma*sqrt(tau)
+     * @param sigmaAtMoneyness Array of five implied volatility i.e. sigma
      * for the five moneyness points
      * @param exists_ is a helper attribute to check existence (default false)
      */
     struct VolatilitySmile {
-        uint256[5] volAtMoneyness;
+        uint256[5] sigmaAtMoneyness;
         bool exists_; 
     }
 
@@ -71,7 +77,7 @@ library Derivative {
 
     /**
      * @notice Create a new volatility smile, which uses `BlackScholesMath.sol` 
-     * to approximate the implied volatility 
+     * to solve for the implied volatility
      * @param order Order object
      * @return smile A volatility smile
      */
@@ -95,7 +101,7 @@ library Derivative {
         if (option.optionType == OptionType.CALL) {
             for (uint256 i = 0; i < moneyness.length; i++) {
                 uint256 spot = (option.strike * moneyness[i]) / 100;
-                uint256 vol = BlackScholesMath.approxVolFromCallPrice(
+                uint256 sigma = BlackScholesMath.solveSigmaFromCallPrice(
                     BlackScholesMath.VolCalculationInput(
                         spot,
                         option.strike,
@@ -103,14 +109,15 @@ library Derivative {
                         0,  // FIXME: get risk-free rate
                         order.tradePrice,
                         scaleFactor
-                    )
+                    ),
+                    MAX_ITER
                 );
-                smile.volAtMoneyness[i] = vol;
+                smile.sigmaAtMoneyness[i] = sigma;
             }
         } else {
             for (uint256 i = 0; i < moneyness.length; i++) {
                 uint256 spot = (option.strike * moneyness[i]) / 100;
-                uint256 vol = BlackScholesMath.approxVolFromPutPrice(
+                uint256 sigma = BlackScholesMath.solveSigmaFromPutPrice(
                     BlackScholesMath.VolCalculationInput(
                         spot,
                         option.strike,
@@ -118,9 +125,10 @@ library Derivative {
                         0,  // FIXME: get risk-free rate
                         order.tradePrice,
                         scaleFactor
-                    )
+                    ),
+                    MAX_ITER
                 );
-                smile.volAtMoneyness[i] = vol;
+                smile.sigmaAtMoneyness[i] = sigma;
             }
         }
         return smile;
@@ -151,19 +159,13 @@ library Derivative {
         uint256 curMoneyness = (spot * 10**option.decimals * 100) / option.strike;
 
         // Interpolate against existing smiles to get sigma
-        uint256 vol = interpolate(
-            [50,75,100,125,150],
-            smile.volAtMoneyness,
-            curMoneyness
-        );
-        uint256 sigma = BlackScholesMath.volToSigma(vol, tau);
+        uint256 sigma = interpolate([50,75,100,125,150], smile.sigmaAtMoneyness, curMoneyness);
 
         // Compute mark price using current option
         uint256 markPrice = getMarkPrice(option, spot, sigma, tau);
 
         // Find closest two data points
-        (uint256 indexLower, uint256 indexUpper) = 
-            findClosestIndices([50,75,100,125,150], curMoneyness);
+        (uint256 indexLower, uint256 indexUpper) = findClosestIndices([50,75,100,125,150], curMoneyness);
 
         uint256 vega;
 
@@ -194,20 +196,11 @@ library Derivative {
     
         if (indexLower == indexUpper) {
             // A single point to update
-            updateVol(
-                indexLower, smile, order.tradePrice, markPrice,
-                order.quantity, vega, 1000
-            );
+            updateSigma(indexLower, smile, order.tradePrice, markPrice, order.quantity, vega, 1000);
         } else {
             // Two points to update
-            updateVol(
-                indexLower, smile, order.tradePrice, markPrice,
-                order.quantity, vega, 1000
-            );
-            updateVol(
-                indexUpper, smile, order.tradePrice, markPrice,
-                order.quantity, vega, 1000
-            );
+            updateSigma(indexLower, smile, order.tradePrice, markPrice, order.quantity, vega, 1000);
+            updateSigma(indexUpper, smile, order.tradePrice, markPrice, order.quantity, vega, 1000);
         }
     }
 
@@ -223,7 +216,7 @@ library Derivative {
      * @param optionVega Vega of the option
      * @param tradeNorm Normalization constant for trade size
      */
-    function updateVol(
+    function updateSigma(
         uint256 index,
         VolatilitySmile storage smile,
         uint256 tradePrice,
@@ -239,7 +232,7 @@ library Derivative {
         bool isNegative;     // is the difference negative
 
         // Fetch the current volatility from smile
-        uint256 curVol = smile.volAtMoneyness[index];
+        uint256 curSigma = smile.sigmaAtMoneyness[index];
 
         // min(tradeSize/tradeNorm,1) = min(tradeSize,tradeNorm)/tradeNorm
         if (tradeSize > tradeNorm) {
@@ -264,11 +257,9 @@ library Derivative {
             }
             // Divide by 10000 because 2 places for decimals and 2 for percentage
             if (isNegative) {
-                smile.volAtMoneyness[index] = 
-                    curVol - (curVol * adjustPerc) / 10000;
+                smile.sigmaAtMoneyness[index] = curSigma - (curSigma * adjustPerc) / 10000;
             } else {
-                smile.volAtMoneyness[index] = 
-                    curVol + (curVol * adjustPerc) / 10000;
+                smile.sigmaAtMoneyness[index] = curSigma + (curSigma * adjustPerc) / 10000;
             }
         }
     } 
