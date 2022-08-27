@@ -379,7 +379,7 @@ library Derivative {
         uint256 queryKey
     )
         internal
-        view
+        pure
         returns (uint256)
     {
         (uint256 indexLower, uint256 indexUpper) = findClosestIndices(sortedKeys, queryKey);
@@ -412,7 +412,7 @@ library Derivative {
      */
     function findClosestIndices(uint8[5] memory sortedData, uint256 query) 
         internal
-        view
+        pure
         returns (uint256, uint256) 
     {
         // If the query is below the smallest number, return 0 for both indices

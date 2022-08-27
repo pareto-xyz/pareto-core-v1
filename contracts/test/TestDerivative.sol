@@ -50,7 +50,7 @@ contract TestDerivative {
         uint256 queryKey
     )
         external
-        view
+        pure
         returns (uint256 queryValue)
     {
         return Derivative.interpolate(sortedKeys, values, queryKey);
@@ -58,7 +58,7 @@ contract TestDerivative {
 
     function findClosestIndices(uint8[5] memory sortedData, uint256 query) 
         external
-        view
+        pure
         returns (uint256, uint256) 
     {
         return Derivative.findClosestIndices(sortedData, query);
