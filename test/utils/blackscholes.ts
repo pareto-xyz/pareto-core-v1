@@ -70,39 +70,25 @@ export function checkPutPrice(
   return price;
 }
 
-export function checkSigmaFromCallPrice(
+export function checkBacksolveSigma(
   spot: number,
   strike: number,
   tau: number,
   rate: number,
   tradePrice: number,
+  isCall: boolean,
   tolerance: number,
+  maxIter: number,
 ): number {
-  let tauInYears = tau / 31556952;
-  var sigma = Math.sqrt(2 * Math.PI / tauInYears) * (tradePrice / spot);
-  for (var i = 0; i < 10; i++) {
-    var diff = checkCallPrice(spot, strike, sigma, tau, rate) - tradePrice;
-    if (Math.abs(diff) < tolerance) {
-      break;
+  var sigma = 1
+  for (var i = 0; i < maxIter; i++) {
+    var markPrice;
+    if (isCall) {
+        markPrice = checkCallPrice(spot, strike, sigma, tau, rate);
+    } else {
+        markPrice = checkPutPrice(spot, strike, sigma, tau, rate);
     }
-    var vega = checkVega(spot, strike, sigma, tau, rate);
-    sigma = sigma - (diff / vega);
-  }
-  return sigma;
-}
-
-export function checkSigmaFromPutPrice(
-  spot: number,
-  strike: number,
-  tau: number,
-  rate: number,
-  tradePrice: number,
-  tolerance: number,
-): number {
-  let tauInYears = tau / 31556952;
-  var sigma = Math.sqrt(2 * Math.PI / tauInYears) * (tradePrice / spot);
-  for (var i = 0; i < 10; i++) {
-    var diff = checkPutPrice(spot, strike, sigma, tau, rate) - tradePrice;
+    var diff = markPrice - tradePrice;
     if (Math.abs(diff) < tolerance) {
       break;
     }

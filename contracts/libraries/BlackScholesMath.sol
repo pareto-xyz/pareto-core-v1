@@ -27,8 +27,8 @@ library BlackScholesMath {
     int128 internal constant TWO_INT = 0x20000000000000000;
     int128 internal constant TWO_PI_INT = 0x6487ed5110b45ef48;
 
-    /// @notice Tolerance for Newton Raphson optimization (0.001)
-    int128 internal constant OPT_TOL = 0x4189374bc6a7f0;
+    /// @notice Tolerance for Newton Raphson optimization (1e-6)
+    int128 internal constant OPT_TOL = 0x10c6f7a0b5ee;
 
     /************************************************
      * Computing Black Scholes Probabilities
@@ -73,6 +73,7 @@ library BlackScholesMath {
      * @param tau Time to expiry (in seconds), not in years
      * @param rate Risk-free rate
      * @param scaleFactor Unsigned 256-bit integer scaling factor
+     * @param isCall true if option is a call else false if a put
      */
     struct PriceCalculationInput {
         uint256 spot;
@@ -81,6 +82,7 @@ library BlackScholesMath {
         uint256 tau;
         uint256 rate;
         uint256 scaleFactor;
+        bool isCall;
     }
 
     /// @notice Convert `PriceCalculationInput` to 64.64 types
@@ -90,7 +92,6 @@ library BlackScholesMath {
         int128 sigmaX64;
         int128 tauX64;
         int128 rateX64;
-        uint256 scaleFactor;
     }
 
     /**
@@ -99,8 +100,9 @@ library BlackScholesMath {
      * @param strike Strike price of the asset 
      * @param tau Time to expiry (in seconds), not in years
      * @param rate Risk-free rate
-     * @param scaleFactor Unsigned 256-bit integer scaling factor
      * @param tradePrice Actual price that the option was sold/bought
+     * @param scaleFactor Unsigned 256-bit integer scaling factor
+     * @param isCall true if option is a call else false if a put
      */
     struct VolCalculationInput {
         uint256 spot;
@@ -109,6 +111,7 @@ library BlackScholesMath {
         uint256 rate;
         uint256 tradePrice;
         uint256 scaleFactor;
+        bool isCall;
     }
 
     /// @notice Convert `VolCalculationInput` to 64.64 types
@@ -118,7 +121,6 @@ library BlackScholesMath {
         int128 tauX64;
         int128 rateX64;
         int128 priceX64;
-        uint256 scaleFactor;
     }
 
     /**
@@ -136,8 +138,7 @@ library BlackScholesMath {
             inputs.strike.scaleToX64(inputs.scaleFactor),
             inputs.sigma.percentageToX64(),
             inputs.tau.toYears(),
-            inputs.rate.scaleToX64(inputs.scaleFactor),
-            inputs.scaleFactor
+            inputs.rate.scaleToX64(inputs.scaleFactor)
         );
     }
 
@@ -156,8 +157,7 @@ library BlackScholesMath {
             inputs.strike.scaleToX64(inputs.scaleFactor),
             inputs.tau.toYears(),
             inputs.rate.scaleToX64(inputs.scaleFactor),
-            inputs.tradePrice.scaleToX64(inputs.scaleFactor),
-            inputs.scaleFactor
+            inputs.tradePrice.scaleToX64(inputs.scaleFactor)
         );
     }
 
@@ -166,18 +166,25 @@ library BlackScholesMath {
      ***********************************************/
 
     /**
-     * @notice Compute Black Scholes call price
+     * @notice Compute Black Scholes price of call or put
      * @param inputs Black Scholes model parameters
      * @return price Black Scholes price of call
      */
-    function getCallPrice(PriceCalculationInput memory inputs) 
+    function getPrice(PriceCalculationInput memory inputs) 
         external
         pure 
         returns (uint256 price)
     {
         PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);
-        int128 priceX64 = getCallPriceX64(inputsX64);
-        require(priceX64 >= 0, "getCallPrice: Price is negative");
+
+        int128 priceX64;
+        if (inputs.isCall) {
+            priceX64 = getCallPriceX64(inputsX64);
+        } else {
+            priceX64 = getPutPriceX64(inputsX64);
+        }
+        
+        require(priceX64 >= 0, "getPrice: Price is negative");
         price = priceX64.scaleFromX64(inputs.scaleFactor);
     }
 
@@ -204,22 +211,6 @@ library BlackScholesMath {
             .mul(GaussianMath.getCDF(d2));
         // Should be > 0
         priceX64 = spotProbX64.sub(discountStrikeProbX64);
-    }
-
-    /**
-     * @notice Compute Black Scholes put price
-     * @param inputs Black Scholes model parameters
-     * @return price Black Scholes price of put
-     */
-    function getPutPrice(PriceCalculationInput memory inputs)
-        external
-        pure
-        returns (uint256 price)
-    {
-        PriceCalculationX64 memory inputsX64 = priceInputToX64(inputs);
-        int128 priceX64 = getPutPriceX64(inputsX64);
-        require(priceX64 >= 0, "getPutPrice: Price is negative");
-        price = priceX64.scaleFromX64(inputs.scaleFactor);
     }
 
     /**
@@ -252,26 +243,6 @@ library BlackScholesMath {
      ***********************************************/
 
     /**
-     * @notice Iterative methods like Newton Raphson require an initial guess
-     * @dev The same formula is used for calls and puts
-     * @dev sqrt(2*pi / tau) * market / spot
-     * @dev Brenner and Subrahmanyam (1988)
-     * @dev https://quant.stackexchange.com/questions/7761/a-simple-formula-for-calculating-implied-volatility
-     * @dev https://www.codearmo.com/blog/implied-volatility-european-call-python
-     */
-    function guessSigmaX64(VolCalculationX64 memory inputsX64)
-        internal
-        pure
-        returns (int128 sigmaX64)
-    {
-        // sqrt(2*pi / tau)
-        int128 piTerm = (TWO_PI_INT.div(inputsX64.tauX64)).sqrt();
-        // market / spot
-        int128 priceTerm = inputsX64.priceX64.div(inputsX64.spotX64);
-        sigmaX64 = piTerm.mul(priceTerm);
-    }
-
-    /**
      * @notice Solve for volatility from call price iteratively using Newton-Raphson
      * @dev Tompkinks (1994, pp. 143)
      * @dev https://www.codearmo.com/blog/implied-volatility-european-call-python
@@ -280,7 +251,7 @@ library BlackScholesMath {
      * @param maxIter To be gas efficient, we should limit the computation
      * @return sigma Implied volatility estimate (annual)
      */
-    function solveSigmaFromCallPrice(
+    function backsolveSigma(
         VolCalculationInput memory inputs,
         uint256 maxIter
     ) 
@@ -290,12 +261,13 @@ library BlackScholesMath {
     {
         require(
             inputs.tradePrice < inputs.strike, 
-            "solveSigmaFromCallPrice: will not converge"
+            "backsolveSigma: will not converge"
         );
         VolCalculationX64 memory inputsX64 = volInputToX64(inputs);
 
-        // Use heuristic to make initial guess for Sigma
-        int128 sigmaX64 = guessSigmaX64(inputsX64);
+        // Very simple initial guess
+        /// @notice Tried Brenner and Subrahmanyam (1988) but worked poorly for low tau
+        int128 sigmaX64 = ONE_INT;
 
         // Build a struct for computing BS price
         PriceCalculationX64 memory dataX64 = PriceCalculationX64(
@@ -303,14 +275,21 @@ library BlackScholesMath {
             inputsX64.strikeX64,
             sigmaX64,
             inputsX64.tauX64,
-            inputsX64.rateX64,
-            inputs.scaleFactor
+            inputsX64.rateX64
         );
 
         // Iteratively solve for sigma
         for (uint256 i = 0; i < maxIter; i++) {
+            // Compute black scholes price
+            int128 priceX64;
+            if (inputs.isCall) {
+                priceX64 = getCallPriceX64(dataX64);
+            } else {
+                priceX64 = getPutPriceX64(dataX64);
+            }
+
             // Calculate difference between BS price and market price 
-            int128 diffX64 = getCallPriceX64(dataX64).sub(inputsX64.priceX64);
+            int128 diffX64 = priceX64.sub(inputsX64.priceX64);
 
             if (diffX64.abs() < OPT_TOL) {
                 break;
@@ -328,62 +307,6 @@ library BlackScholesMath {
 
         // Return the best approximation
         require(sigmaX64 >= 0, "solveSigmaFromCallPrice: sigma is negative");
-        sigma = sigmaX64.scaleFromX64(inputs.scaleFactor);
-    }
-
-    /**
-     * @notice Solve for volatility from put price iteratively using Newton-Raphson
-     * @dev Tompkinks (1994, pp. 143)
-     * @dev https://www.codearmo.com/blog/implied-volatility-european-call-python
-     * @param inputs Black Scholes model parameters 
-     * @param maxIter To be gas efficient, we should limit the computation
-     * @return sigma Implied volatility estimate (annual)
-     */
-    function solveSigmaFromPutPrice(
-        VolCalculationInput memory inputs,
-        uint256 maxIter
-    ) 
-        external
-        view
-        returns (uint256 sigma) 
-    {
-        VolCalculationX64 memory inputsX64 = volInputToX64(inputs);
-
-        // Use heuristic to make initial guess for Sigma
-        int128 sigmaX64 = guessSigmaX64(inputsX64);
-
-        // Build a struct for computing BS price
-        PriceCalculationX64 memory dataX64 = PriceCalculationX64(
-            inputsX64.spotX64,
-            inputsX64.strikeX64,
-            sigmaX64,
-            inputsX64.tauX64,
-            inputsX64.rateX64,
-            inputs.scaleFactor
-        );
-
-        // Iteratively solve for sigma
-        for (uint256 i = 0; i < maxIter; i++) {
-            // Calculate difference between BS price and market price 
-            int128 diffX64 = getPutPriceX64(dataX64).sub(inputsX64.priceX64);
-
-            // If the difference is small enough, break
-            if (diffX64.abs() < OPT_TOL) {
-                break;
-            }
-
-            // Calculate vega of put option
-            int128 vegaX64 = getVegaX64(dataX64);
-
-            // Newton Raphson to update estimate
-            sigmaX64 = sigmaX64.sub(diffX64.div(vegaX64));
-
-            // Update `dataX64`
-            dataX64.sigmaX64 = sigmaX64;
-        }
-
-        // Return the best approximation
-        require(sigmaX64 >= 0, "solveSigmaFromPutPrice: sigma is negative");
         sigma = sigmaX64.scaleFromX64(inputs.scaleFactor);
     }
 

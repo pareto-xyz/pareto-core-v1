@@ -22,6 +22,7 @@ contract TestBlackScholesMath {
         pure
         returns (uint256 d1abs, uint256 d2abs, bool d1IsNeg, bool d2IsNeg) 
     {
+        // doesn't matter what to set `isCall`
         BlackScholesMath.PriceCalculationInput memory inputs = 
             BlackScholesMath.PriceCalculationInput(
                 spot,
@@ -29,7 +30,8 @@ contract TestBlackScholesMath {
                 sigma,
                 tau,
                 rate,
-                scaleFactor
+                scaleFactor,
+                true
             );
         BlackScholesMath.PriceCalculationX64 memory inputsX64 = 
             BlackScholesMath.priceInputToX64(inputs);
@@ -51,13 +53,14 @@ contract TestBlackScholesMath {
         }
     }
 
-    function getCallPrice(
+    function getPrice(
         uint256 spot,
         uint256 strike,
         uint256 sigma,
         uint256 tau,
         uint256 rate,
-        uint256 scaleFactor
+        uint256 scaleFactor,
+        bool isCall
     ) 
         external
         pure 
@@ -70,43 +73,21 @@ contract TestBlackScholesMath {
                 sigma,
                 tau,
                 rate,
-                scaleFactor
+                scaleFactor,
+                isCall
             );
             
-        return BlackScholesMath.getCallPrice(inputs);
+        return BlackScholesMath.getPrice(inputs);
     }
 
-    function getPutPrice(
-        uint256 spot,
-        uint256 strike,
-        uint256 sigma,
-        uint256 tau,
-        uint256 rate,
-        uint256 scaleFactor
-    )
-        external
-        pure
-        returns (uint256 price)
-    {
-        BlackScholesMath.PriceCalculationInput memory inputs = 
-            BlackScholesMath.PriceCalculationInput(
-                spot,
-                strike,
-                sigma,
-                tau,
-                rate,
-                scaleFactor
-            );
-        return BlackScholesMath.getPutPrice(inputs);
-    }
-
-    function solveSigmaFromCallPrice(
+    function backsolveSigma(
         uint256 spot,
         uint256 strike,
         uint256 tau,
         uint256 rate,
         uint256 tradePrice,
-        uint256 scaleFactor
+        uint256 scaleFactor,
+        bool isCall
     )
         external
         pure
@@ -119,33 +100,10 @@ contract TestBlackScholesMath {
                 tau,
                 rate,
                 tradePrice,
-                scaleFactor
+                scaleFactor,
+                isCall
             );
-        return BlackScholesMath.solveSigmaFromCallPrice(inputs, 10);
-    }
-
-    function solveSigmaFromPutPrice(
-        uint256 spot,
-        uint256 strike,
-        uint256 tau,
-        uint256 rate,
-        uint256 tradePrice,
-        uint256 scaleFactor
-    )
-        external
-        view
-        returns (uint256 vol)
-    {
-        BlackScholesMath.VolCalculationInput memory inputs = 
-            BlackScholesMath.VolCalculationInput(
-                spot,
-                strike,
-                tau,
-                rate,
-                tradePrice,
-                scaleFactor
-            );
-        return BlackScholesMath.solveSigmaFromPutPrice(inputs, 10);
+        return BlackScholesMath.backsolveSigma(inputs, 10);
     }
 
     function getVega(
@@ -154,12 +112,14 @@ contract TestBlackScholesMath {
         uint256 sigma,
         uint256 tau,
         uint256 rate,
-        uint256 scaleFactor
+        uint256 scaleFactor,
+        bool isCall
     ) 
         external
         pure
         returns (uint256 vega) 
     {
+        // doesn't matter what to put for isCall due to parity
         BlackScholesMath.PriceCalculationInput memory inputs = 
             BlackScholesMath.PriceCalculationInput(
                 spot,
@@ -167,7 +127,8 @@ contract TestBlackScholesMath {
                 sigma,
                 tau,
                 rate,
-                scaleFactor
+                scaleFactor,
+                isCall
             );
         return BlackScholesMath.getVega(inputs);
     }

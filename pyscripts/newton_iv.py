@@ -28,17 +28,31 @@ def get_put_price(spot, strike, rate, sigma, tau):
   price = strike * math.exp(-rate * tauInYears) * norm.cdf(-d2) - spot * norm.cdf(-d1)
   return price
 
-def get_call_imp_vol(spot, strike, rate, tau, market, tol=1e-6, maxIter=5):
+def get_imp_vol(spot, strike, rate, tau, market, is_call=True, tol=1e-6, maxIter=5, debug=False):
   sigma = 1
   for _ in range(maxIter):
-    diff = get_call_price(spot, strike, rate, sigma, tau) - market
+    if is_call:
+      diff = get_call_price(spot, strike, rate, sigma, tau) - market
+    else:
+      diff = get_put_price(spot, strike, rate, sigma, tau) - market
     if abs(diff) < tol:
       break
     vega = get_vega(spot, strike, rate, sigma, tau)
     sigma = sigma - diff / vega
-    print("sigma", sigma)
+
+    if debug:
+      print(sigma, vega, diff)
   return sigma
 
 
 if __name__ == "__main__":
-  iv = get_call_imp_vol(100, 115, 0.05, 31556952, 20)
+  tol = 1e-6
+  iv = get_imp_vol(100, 115, 0.05, 31556952, 18, is_call=True, tol=tol)
+  assert math.isclose(iv, 0.5428424065162359, abs_tol=tol)
+
+  iv = get_imp_vol(100, 115, 0.05, 31556952, 18, is_call=False, tol=tol)
+  assert math.isclose(iv, 0.3068596305125857, abs_tol=tol)
+
+  price = get_call_price(1, 1.1, 0, 0.5, 604800)
+  iv = get_imp_vol(1, 1.1, 0, 604800, price, is_call=True, tol=tol)
+  assert math.isclose(iv, 0.5, abs_tol=tol)

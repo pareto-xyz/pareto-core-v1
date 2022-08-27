@@ -98,39 +98,23 @@ library Derivative {
         // Set the hash for the new smile
         smile.exists_ = true;
 
-        if (option.optionType == OptionType.CALL) {
-            for (uint256 i = 0; i < moneyness.length; i++) {
-                uint256 spot = (option.strike * moneyness[i]) / 100;
-                uint256 sigma = BlackScholesMath.solveSigmaFromCallPrice(
-                    BlackScholesMath.VolCalculationInput(
-                        spot,
-                        option.strike,
-                        option.expiry - block.timestamp,
-                        0,  // FIXME: get risk-free rate
-                        order.tradePrice,
-                        scaleFactor
-                    ),
-                    MAX_ITER
-                );
-                smile.sigmaAtMoneyness[i] = sigma;
-            }
-        } else {
-            for (uint256 i = 0; i < moneyness.length; i++) {
-                uint256 spot = (option.strike * moneyness[i]) / 100;
-                uint256 sigma = BlackScholesMath.solveSigmaFromPutPrice(
-                    BlackScholesMath.VolCalculationInput(
-                        spot,
-                        option.strike,
-                        option.expiry - block.timestamp,
-                        0,  // FIXME: get risk-free rate
-                        order.tradePrice,
-                        scaleFactor
-                    ),
-                    MAX_ITER
-                );
-                smile.sigmaAtMoneyness[i] = sigma;
-            }
+        for (uint256 i = 0; i < moneyness.length; i++) {
+            uint256 spot = (option.strike * moneyness[i]) / 100;
+            uint256 sigma = BlackScholesMath.backsolveSigma(
+                BlackScholesMath.VolCalculationInput(
+                    spot,
+                    option.strike,
+                    option.expiry - block.timestamp,
+                    0,  // FIXME: get risk-free rate
+                    order.tradePrice,
+                    scaleFactor,
+                    option.optionType == OptionType.CALL
+                ),
+                MAX_ITER
+            );
+            smile.sigmaAtMoneyness[i] = sigma;
         }
+
         return smile;
     }
 
@@ -170,30 +154,18 @@ library Derivative {
         uint256 vega;
 
         // Compute vega of option
-        if (option.optionType == OptionType.CALL) {
-            vega = BlackScholesMath.getCallVega(
-                BlackScholesMath.PriceCalculationInput(
-                    spot,
-                    option.strike,
-                    sigma,
-                    option.expiry - block.timestamp,
-                    0, // FIXME: risk-free rate
-                    10**(18-option.decimals)
-                )
-            );
-        } else {
-            vega = BlackScholesMath.getPutVega(
-                BlackScholesMath.PriceCalculationInput(
-                    spot,
-                    option.strike,
-                    sigma,
-                    option.expiry - block.timestamp,
-                    0, // FIXME: risk-free rate
-                    10**(18-option.decimals)
-                )
-            );
-        }
-    
+        vega = BlackScholesMath.getVega(
+            BlackScholesMath.PriceCalculationInput(
+                spot,
+                option.strike,
+                sigma,
+                option.expiry - block.timestamp,
+                0, // FIXME: risk-free rate
+                10**(18-option.decimals),
+                option.optionType == OptionType.CALL
+            )
+        );
+
         if (indexLower == indexUpper) {
             // A single point to update
             updateSigma(indexLower, smile, order.tradePrice, markPrice, order.quantity, vega, 1000);
@@ -285,29 +257,17 @@ library Derivative {
         pure
         returns (uint256 price) 
     {   
-        if (option.optionType == OptionType.CALL) {
-            price = BlackScholesMath.getCallPrice(
-                BlackScholesMath.PriceCalculationInput(
-                    spot,
-                    option.strike,
-                    sigma,
-                    tau,
-                    0,  // FIXME: need to get rate
-                    10**(18-option.decimals)
-                )
-            );
-        } else {
-            price = BlackScholesMath.getPutPrice(
-                BlackScholesMath.PriceCalculationInput(
-                    spot,
-                    option.strike,
-                    sigma,
-                    tau,
-                    0,  // FIXME: need to get rate
-                    10**(18-option.decimals)
-                )
-            );
-        }
+        price = BlackScholesMath.getPrice(
+            BlackScholesMath.PriceCalculationInput(
+                spot,
+                option.strike,
+                sigma,
+                tau,
+                0,  // FIXME: need to get rate
+                10**(18-option.decimals),
+                option.optionType == OptionType.CALL
+            )
+        );
     }
 
     /************************************************
