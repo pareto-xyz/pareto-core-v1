@@ -256,7 +256,7 @@ library BlackScholesMath {
         uint256 maxIter
     ) 
         external
-        pure
+        view
         returns (uint256 sigma) 
     {
         require(
@@ -291,6 +291,9 @@ library BlackScholesMath {
             // Calculate difference between BS price and market price 
             int128 diffX64 = priceX64.sub(inputsX64.priceX64);
 
+            console.log("diffX64");
+            console.logInt(diffX64);
+
             if (diffX64.abs() < OPT_TOL) {
                 break;
             }
@@ -298,8 +301,14 @@ library BlackScholesMath {
             // Calculate vega of call option
             int128 vegaX64 = getVegaX64(dataX64);
 
+            console.log("vegaX64");
+            console.logInt(vegaX64);
+
             // Newton Raphson to update estimate
             sigmaX64 = sigmaX64.sub(diffX64.div(vegaX64));
+
+            console.log("sigmaX64");
+            console.logInt(sigmaX64);
 
             // Update `dataX64`
             dataX64.sigmaX64 = sigmaX64;

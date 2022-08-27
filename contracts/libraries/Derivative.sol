@@ -88,7 +88,7 @@ library Derivative {
     {
         Option memory option = order.option;
         require(option.expiry >= block.timestamp, "createSmile: option expired");
-
+        
         // Compute scale factor
         uint256 scaleFactor = 10**(18-option.decimals);
 

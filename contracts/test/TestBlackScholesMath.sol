@@ -90,7 +90,7 @@ contract TestBlackScholesMath {
         bool isCall
     )
         external
-        pure
+        view
         returns (uint256 vol) 
     {
         BlackScholesMath.VolCalculationInput memory inputs = 
