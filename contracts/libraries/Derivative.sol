@@ -2,12 +2,18 @@
 pragma solidity ^0.8.9;
 
 import "./BlackScholesMath.sol";
+import "./BasicMath.sol";
+import "./NegativeMath.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
+
+import "hardhat/console.sol";
 
 /**
  * @notice Contains enums and structs representing Pareto derivatives
  */
 library Derivative {
+    using BasicMath for uint256;
+
     /************************************************
      * Structs and Enums
      ***********************************************/
@@ -361,8 +367,9 @@ library Derivative {
 
     /**
      * @notice Compute the interpolated value based on a query key
+     * @dev y = y1 + (x - x1) * (y2 - y1) / (x2 - x1)
      * @param sortedKeys Array of size 5 containing numeric keys sorted
-     * @param values Array of size 5 containing numeric values
+     * @param values Array of size 5 containing numeric values (all must be positive)
      * @param queryKey Key to search for
      * @return queryValue Interpolated value for the queryKey
      */
@@ -372,15 +379,27 @@ library Derivative {
         uint256 queryKey
     )
         internal
-        pure
-        returns (uint256 queryValue)
+        view
+        returns (uint256)
     {
-        (uint256 indexLower, uint256 indexUpper) = 
-            findClosestIndices(sortedKeys, queryKey);
+        (uint256 indexLower, uint256 indexUpper) = findClosestIndices(sortedKeys, queryKey);
+
         if (indexLower == indexUpper) {
-            queryValue = values[indexLower];
+            return values[indexLower];
         } else {
-            queryValue = (values[indexLower] + values[indexUpper]) / 2;
+            (uint256 yDiff, bool yIsNeg) = values[indexUpper].absdiff(values[indexLower]);
+            uint256 xDiff = sortedKeys[indexUpper] - sortedKeys[indexLower];
+
+            // Compute slope
+            uint256 slopeAbs = (queryKey - sortedKeys[indexLower]) * yDiff / xDiff;
+
+            // Add intercept to slope
+            (uint256 queryValue, bool outIsNeg) = NegativeMath.add(values[indexLower], false, slopeAbs, yIsNeg);
+
+            // It must be that the value is positive
+            require(!outIsNeg, "interpolate: how did you get a negative?");
+
+            return queryValue;
         }
     }
 
@@ -393,7 +412,7 @@ library Derivative {
      */
     function findClosestIndices(uint8[5] memory sortedData, uint256 query) 
         internal
-        pure
+        view
         returns (uint256, uint256) 
     {
         // If the query is below the smallest number, return 0 for both indices
@@ -407,22 +426,18 @@ library Derivative {
         uint256 indexLower;
         uint256 indexUpper;
         for (uint256 i = 0; i < 5; i++) {
-            // If the query is exactly one of the points, return only 
-            // that point
+            // If the query is exactly one of the points, return point
             if (query == sortedData[i]) {
                 return (i, i);
             } else if (query < sortedData[i]) {
-                // Just keep overwriting the lower index
-                indexLower = i;
-            } else if (query > sortedData[i]) {
-                // If we found a point bigger which we are guaranteed to find, 
-                // then pick the first one this happens
+                // First entry larger than query, we quite
                 indexUpper = i;
-                // We can return since we definitely have found `indexLower`
-                // by the time we reach here
                 return (indexLower, indexUpper);
+            } else if (query > sortedData[i]) {
+                indexLower = i;
             }
         }
+        // Should not reach here
         return (indexLower, indexUpper);
     }
 }

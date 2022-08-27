@@ -1,8 +1,10 @@
 import { ethers } from "hardhat";
 import { BigNumber } from "ethers";
+import { fromBn } from "evm-bn";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { Contract } from "ethers";
+import { checkInterpolate, checkClosestIndices } from "../utils/interpolate";
 
 /****************************************
  * Constants
@@ -212,11 +214,84 @@ describe("Derivative Library", () => {
    * Interpolation
    ****************************************/
   describe("Interpolation", () => {
+    it("can interpolate", async () => {
+      await derivative.interpolate(
+        [50,75,100,125,150],
+        [ONE_ETH.mul(2),ONE_ETH.mul(4),ONE_ETH.mul(6),ONE_ETH.mul(8),ONE_ETH.mul(10)],
+        100,
+      );
+    });
+    it("query key in middle #1", async () => {
+      const queryValue = await derivative.interpolate(
+        [50,75,100,125,150],
+        [ONE_ETH.mul(2),ONE_ETH.mul(4),ONE_ETH.mul(6),ONE_ETH.mul(8),ONE_ETH.mul(10)],
+        110,
+      );
+      const queryValuets = checkInterpolate([50,75,100,125,150], [2,4,6,8,10], 110);
+      expect(parseFloat(fromBn(queryValue, 18))).to.be.equal(queryValuets);
+    });
+    it("query key in middle #2", async () => {
+      const queryValue = await derivative.interpolate(
+        [50,75,100,125,150],
+        [ONE_ETH.mul(2),ONE_ETH.mul(4),ONE_ETH.mul(6),ONE_ETH.mul(8),ONE_ETH.mul(10)],
+        129,
+      );
+      const queryValuets = checkInterpolate([50,75,100,125,150], [2,4,6,8,10], 129);
+      expect(parseFloat(fromBn(queryValue, 18))).to.be.equal(queryValuets);
+      });
+    it("query key less than lowest key", async () => {
+      const queryValue = await derivative.interpolate(
+        [50,75,100,125,150],
+        [ONE_ETH.mul(2),ONE_ETH.mul(4),ONE_ETH.mul(6),ONE_ETH.mul(8),ONE_ETH.mul(10)],
+        10,
+      );
+      expect(parseFloat(fromBn(queryValue, 18))).to.be.equal(2);
+    });
+    it("query key more than biggest key", async () => {
+      const queryValue = await derivative.interpolate(
+        [50,75,100,125,150],
+        [ONE_ETH.mul(2),ONE_ETH.mul(4),ONE_ETH.mul(6),ONE_ETH.mul(8),ONE_ETH.mul(10)],
+        1000,
+      );
+      expect(parseFloat(fromBn(queryValue, 18))).to.be.equal(10);
+    });
   });
 
   /****************************************
    * Finding closest indices
    ****************************************/
   describe("Finding closest indices", () => {
+    it("query key in middle #1", async () => {
+      const [indexLeft, indexRight] = await derivative.findClosestIndices(
+        [50,75,100,125,150], 110);
+      const [indexLeftts, indexRightts] = checkClosestIndices(
+        [50,75,100,125,150], 110);
+      expect(indexLeft).to.be.equal(indexLeftts);
+      expect(indexRight).to.be.equal(indexRightts);
+    });
+    it("query key in middle #2", async () => {
+      const [indexLeft, indexRight] = await derivative.findClosestIndices(
+        [50,75,100,125,150], 129);
+      const [indexLeftts, indexRightts] = checkClosestIndices(
+        [50,75,100,125,150], 129);
+      expect(indexLeft).to.be.equal(indexLeftts);
+      expect(indexRight).to.be.equal(indexRightts);
+    });
+    it("query key less than lowest key", async () => {
+      const [indexLeft, indexRight] = await derivative.findClosestIndices(
+        [50,75,100,125,150], 10);
+      const [indexLeftts, indexRightts] = checkClosestIndices(
+        [50,75,100,125,150], 10);
+      expect(indexLeft).to.be.equal(indexLeftts);
+      expect(indexRight).to.be.equal(indexRightts);
+    });
+    it("query key less than highest key", async () => {
+      const [indexLeft, indexRight] = await derivative.findClosestIndices(
+        [50,75,100,125,150], 190);
+      const [indexLeftts, indexRightts] = checkClosestIndices(
+        [50,75,100,125,150], 190);
+      expect(indexLeft).to.be.equal(indexLeftts);
+      expect(indexRight).to.be.equal(indexRightts);
+    });
   });
 });
