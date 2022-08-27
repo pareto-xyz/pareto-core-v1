@@ -59,7 +59,7 @@ def newton_raphson_iv(spot, strike, rate, tau, market, is_call=True, guess=1, to
 
   return sigma
 
-def bisection_method_iv(spot, strike, rate, tau, market, is_call=True, left=0, right=10, tol=1e-6, maxIter=5):
+def bisection_method_iv(spot, strike, rate, tau, market, is_call=True, left=0.001, right=10, tol=1e-6, maxIter=5):
   for _ in range(maxIter):
     mid = (left + right) / 2
     if is_call:

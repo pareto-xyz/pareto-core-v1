@@ -35,7 +35,7 @@ library BlackScholesMath {
     int128 internal constant SIGMA_GUESS = ONE_INT;
 
     /// @notice Bounds for bisection method
-    int128 internal constant MIN_SIGMA = 0x0;
+    int128 internal constant MIN_SIGMA = 0x4189374bc6a7f0;
     int128 internal constant MAX_SIGMA = 0xa0000000000000000;
 
     /************************************************
@@ -372,11 +372,11 @@ library BlackScholesMath {
             int128 diffLeftX64;
             // diff = option price - market price
             if (inputs.isCall) {
-                diffLeftX64 = getCallPriceX64(dataLeftX64);
-                diffMidX64 = getCallPriceX64(dataMidX64);
+                diffLeftX64 = getCallPriceX64(dataLeftX64).sub(inputsX64.priceX64);
+                diffMidX64 = getCallPriceX64(dataMidX64).sub(inputsX64.priceX64);
             } else {
-                diffLeftX64 = getPutPriceX64(dataLeftX64);
-                diffMidX64 = getPutPriceX64(dataMidX64);
+                diffLeftX64 = getPutPriceX64(dataLeftX64).sub(inputsX64.priceX64);
+                diffMidX64 = getPutPriceX64(dataMidX64).sub(inputsX64.priceX64);
             }
 
             if (diffMidX64.abs() < OPT_TOL) {
