@@ -261,7 +261,7 @@ describe("BlackScholesMath Library", () => {
       const priceTrue = checkCallPrice(1, 1.1, sigmaTrue, ONE_WEEK, 0.05);
       const priceTrueBn = toBn(priceTrue.toString(), 18);
       const sigmaBn = await blackScholesMath.backsolveSigma(
-        ONE_ETH, ONEONE_ETH, ONE_WEEK, 0.05, priceTrueBn, 1, true);
+        ONE_ETH, ONEONE_ETH, ONE_WEEK, ONE_ETH.mul(5).div(100), priceTrueBn, 1, true);
       const sigma = parseFloat(fromBn(sigmaBn, 18));
       const sigmats = checkBacksolveSigma(
         1, 1.1, ONE_WEEK, 0.05, priceTrue, true, 1e-10, 10);
@@ -309,6 +309,104 @@ describe("BlackScholesMath Library", () => {
    * Volatility from puts
    ****************************************/
   describe("Approximating sigma from put price", () => {
+    it("spot=1,strike=0.9,sigma=0.5,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.5;
+      const priceTrue = checkPutPrice(1, 0.9, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.backsolveSigma(
+        ONE_ETH, ONE_ETH.mul(9).div(10), ONE_WEEK, 0, priceTrueBn, 1, false);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      const sigmats = checkBacksolveSigma(
+        1, 0.9, ONE_WEEK, 0, priceTrue, false, 1e-10, 10);
+      expect(sigma).to.be.closeTo(sigmats, 1e-3);
+      expect(sigma).to.be.closeTo(sigmaTrue, 1e-3);
+    });
+    it("spot=1,strike=0.9,sigma=1.5,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 1.5;
+      const priceTrue = checkPutPrice(1, 0.9, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.backsolveSigma(
+        ONE_ETH, ONE_ETH.mul(9).div(10), ONE_WEEK, 0, priceTrueBn, 1, false);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      const sigmats = checkBacksolveSigma(
+        1, 0.9, ONE_WEEK, 0, priceTrue, false, 1e-10, 10);
+      expect(sigma).to.be.closeTo(sigmats, 1e-3);
+      expect(sigma).to.be.closeTo(sigmaTrue, 1e-3);
+    });
+    it("spot=1,strike=0.9,sigma=0.9,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.9;
+      const priceTrue = checkPutPrice(1, 0.9, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.backsolveSigma(
+        ONE_ETH, ONE_ETH.mul(9).div(10), ONE_WEEK, 0, priceTrueBn, 1, false);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      const sigmats = checkBacksolveSigma(
+        1, 0.9, ONE_WEEK, 0, priceTrue, false, 1e-10, 10);
+      expect(sigma).to.be.closeTo(sigmats, 1e-3);
+      expect(sigma).to.be.closeTo(sigmaTrue, 1e-3);
+    });
+    it("spot=1,strike=0.9,sigma=0.1,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.1;
+      const priceTrue = checkPutPrice(1, 0.9, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.backsolveSigma(
+        ONE_ETH, ONE_ETH.mul(9).div(10), ONE_WEEK, 0, priceTrueBn, 1, false);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      const sigmats = checkBacksolveSigma(
+        1, 0.9, ONE_WEEK, 0, priceTrue, false, 1e-10, 10);
+      expect(sigma).to.be.closeTo(sigmats, 1e-3);
+       // Need much more iters to accurately solve
+       const sigmats2 = checkBacksolveSigma(
+        1, 0.9, ONE_WEEK, 0, priceTrue, false, 1e-100, 100);
+      expect(sigmats2).to.be.closeTo(sigmaTrue, 0.1);
+    });
+    it("spot=1,strike=0.9,sigma=0.5,tau=1 week,rate=0.05", async () => {
+      const sigmaTrue = 0.5;
+      const priceTrue = checkPutPrice(1, 0.9, sigmaTrue, ONE_WEEK, 0.05);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.backsolveSigma(
+        ONE_ETH, ONE_ETH.mul(9).div(10), ONE_WEEK, ONE_ETH.mul(5).div(100), priceTrueBn, 1, false);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      const sigmats = checkBacksolveSigma(
+        1, 0.9, ONE_WEEK, 0.05, priceTrue, false, 1e-10, 10);
+      expect(sigma).to.be.closeTo(sigmats, 1e-3);
+    });
+    it("spot=0.9,strike=0.9,sigma=0.5,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.5;
+      const priceTrue = checkPutPrice(0.9, 0.9, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.backsolveSigma(
+        ONE_ETH.mul(9).div(10), ONE_ETH.mul(9).div(10), ONE_WEEK, 0, priceTrueBn, 1, false);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      const sigmats = checkBacksolveSigma(
+        0.9, 0.9, ONE_WEEK, 0, priceTrue, false, 1e-10, 10);
+      expect(sigma).to.be.closeTo(sigmats, 1e-3);
+      expect(sigma).to.be.closeTo(sigmaTrue, 1e-3);
+    });
+    it("spot=0.7,strike=0.9,sigma=0.5,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.5;
+      const priceTrue = checkPutPrice(0.7, 0.9, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.backsolveSigma(
+        ONE_ETH.mul(7).div(10), ONE_ETH.mul(9).div(10), ONE_WEEK, 0, priceTrueBn, 1, false);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      const sigmats = checkBacksolveSigma(
+        0.7, 0.9, ONE_WEEK, 0, priceTrue, false, 1e-10, 10);
+      expect(sigma).to.be.closeTo(sigmats, 1e-3);
+      expect(sigma).to.be.closeTo(sigmaTrue, 1e-3);
+    });
+    it("spot=110,strike=100,sigma=0.5,tau=1 week,rate=0", async () => {
+      const sigmaTrue = 0.5;
+      const priceTrue = checkPutPrice(110, 100, sigmaTrue, ONE_WEEK, 0);
+      const priceTrueBn = toBn(priceTrue.toString(), 18);
+      const sigmaBn = await blackScholesMath.backsolveSigma(
+        ONE_ETH.mul(110), ONE_ETH.mul(100), ONE_WEEK, 0, priceTrueBn, 1, false);
+      const sigma = parseFloat(fromBn(sigmaBn, 18));
+      const sigmats = checkBacksolveSigma(
+        110, 100, ONE_WEEK, 0, priceTrue, false, 1e-10, 10);
+      expect(sigma).to.be.closeTo(sigmats, 1e-3);
+      expect(sigma).to.be.closeTo(sigmaTrue, 1e-3);
+    });
   });
   /****************************************
    * Vega
