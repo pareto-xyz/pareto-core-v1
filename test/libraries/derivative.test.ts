@@ -1,10 +1,11 @@
 import { ethers } from "hardhat";
 import { BigNumber } from "ethers";
-import { fromBn } from "evm-bn";
+import { fromBn, toBn } from "evm-bn";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { Contract } from "ethers";
 import { checkInterpolate, checkClosestIndices } from "../utils/interpolate";
+import { checkCallPrice, checkPutPrice } from "../utils/blackscholes";
 
 /****************************************
  * Constants
@@ -60,11 +61,13 @@ describe("Derivative Library", () => {
   describe("Creating a smile", () => {
     it("Can create a smile", async () => {
       const curTime = Math.floor(Date.now() / 1000);
+      // Use black scholes to estimate a reasonable price
+      const tradePrice = checkCallPrice(1, 1.1, 0.5, ONE_WEEK, 0);
       const order = {
         orderId: "test",
         buyer: alice.address,
         seller: bob.address,
-        tradePrice: ONE_ETH.mul(11).div(100),
+        tradePrice: toBn(tradePrice.toString(), 18),
         quantity: 5,
         option: {
           optionType: 0,
