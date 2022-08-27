@@ -70,7 +70,7 @@ export function checkPutPrice(
   return price;
 }
 
-export function checkBacksolveSigma(
+export function getSigmaByNewton(
   spot: number,
   strike: number,
   tau: number,
