@@ -29,6 +29,14 @@ library BlackScholesMath {
 
     /// @notice Tolerance for Newton Raphson optimization (1e-10)
     int128 internal constant OPT_TOL = 0x6df37f67;
+    
+    /// @notice Minimum vega when solving for sigma
+    int128 internal constant MIN_VEGA = 0x28f5c28f5c28f5c;
+    int128 internal constant SIGMA_GUESS = ONE_INT;
+
+    /// @notice Bounds for bisection method
+    int128 internal constant MIN_SIGMA = 0x0;
+    int128 internal constant MAX_SIGMA = 0xa0000000000000000;
 
     /************************************************
      * Computing Black Scholes Probabilities
@@ -251,23 +259,23 @@ library BlackScholesMath {
      * @param maxIter To be gas efficient, we should limit the computation
      * @return sigma Implied volatility estimate (annual)
      */
-    function backsolveSigma(
+    function getSigmaByNewton(
         VolCalculationInput memory inputs,
         uint256 maxIter
     ) 
         external
-        view
+        pure
         returns (uint256 sigma) 
     {
         require(
             inputs.tradePrice < inputs.strike, 
-            "backsolveSigma: will not converge"
+            "getSigmaByNewton: will not converge"
         );
         VolCalculationX64 memory inputsX64 = volInputToX64(inputs);
 
         // Very simple initial guess
         /// @notice Tried Brenner and Subrahmanyam (1988) but worked poorly for low tau
-        int128 sigmaX64 = ONE_INT;
+        int128 sigmaX64 = SIGMA_GUESS;
 
         // Build a struct for computing BS price
         PriceCalculationX64 memory dataX64 = PriceCalculationX64(
@@ -291,9 +299,6 @@ library BlackScholesMath {
             // Calculate difference between BS price and market price 
             int128 diffX64 = priceX64.sub(inputsX64.priceX64);
 
-            console.log("diffX64");
-            console.logInt(diffX64);
-
             if (diffX64.abs() < OPT_TOL) {
                 break;
             }
@@ -301,22 +306,101 @@ library BlackScholesMath {
             // Calculate vega of call option
             int128 vegaX64 = getVegaX64(dataX64);
 
-            console.log("vegaX64");
-            console.logInt(vegaX64);
+            // vega can be very small when spot is very far from strike
+            // Bound it so we don't have numerical issues
+            if (vegaX64 < MIN_VEGA) {
+              vegaX64 = MIN_VEGA;
+            }
 
             // Newton Raphson to update estimate
             sigmaX64 = sigmaX64.sub(diffX64.div(vegaX64));
-
-            console.log("sigmaX64");
-            console.logInt(sigmaX64);
 
             // Update `dataX64`
             dataX64.sigmaX64 = sigmaX64;
         }
 
         // Return the best approximation
-        require(sigmaX64 >= 0, "solveSigmaFromCallPrice: sigma is negative");
+        require(sigmaX64 >= 0, "getSigmaByNewton: sigma is negative");
         sigma = sigmaX64.scaleFromX64(inputs.scaleFactor);
+    }
+
+    /**
+     * @notice Solve for volatility from call price iteratively using Bisection method
+     * @dev https://en.wikipedia.org/wiki/Bisection_method
+     * @param inputs Black Scholes model parameters 
+     * @param maxIter To be gas efficient, we should limit the computation
+     * @return sigma Implied volatility estimate (annual)
+     */
+    function getSigmaByBisection(
+        VolCalculationInput memory inputs,
+        uint256 maxIter
+    ) 
+        external
+        pure
+        returns (uint256 sigma) 
+    {
+        require(
+            inputs.tradePrice < inputs.strike, 
+            "getSigmaByBisection: will not converge"
+        );
+        VolCalculationX64 memory inputsX64 = volInputToX64(inputs);
+
+        // Initialize left and right bound
+        int128 leftX64 = MIN_SIGMA;
+        int128 rightX64 = MAX_SIGMA;
+        int128 midX64 = leftX64.add(rightX64).div(TWO_INT);
+
+        // Create data objects for left and mid
+        PriceCalculationX64 memory dataLeftX64 = PriceCalculationX64(
+            inputsX64.spotX64,
+            inputsX64.strikeX64,
+            leftX64,
+            inputsX64.tauX64,
+            inputsX64.rateX64
+        );
+        PriceCalculationX64 memory dataMidX64 = PriceCalculationX64(
+            inputsX64.spotX64,
+            inputsX64.strikeX64,
+            midX64,
+            inputsX64.tauX64,
+            inputsX64.rateX64
+        );
+
+        for (uint256 i = 0; i < maxIter; i++) {
+            // Get prices of options
+            int128 diffMidX64;
+            int128 diffLeftX64;
+            // diff = option price - market price
+            if (inputs.isCall) {
+                diffLeftX64 = getCallPriceX64(dataLeftX64);
+                diffMidX64 = getCallPriceX64(dataMidX64);
+            } else {
+                diffLeftX64 = getPutPriceX64(dataLeftX64);
+                diffMidX64 = getPutPriceX64(dataMidX64);
+            }
+
+            if (diffMidX64.abs() < OPT_TOL) {
+                break;
+            }
+
+            // Check if the signs are the same
+            if ((diffMidX64 >= 0) == (diffLeftX64 >= 0)) {
+                leftX64 = midX64;
+            } else {
+                rightX64 = midX64;
+            }
+
+            // mid = (left + right) / 2 
+            midX64 = leftX64.add(rightX64).div(TWO_INT);
+
+            // Update the data objects
+            dataLeftX64.sigmaX64 = leftX64;
+            dataMidX64.sigmaX64 = midX64;
+        }
+
+        // Return final mid point
+        require(midX64 >= 0, "getSigmaByBisection: sigma is negative");
+        sigma = midX64.scaleFromX64(inputs.scaleFactor);
     }
 
     /************************************************

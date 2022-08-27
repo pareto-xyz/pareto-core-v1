@@ -92,7 +92,7 @@ export function checkBacksolveSigma(
     if (Math.abs(diff) < tolerance) {
       break;
     }
-    var vega = checkVega(spot, strike, sigma, tau, rate);
+    var vega = Math.max(checkVega(spot, strike, sigma, tau, rate), 0.01);
     sigma = sigma - (diff / vega);
   }
   return sigma;
