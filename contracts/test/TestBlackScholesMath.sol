@@ -80,7 +80,7 @@ contract TestBlackScholesMath {
         return BlackScholesMath.getPrice(inputs);
     }
 
-    function backsolveSigma(
+    function getSigmaByNewton(
         uint256 spot,
         uint256 strike,
         uint256 tau,
@@ -90,8 +90,8 @@ contract TestBlackScholesMath {
         bool isCall
     )
         external
-        view
-        returns (uint256 vol) 
+        pure
+        returns (uint256) 
     {
         BlackScholesMath.VolCalculationInput memory inputs = 
             BlackScholesMath.VolCalculationInput(
@@ -103,7 +103,33 @@ contract TestBlackScholesMath {
                 scaleFactor,
                 isCall
             );
-        return BlackScholesMath.backsolveSigma(inputs, 10);
+        return BlackScholesMath.getSigmaByNewton(inputs, 10);
+    }
+
+    function getSigmaByBisection(
+        uint256 spot,
+        uint256 strike,
+        uint256 tau,
+        uint256 rate,
+        uint256 tradePrice,
+        uint256 scaleFactor,
+        bool isCall
+    )
+        external
+        pure
+        returns (uint256) 
+    {
+        BlackScholesMath.VolCalculationInput memory inputs = 
+            BlackScholesMath.VolCalculationInput(
+                spot,
+                strike,
+                tau,
+                rate,
+                tradePrice,
+                scaleFactor,
+                isCall
+            );
+        return BlackScholesMath.getSigmaByBisection(inputs, 10);
     }
 
     function getVega(
