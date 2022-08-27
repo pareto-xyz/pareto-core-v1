@@ -58,7 +58,25 @@ describe("Derivative Library", () => {
    * Smile creation
    ****************************************/
   describe("Creating a smile", () => {
-
+    it("Can create a smile", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const order = {
+        orderId: "test",
+        buyer: alice.address,
+        seller: bob.address,
+        tradePrice: ONE_ETH.mul(11).div(100),
+        quantity: 5,
+        option: {
+          optionType: 0,
+          strike: ONE_ETH.mul(11).div(10),
+          expiry: curTime + ONE_WEEK,
+          underlying: "0x0000000000000000000000000000000000000000",
+          decimals: 18,
+        }
+      };
+      var smile = await derivative.createSmile(order);
+      console.log(smile);
+    });
   });
 
   /****************************************

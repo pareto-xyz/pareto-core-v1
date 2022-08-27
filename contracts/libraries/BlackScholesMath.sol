@@ -260,18 +260,19 @@ library BlackScholesMath {
         // Compute discounted strike price
         int128 discountStrikeX64 = inputsX64.strikeX64
             .mul((inputsX64.rateX64.mul(inputsX64.tauX64)).neg().exp());
-        int128 TwoCXS = inputsX64.priceX64.mul(TWO_INT)
+        int128 twoCXS = inputsX64.priceX64.mul(TWO_INT)
             .add(discountStrikeX64)
             .sub(inputsX64.spotX64);
         int128 SX = inputsX64.spotX64.add(discountStrikeX64);
         int128 piTerm = (TWO_INT.mul(PI_INT)).sqrt().div(SX.mul(TWO_INT));
-        int128 sqrtTerm = (TwoCXS.pow(2).sub(
-            ONE_EIGHTY_FIVE_INT
-                .mul(SX)
-                .mul((discountStrikeX64.sub(inputsX64.spotX64)).pow(2))
-            .div(PI_INT.mul((discountStrikeX64.mul(inputsX64.spotX64)).sqrt()))
-        )).sqrt();
-        int128 volX64 = piTerm.mul(TwoCXS.add(sqrtTerm));
+        int128 twoCXSsqr = twoCXS.pow(2);
+        int128 subTerm = ONE_EIGHTY_FIVE_INT
+            .mul(SX)
+            .mul((discountStrikeX64.sub(inputsX64.spotX64)).pow(2))
+            .div(PI_INT.mul((discountStrikeX64.mul(inputsX64.spotX64)).sqrt()));
+        require(twoCXSsqr >= subTerm, "approxVolFromCallPrice: invalid price");
+        int128 sqrtTerm = (twoCXSsqr.sub(subTerm)).sqrt();
+        int128 volX64 = piTerm.mul(twoCXS.add(sqrtTerm));
         vol = volX64.scaleFromX64(inputs.scaleFactor);
     }
 
