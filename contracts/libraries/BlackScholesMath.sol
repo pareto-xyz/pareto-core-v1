@@ -27,8 +27,8 @@ library BlackScholesMath {
     int128 internal constant TWO_INT = 0x20000000000000000;
     int128 internal constant TWO_PI_INT = 0x6487ed5110b45ef48;
 
-    /// @notice Tolerance for Newton Raphson optimization (0.01)
-    int128 internal constant OPT_TOL = 0x28f5c28f5c28f5c;
+    /// @notice Tolerance for Newton Raphson optimization (0.001)
+    int128 internal constant OPT_TOL = 0x4189374bc6a7f0;
 
     /************************************************
      * Computing Black Scholes Probabilities
@@ -261,7 +261,7 @@ library BlackScholesMath {
      */
     function guessSigmaX64(VolCalculationX64 memory inputsX64)
         internal
-        pure
+        view
         returns (int128 sigmaX64)
     {
         // sqrt(2*pi / tau)
@@ -285,7 +285,7 @@ library BlackScholesMath {
         uint256 maxIter
     ) 
         external
-        pure
+        view
         returns (uint256 sigma) 
     {
         VolCalculationX64 memory inputsX64 = volInputToX64(inputs);
@@ -340,7 +340,7 @@ library BlackScholesMath {
         uint256 maxIter
     ) 
         external
-        pure
+        view
         returns (uint256 sigma) 
     {
         VolCalculationX64 memory inputsX64 = volInputToX64(inputs);

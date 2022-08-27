@@ -109,7 +109,7 @@ contract TestBlackScholesMath {
         uint256 scaleFactor
     )
         external
-        pure
+        view
         returns (uint256 vol) 
     {
         BlackScholesMath.VolCalculationInput memory inputs = 
@@ -133,7 +133,7 @@ contract TestBlackScholesMath {
         uint256 scaleFactor
     )
         external
-        pure
+        view
         returns (uint256 vol)
     {
         BlackScholesMath.VolCalculationInput memory inputs = 

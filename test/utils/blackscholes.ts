@@ -76,11 +76,13 @@ export function checkSigmaFromCallPrice(
   tau: number,
   rate: number,
   tradePrice: number,
+  tolerance: number,
 ): number {
-  var sigma = Math.sqrt(2 * Math.PI / tau) * (tradePrice / spot);
+  let tauInYears = tau / 31556952;
+  var sigma = Math.sqrt(2 * Math.PI / tauInYears) * (tradePrice / spot);
   for (var i = 0; i < 10; i++) {
     var diff = checkCallPrice(spot, strike, sigma, tau, rate) - tradePrice;
-    if (Math.abs(diff) < 0.001) {
+    if (Math.abs(diff) < tolerance) {
       break;
     }
     var vega = checkCallVega(spot, strike, sigma, tau, rate);
@@ -95,11 +97,13 @@ export function checkSigmaFromPutPrice(
   tau: number,
   rate: number,
   tradePrice: number,
+  tolerance: number,
 ): number {
-  var sigma = Math.sqrt(2 * Math.PI / tau) * (tradePrice / spot);
+  let tauInYears = tau / 31556952;
+  var sigma = Math.sqrt(2 * Math.PI / tauInYears) * (tradePrice / spot);
   for (var i = 0; i < 10; i++) {
     var diff = checkPutPrice(spot, strike, sigma, tau, rate) - tradePrice;
-    if (Math.abs(diff) < 0.001) {
+    if (Math.abs(diff) < tolerance) {
       break;
     }
     var vega = checkPutVega(spot, strike, sigma, tau, rate);
