@@ -122,7 +122,6 @@ contract TestBlackScholesMath {
                 scaleFactor
             );
         return BlackScholesMath.solveSigmaFromCallPrice(inputs, 10);
-
     }
 
     function solveSigmaFromPutPrice(

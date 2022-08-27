@@ -70,53 +70,42 @@ export function checkPutPrice(
   return price;
 }
 
-export function checkVolFromCallPrice(
+export function checkSigmaFromCallPrice(
   spot: number,
   strike: number,
   tau: number,
   rate: number,
   tradePrice: number,
 ): number {
-  let tauInYears = tau / 31556952;
-  let C = tradePrice;
-  let S = spot;
-  let X = strike * Math.exp(-rate * tauInYears);
-  let TwoCXS = 2 * C + X - S;
-  let SX = S + X;
-  let sqrtTerm = Math.sqrt(Math.pow(TwoCXS, 2) - 
-    1.85 * SX * Math.pow(X-S, 2) / (Math.PI * Math.sqrt(X * S)));
-  let piTerm = Math.sqrt(2 * Math.PI) / (2 * SX);
-  let vol = piTerm * (TwoCXS + sqrtTerm);
-  return vol;
+  var sigma = Math.sqrt(2 * Math.PI / tau) * (tradePrice / spot);
+  for (var i = 0; i < 10; i++) {
+    var diff = checkCallPrice(spot, strike, sigma, tau, rate) - tradePrice;
+    if (Math.abs(diff) < 0.001) {
+      break;
+    }
+    var vega = checkCallVega(spot, strike, sigma, tau, rate);
+    sigma = sigma - (diff / vega);
+  }
+  return sigma;
 }
 
-export function checkVolFromPutPrice(
+export function checkSigmaFromPutPrice(
   spot: number,
   strike: number,
   tau: number,
   rate: number,
   tradePrice: number,
 ): number {
-  let tauInYears = tau / 31556952;
-  let P = tradePrice;
-  let S = spot;
-  let X = strike * Math.exp(-rate * tauInYears);
-  let TwoPSX = 2 * P + S - X;
-  let SX = S + X;
-  let sqrtTerm = Math.sqrt(Math.pow(TwoPSX, 2) - 
-    1.85 * SX * Math.pow(S-X, 2) / (Math.PI * Math.sqrt(X * S)));
-  let piTerm = Math.sqrt(2 * Math.PI) / (2 * SX);
-  let vol = piTerm * (TwoPSX + sqrtTerm);
-  return vol;
-}
-
-export function checkVolToSigma(
-  vol: number,
-  tau: number,
-): number {
-  let tauInYears = tau / 31556952;
-  let sqrtTau = Math.sqrt(tauInYears);
-  return vol / sqrtTau;
+  var sigma = Math.sqrt(2 * Math.PI / tau) * (tradePrice / spot);
+  for (var i = 0; i < 10; i++) {
+    var diff = checkPutPrice(spot, strike, sigma, tau, rate) - tradePrice;
+    if (Math.abs(diff) < 0.001) {
+      break;
+    }
+    var vega = checkPutVega(spot, strike, sigma, tau, rate);
+    sigma = sigma - (diff / vega);
+  }
+  return sigma;
 }
 
 export function checkCallVega(

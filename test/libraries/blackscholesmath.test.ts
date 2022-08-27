@@ -7,9 +7,8 @@ import {
   checkCallPrice,
   checkPutPrice,
   checkProbabilityFactors,
-  checkVolToSigma,
-  checkVolFromCallPrice,
-  checkVolFromPutPrice,
+  checkSigmaFromCallPrice,
+  checkSigmaFromPutPrice,
   checkCallVega,
   checkPutVega,
 } from "../utils/blackscholes";
@@ -209,72 +208,49 @@ describe("BlackScholesMath Library", () => {
     });
   });
   /****************************************
-   * Volatility to standard deviation
-   ****************************************/
-  describe("Converting vol to sigma", () => {
-    it("vol=0.1,tau=1 week", async () => {
-      const sigmaBn = await blackScholesMath.volToSigma(volToBn(0.1), ONE_WEEK);
-      const sigma = parseFloat(fromBn(sigmaBn, 4));
-      const sigmats = checkVolToSigma(0.1, ONE_WEEK);
-      expect(sigma).to.be.closeTo(sigmats, 1e-4);
-    });
-    it("vol=0.1,tau=1 day", async () => {
-      const sigmaBn = await blackScholesMath.volToSigma(volToBn(0.1), ONE_DAY);
-      const sigma = parseFloat(fromBn(sigmaBn, 4));
-      const sigmats = checkVolToSigma(0.1, ONE_DAY);
-      expect(sigma).to.be.closeTo(sigmats, 1e-4);
-    });
-    it("vol=1,tau=1 week", async () => {
-      const sigmaBn = await blackScholesMath.volToSigma(volToBn(1), ONE_WEEK);
-      const sigma = parseFloat(fromBn(sigmaBn, 4));
-      const sigmats = checkVolToSigma(1, ONE_WEEK);
-      expect(sigma).to.be.closeTo(sigmats, 1e-4);
-    });
-  });
-  /****************************************
    * Volatility from calls
    ****************************************/
   describe("Approximating vol from call price", () => {
     it("spot=1,strike=1.1,tau=1 week,rate=0,tradePrice=1", async () => {
-      const volBn = await blackScholesMath.approxVolFromCallPrice(
+      const volBn = await blackScholesMath.solveSigmaFromCallPrice(
         ONE_ETH, ONEONE_ETH, ONE_WEEK, 0, ONE_ETH, 1);
       const vol = parseFloat(fromBn(volBn, 18));
-      const volts = checkVolFromCallPrice(1, 1.1, ONE_WEEK, 0, 1);
+      const volts = checkSigmaFromCallPrice(1, 1.1, ONE_WEEK, 0, 1);
       expect(vol).to.be.closeTo(volts, 1e-5);
     });
     it("spot=1,strike=1.1,tau=1 day,rate=0,tradePrice=1", async () => {
-      const volBn = await blackScholesMath.approxVolFromCallPrice(
+      const volBn = await blackScholesMath.solveSigmaFromCallPrice(
         ONE_ETH, ONEONE_ETH, ONE_DAY, 0, ONE_ETH, 1);
       const vol = parseFloat(fromBn(volBn, 18));
-      const volts = checkVolFromCallPrice(1, 1.1, ONE_DAY, 0, 1);
+      const volts = checkSigmaFromCallPrice(1, 1.1, ONE_DAY, 0, 1);
       expect(vol).to.be.closeTo(volts, 1e-5);
     });
     it("spot=1,strike=1.1,tau=1 week,rate=0,tradePrice=1.1", async () => {
-      const volBn = await blackScholesMath.approxVolFromCallPrice(
+      const volBn = await blackScholesMath.solveSigmaFromCallPrice(
         ONE_ETH, ONEONE_ETH, ONE_WEEK, 0, ONEONE_ETH, 1);
       const vol = parseFloat(fromBn(volBn, 18));
-      const volts = checkVolFromCallPrice(1, 1.1, ONE_WEEK, 0, 1.1);
+      const volts = checkSigmaFromCallPrice(1, 1.1, ONE_WEEK, 0, 1.1);
       expect(vol).to.be.closeTo(volts, 1e-5);
     });
     it("spot=1,strike=1.1,tau=1 week,rate=0,tradePrice=0.9", async () => {
-      const volBn = await blackScholesMath.approxVolFromCallPrice(
+      const volBn = await blackScholesMath.solveSigmaFromCallPrice(
         ONE_ETH, ONEONE_ETH, ONE_WEEK, 0, ONE_ETH.mul(9).div(10), 1);
       const vol = parseFloat(fromBn(volBn, 18));
-      const volts = checkVolFromCallPrice(1, 1.1, ONE_WEEK, 0, 0.9);
+      const volts = checkSigmaFromCallPrice(1, 1.1, ONE_WEEK, 0, 0.9);
       expect(vol).to.be.closeTo(volts, 1e-5);
     });
     it("spot=1,strike=1.1,tau=1 week,rate=0,tradePrice=1.2", async () => {
-      const volBn = await blackScholesMath.approxVolFromCallPrice(
+      const volBn = await blackScholesMath.solveSigmaFromCallPrice(
         ONE_ETH, ONEONE_ETH, ONE_WEEK, 0, ONE_ETH.mul(12).div(10), 1);
       const vol = parseFloat(fromBn(volBn, 18));
-      const volts = checkVolFromCallPrice(1, 1.1, ONE_WEEK, 0, 1.2);
+      const volts = checkSigmaFromCallPrice(1, 1.1, ONE_WEEK, 0, 1.2);
       expect(vol).to.be.closeTo(volts, 1e-5);
     });
     it("spot=1,strike=1.1,tau=1 week,rate=0.01,tradePrice=1", async () => {
-      const volBn = await blackScholesMath.approxVolFromCallPrice(
+      const volBn = await blackScholesMath.solveSigmaFromCallPrice(
         ONE_ETH, ONEONE_ETH, ONE_WEEK, ONE_ETH.div(100), ONE_ETH, 1);
       const vol = parseFloat(fromBn(volBn, 18));
-      const volts = checkVolFromCallPrice(1, 1.1, ONE_WEEK, 0, 1);
+      const volts = checkSigmaFromCallPrice(1, 1.1, ONE_WEEK, 0, 1);
       expect(vol).to.be.closeTo(volts, 1e-5);
     });
   });
@@ -283,45 +259,45 @@ describe("BlackScholesMath Library", () => {
    ****************************************/
   describe("Approximating vol from put price", () => {
     it("spot=1.1,strike=1,tau=1 week,rate=0,tradePrice=1", async () => {
-      const volBn = await blackScholesMath.approxVolFromPutPrice(
+      const volBn = await blackScholesMath.solveSigmaFromPutPrice(
         ONEONE_ETH, ONE_ETH, ONE_WEEK, 0, ONE_ETH, 1);
       const vol = parseFloat(fromBn(volBn, 18));
-      const volts = checkVolFromPutPrice(1.1, 1, ONE_WEEK, 0, 1);
+      const volts = checkSigmaFromPutPrice(1.1, 1, ONE_WEEK, 0, 1);
       expect(vol).to.be.closeTo(volts, 1e-5);
     });
     it("spot=1.1,strike=1,tau=1 day,rate=0,tradePrice=1", async () => {
-      const volBn = await blackScholesMath.approxVolFromPutPrice(
+      const volBn = await blackScholesMath.solveSigmaFromPutPrice(
         ONEONE_ETH, ONE_ETH, ONE_DAY, 0, ONE_ETH, 1);
       const vol = parseFloat(fromBn(volBn, 18));
-      const volts = checkVolFromPutPrice(1.1, 1, ONE_DAY, 0, 1);
+      const volts = checkSigmaFromPutPrice(1.1, 1, ONE_DAY, 0, 1);
       expect(vol).to.be.closeTo(volts, 1e-5);
     });
     it("spot=1.1,strike=1,tau=1 week,rate=0,tradePrice=1.1", async () => {
-      const volBn = await blackScholesMath.approxVolFromPutPrice(
+      const volBn = await blackScholesMath.solveSigmaFromPutPrice(
         ONEONE_ETH, ONE_ETH, ONE_WEEK, 0, ONEONE_ETH, 1);
       const vol = parseFloat(fromBn(volBn, 18));
-      const volts = checkVolFromPutPrice(1.1, 1, ONE_WEEK, 0, 1.1);
+      const volts = checkSigmaFromPutPrice(1.1, 1, ONE_WEEK, 0, 1.1);
       expect(vol).to.be.closeTo(volts, 1e-5);
     });
     it("spot=1.1,strike=1,tau=1 week,rate=0,tradePrice=0.9", async () => {
-      const volBn = await blackScholesMath.approxVolFromPutPrice(
+      const volBn = await blackScholesMath.solveSigmaFromPutPrice(
         ONEONE_ETH, ONE_ETH, ONE_WEEK, 0, ONE_ETH.mul(9).div(10), 1);
       const vol = parseFloat(fromBn(volBn, 18));
-      const volts = checkVolFromPutPrice(1.1, 1, ONE_WEEK, 0, 0.9);
+      const volts = checkSigmaFromPutPrice(1.1, 1, ONE_WEEK, 0, 0.9);
       expect(vol).to.be.closeTo(volts, 1e-5);
     });
     it("spot=1.1,strike=1,tau=1 week,rate=0,tradePrice=1.2", async () => {
-      const volBn = await blackScholesMath.approxVolFromPutPrice(
+      const volBn = await blackScholesMath.solveSigmaFromPutPrice(
         ONEONE_ETH, ONE_ETH, ONE_WEEK, 0, ONE_ETH.mul(12).div(10), 1);
       const vol = parseFloat(fromBn(volBn, 18));
-      const volts = checkVolFromPutPrice(1.1, 1, ONE_WEEK, 0, 1.2);
+      const volts = checkSigmaFromPutPrice(1.1, 1, ONE_WEEK, 0, 1.2);
       expect(vol).to.be.closeTo(volts, 1e-5);
     });
     it("spot=1.1,strike=1,tau=1 week,rate=0.01,tradePrice=1", async () => {
-      const volBn = await blackScholesMath.approxVolFromPutPrice(
+      const volBn = await blackScholesMath.solveSigmaFromPutPrice(
         ONEONE_ETH, ONE_ETH, ONE_WEEK, ONE_ETH.div(100), ONE_ETH, 1);
       const vol = parseFloat(fromBn(volBn, 18));
-      const volts = checkVolFromPutPrice(1.1, 1, ONE_WEEK, 0, 1);
+      const volts = checkSigmaFromPutPrice(1.1, 1, ONE_WEEK, 0, 1);
       expect(vol).to.be.closeTo(volts, 1e-5);
     });
   });
