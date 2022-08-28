@@ -56,9 +56,6 @@ contract ParetoV1Margin is
     /// @notice Stores hash to derivative order
     mapping(bytes32 => Derivative.Order) private orderHashs;
 
-    /// @notice Track total balance (used for checks)
-    uint256 private totalBalance;
-
     /// @notice Store volatility smiles per expiry & underlying
     mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
 
@@ -118,8 +115,6 @@ contract ParetoV1Margin is
      */
     event RecordPositionEvent(
         string indexed orderId,
-        address indexed buyer,
-        address indexed seller,
         uint256 tradePrice,
         uint256 quantity,
         Derivative.OptionType optionType,
@@ -172,16 +167,9 @@ contract ParetoV1Margin is
 
         // Increment counters
         balances[msg.sender] += amount;
-        totalBalance += amount;
 
         // Pull resources from sender to this contract
         IERC20(usdc).transferFrom(msg.sender, address(this), amount);
-
-        // Check that balance owned and balance tracked agree
-        require(
-            totalBalance == IERC20(usdc).balanceOf(address(this)),
-            "deposit: Balance and reserves are out of sync"
-        );
 
         // Emit `DepositEvent`
         emit DepositEvent(msg.sender, amount);
@@ -255,6 +243,15 @@ contract ParetoV1Margin is
 
         // if diff > 0, then satisfied = true
         return (diff, !diffIsNeg);
+    }
+
+    /**
+     * @notice Settles all expired positions using current block timestamp
+     * @dev This will do netting to reduce the number of transactions
+     * @dev Anyone can call this though the burden calls on keepers
+     */
+    function settleBulk() external nonReentrant {
+        
     }
 
     /************************************************
@@ -465,7 +462,7 @@ contract ParetoV1Margin is
      * @notice Remove oracle for an underlying
      * @param underlying Address for an underlying token
      */
-    function addOracle(address underlying) external onlyKeeper {
+    function removeOracle(address underlying) external onlyKeeper {
         delete oracles[underlying];
     }
 
@@ -513,12 +510,10 @@ contract ParetoV1Margin is
         bytes32 orderHash = Derivative.hashOrder(order);
         bytes32 smileHash = Derivative.hashForSmile(underlying, expiry);
 
-        // Save the order object
-        orderHashs[orderHash] = order;
-
-        // Save that the buyer/seller have this position
-        orderPositions[buyer].push(orderHash);
-        orderPositions[seller].push(orderHash);
+        require(
+            bytes(orderHashs[orderHash].orderId).length == 0,
+            "addPosition: order already exists"
+        );
 
         if (volSmiles[smileHash].exists_) {
             /**
@@ -553,11 +548,16 @@ contract ParetoV1Margin is
             orderExpiries[underlying] = order.option.expiry;
         }
 
+        // Save the order object
+        orderHashs[orderHash] = order;
+
+        // Save that the buyer/seller have this position
+        orderPositions[buyer].push(orderHash);
+        orderPositions[seller].push(orderHash);
+
         // Emit event 
         emit RecordPositionEvent(
             orderId,
-            buyer,
-            seller,
             tradePrice,
             quantity,
             optionType,
