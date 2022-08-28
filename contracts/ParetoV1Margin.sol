@@ -42,6 +42,12 @@ contract ParetoV1Margin is
     /// @notice Stores the address for USDC
     address public usdc;
 
+    /// @notice Address of the insurance fund
+    address public insuranceFund;
+
+    /// @notice Round
+    uint8 public round;
+
     /// @notice The current active expiry
     /// @dev This assumes all underlying has only one expiry.
     uint256 private activeExpiry;
@@ -73,15 +79,30 @@ contract ParetoV1Margin is
     /// @notice Store volatility smiles per hash(expiry,underlying)
     mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
 
+    /// @notice Stores expiries for each round
+    mapping(uint8 => uint256) private roundExpiries;
+
     /************************************************
      * Initialization and Upgradeability
      ***********************************************/
 
     /**
      * @param usdc_ Address for the USDC token (e.g. cash)
+     * @param insuranceFund_ Address for the insurance fund
+     * @param underlying_ Address of underlying token to support at deployment
+     * @param oracle_ Address of oracle for the underlying
      */
-    function initialize(address usdc_) public initializer {
+    function initialize(
+        address usdc_,
+        address insuranceFund_,
+        address underlying_,
+        address oracle_
+    )
+        public
+        initializer 
+    {
         usdc = usdc_;
+        insuranceFund = insuranceFund_;
 
         // Initialize the upgradeable dependencies
         __ReentrancyGuard_init();
@@ -89,6 +110,12 @@ contract ParetoV1Margin is
 
         // The owner is a keeper
         keepers[owner()] = true;
+
+        // Initialize state variables
+        round = 1;
+        activeExpiry = DateMath.getNextExpiry(block.timestamp);
+        roundExpiries[round] = activeExpiry;
+        newUnderlying(underlying_, oracle_);
     }
 
     /**
@@ -261,13 +288,13 @@ contract ParetoV1Margin is
      * to this contract. Adds amount owed to each user to their margin account
      * @dev This will do netting to reduce the number of transactions
      * @dev Anyone can call this though the burden falls on keepers
+     * @param round Round of orders to settle
      */
-    function settle() external nonReentrant {
-        if (expiry <= block.timestamp) {
-            bytes32[] memory positions = expiryPositions[expiry];
-            for (uint256 j = 0; j < positions.length; j++) {
-                Derivative.Order memory order = orderHashs[positions[j]];
-            }
+    function settle(uint8 round) external nonReentrant {
+        uint256 roundExpiry = roundExpiries[round];
+        bytes32[] memory positions = expiryPositions[expiry];
+        for (uint256 j = 0; j < positions.length; j++) {
+            Derivative.Order memory order = orderHashs[positions[j]];
         }
     }
 
@@ -432,6 +459,19 @@ contract ParetoV1Margin is
         return NegativeMath.add(margin, isMarginNeg, amount, true);
     }
 
+    /**
+     * @notice Add a new underlying
+     * @dev For code reuse
+     * @param underlying Address for an underlying token
+     * @param oracleFeed Address for an oracle price feed contract
+     */
+    function newUnderlying(address underlying, address oracleFeed) internal {
+        underlyings.push(underlying);
+        bytes32 smileHash = Derivative.hashForSmile(underlying, activeExpiry);
+        volSmiles[smileHash] = Derivative.createSmile();
+        oracles[underlying] = oracleFeed;
+    }
+
     /************************************************
      * Admin functions
      ***********************************************/
@@ -473,10 +513,13 @@ contract ParetoV1Margin is
      * @param oracleFeed Address for an oracle price feed contract
      */
     function setOracle(address underlying, address oracleFeed) external onlyKeeper {
-        if (oracles[underlying] != address(0)) {
-            underlyings.push(underlying);
+        if (oracles[underlying] == address(0)) {
+            // Brand new oracle
+            newUnderlying(underlying, oracleFeed);
+        } else {
+            // Existing underlying, overwrite oracle
+            oracles[underlying] = oracleFeed;
         }
-        oracles[underlying] = oracleFeed;
     }
 
     /**
@@ -497,6 +540,12 @@ contract ParetoV1Margin is
         // Update the active expiry
         uint256 lastExpiry = activeExpiry;
         activeExpiry = DateMath.getNextExpiry(lastExpiry);
+
+        // Update round
+        round += 1;
+
+        // Stores the expiry for round
+        roundExpiries[round] = activeExpiry;
 
         // Update smiles for each underlying token
         for (uint256 i = 0; i < underlyings.length; i++) {
