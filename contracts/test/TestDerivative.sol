@@ -7,12 +7,12 @@ import "../libraries/Derivative.sol";
  * @notice Test contract to wrap around `Derivative.sol`
  */
 contract TestDerivative {
-    function createSmile(Derivative.Order memory order)
+    function createSmile()
         external
-        view
+        pure
         returns (Derivative.VolatilitySmile memory smile) 
     {
-        return Derivative.createSmile(order);
+        return Derivative.createSmile();
     }
 
     function getMarkPrice(
