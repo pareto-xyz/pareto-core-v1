@@ -470,13 +470,7 @@ contract ParetoV1Margin is
             seller,
             tradePrice,
             quantity,
-            Derivative.Option(
-                optionType,
-                strike,
-                expiry,
-                underlying,
-                decimals
-            )
+            Derivative.Option(optionType, strike, expiry, underlying, decimals)
         );
         bytes32 orderHash = Derivative.hashOrder(order);
         bytes32 smileHash = Derivative.hashForSmile(underlying, expiry);
@@ -488,9 +482,11 @@ contract ParetoV1Margin is
         orderPositions[buyer].push(orderHash);
         orderPositions[seller].push(orderHash);
 
-        /// @dev Smiles are unique to the option not the order
         if (volSmiles[smileHash].exists_) {
-            // Update the volatility smile
+            /**
+             * Case 1: If this is an existing smile, then update it
+             * @dev Smiles are unique to the option not the order
+             */
             // FIXME: replace `1 ether` with spot price
             Derivative.updateSmile(1 ether, order, volSmiles[smileHash]);
         } else {
@@ -501,7 +497,7 @@ contract ParetoV1Margin is
 
             if (lastExpiry > 0) {
                 /**
-                 * Case 1: hash doesn't exist because it's a new round and options
+                 * Case 2: hash doesn't exist because it's a new round and options
                  * are being overwritten. In these cases, we initialize the smile
                  * from last round's smile!
                  */
@@ -509,11 +505,12 @@ contract ParetoV1Margin is
                 volSmiles[smileHash] = volSmiles[lastSmileHash];
             } else {
                 /**
-                 * Case 2: Either the first time ever or new underlying
+                 * Case 3: Either the first time ever or new underlying.
+                 * Here, create a new uniform (uninformed) smile 
                  */
-                // Create a fresh volatility smile
                 volSmiles[smileHash] = Derivative.createSmile();
             }
+
             // Set underlying => expiry
             orderExpiries[underlying] = order.option.expiry;
         }
