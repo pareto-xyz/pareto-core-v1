@@ -77,44 +77,17 @@ library Derivative {
 
     /**
      * @notice Create a new volatility smile, which uses `BlackScholesMath.sol` 
-     * to solve for the implied volatility
-     * @param order Order object
+     * to solve for the implied volatility. 
+     * @dev Volatility is initialized at 50% for all moneyness values, which is 
+     * incorrect but will be updated as orders progress
      * @return smile A volatility smile
      */
-    function createSmile(Order memory order)
-        external
-        view
-        returns (VolatilitySmile memory smile) 
-    {
-        Option memory option = order.option;
-        require(option.expiry >= block.timestamp, "createSmile: option expired");
-        
-        // Compute scale factor
-        uint256 scaleFactor = 10**(18-option.decimals);
-
-        /// @notice Default five points for moneyness. Same as in Zeta.
-        uint8[5] memory moneyness = [50, 75, 100, 125, 150];
-
-        // Set the hash for the new smile
-        smile.exists_ = true;
-
-        for (uint256 i = 0; i < moneyness.length; i++) {
-            uint256 spot = (option.strike * moneyness[i]) / 100;
-            uint256 sigma = BlackScholesMath.getSigmaByBisection(
-                BlackScholesMath.VolCalculationInput(
-                    spot,
-                    option.strike,
-                    option.expiry - block.timestamp,
-                    0,  // FIXME: get risk-free rate
-                    order.tradePrice,
-                    scaleFactor,
-                    option.optionType == OptionType.CALL
-                ),
-                MAX_ITER
-            );
-            smile.sigmaAtMoneyness[i] = sigma;
+    function createSmile() external pure returns (VolatilitySmile memory smile) {
+        for (uint256 i = 0; i < 5; i++) {
+            smile.sigmaAtMoneyness[i] = 5000;  // 4 decimals
         }
-
+        // Set that the new smile exists
+        smile.exists_ = true;
         return smile;
     }
 
@@ -310,6 +283,20 @@ library Derivative {
             option.strike,
             option.expiry
         ));
+    }
+
+    /**
+     * @notice Calls and puts of the same expiry and underlying but different 
+     * strikes share the same smile
+     * @param option Option object 
+     * @param hash_ SHA-3 hash of the Option object
+     */
+    function hashOptionForSmile(Option memory option)
+        public
+        pure
+        returns (bytes32 hash_)
+    {
+        hash_ = keccak256(abi.encodePacked(option.underlying, option.expiry));
     }
 
     /************************************************

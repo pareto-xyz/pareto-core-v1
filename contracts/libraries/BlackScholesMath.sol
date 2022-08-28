@@ -4,7 +4,6 @@ pragma solidity ^0.8.9;
 import "./GaussianMath.sol";
 import "./ABDKMath64x64.sol";
 import "./Units.sol";
-import "hardhat/console.sol";
 
 /**
  * @notice Library for Black Scholes Math

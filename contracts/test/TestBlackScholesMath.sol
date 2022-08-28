@@ -3,7 +3,6 @@ pragma solidity ^0.8.9;
 
 import "../libraries/BlackScholesMath.sol";
 import "../libraries/Units.sol";
-import "hardhat/console.sol";
 
 /**
  * @notice Test contract to wrap around `CumulativeNormalDistribution.sol`

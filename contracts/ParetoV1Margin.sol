@@ -320,6 +320,7 @@ contract ParetoV1Margin is
             Derivative.Order memory order = orderHashs[positions[i]];
             Derivative.Option memory option = order.option;
             bytes32 optionHash = Derivative.hashOption(option);
+            bytes32 smileHash = Derivative.hashOptionForSmile(option);
 
             // In the case of multiple positions for the same option, 
             // compute the total amount the user wishes to buy and sell
@@ -354,12 +355,11 @@ contract ParetoV1Margin is
             }
 
             // Compute total buy - total sell
-            (uint256 netQuantity, bool isSeller) = 
-                NegativeMath.add(totalBuyQuantity, false, totalSellQuantity, true);
+            (uint256 netQuantity, bool isSeller) = NegativeMath.add(totalBuyQuantity, false, totalSellQuantity, true);
 
             if (netQuantity > 0) {
                 // Fetch smile and check it is valid
-                Derivative.VolatilitySmile memory smile = volSmiles[optionHash];
+                Derivative.VolatilitySmile memory smile = volSmiles[smileHash];
                 require(smile.exists_, "getMaintainenceMargin: found unknown option");
 
                 // Build margin using `netQuantity`
@@ -476,7 +476,7 @@ contract ParetoV1Margin is
             )
         );
         bytes32 orderHash = Derivative.hashOrder(order);
-        bytes32 optionHash = Derivative.hashOption(order.option);
+        bytes32 smileHash = Derivative.hashOptionForSmile(order.option);
 
         // Save the order object
         orderHashs[orderHash] = order;
@@ -486,13 +486,13 @@ contract ParetoV1Margin is
         orderPositions[seller].push(orderHash);
 
         /// @dev Smiles are unique to the option not the order
-        if (volSmiles[optionHash].exists_) {
+        if (volSmiles[smileHash].exists_) {
             // Update the volatility smile
             // FIXME: replace `1 ether` with spot price
-            Derivative.updateSmile(1 ether, order, volSmiles[optionHash]);
+            Derivative.updateSmile(1 ether, order, volSmiles[smileHash]);
         } else {
-            // Create a new volatility smile
-            volSmiles[optionHash] = Derivative.createSmile(order);
+            // Create a fresh volatility smile
+            volSmiles[smileHash] = Derivative.createSmile();
         }
 
         // Emit event 
