@@ -241,13 +241,11 @@ contract ParetoV1Margin is
         nonReentrant
         returns (uint256, bool)
     {
-        uint256 spot = 1 ether;  // TODO: get real spot price
         uint256 balance = balances[user];
-
-        uint256 maintainence = getMaintainenceMargin(user, spot);
+        uint256 maintainence = getMaintainenceMargin(user);
 
         // Compute the unrealized PnL (actually this is only unrealized losses)
-        (uint256 pnl, bool pnlIsNeg) = getPayoff(user, spot, true);
+        (uint256 pnl, bool pnlIsNeg) = getPayoff(user, true);
 
         // Compute `balance + PnL`
         (uint256 bpnl, bool bpnlIsNeg) = NegativeMath.add(balance, false, pnl, pnlIsNeg);
@@ -264,16 +262,27 @@ contract ParetoV1Margin is
      ***********************************************/
 
     /**
+     * @notice Read latest oracle price data
+     * @param underlying Address for the underlying token
+     * @return answer Latest price for underlying
+     */
+    function getSpot(address underlying) internal view returns (uint256) {
+        require(oracles[underlying] != address(0), "getSpot: missing oracle");
+        (,int256 answer,,,) = IOracle(oracles[underlying]).latestRoundData();
+        // NOTE: check that this conversion is okay
+        return uint256(answer);
+    }
+
+    /**
      * @notice Compute the initial margin for all positions owned by user
      * @dev The initial margin is equal to the sum of initial margins for all positions
      * @dev TODO Support P&L netting
      * @param user Address to compute IM for
-     * @param spot The spot price
      * @param onlyLoss Do not count unrealized profits from open positions
      * @return payoff The payoff summed for all positions
      * @return isNegative True if the payoff is less than 0, else false
      */
-    function getPayoff(address user, uint256 spot, bool onlyLoss)
+    function getPayoff(address user, bool onlyLoss)
         internal
         view
         returns (uint256, bool) 
@@ -283,12 +292,17 @@ contract ParetoV1Margin is
             return (0, false);
         }
 
-        Derivative.Order memory order;
         uint256 payoff;
         bool isNegative;
 
         for (uint256 i = 0; i < positions.length; i++) {
-            order = orderHashs[positions[i]];
+            // Fetch the order in the position
+            Derivative.Order memory order = orderHashs[positions[i]];
+
+            // Fetch the underlying token for the option
+            uint256 spot = getSpot(order.option.underlying);
+
+            // Compute the payoff at this price
             (uint256 curPayoff, bool curIsNegative) = MarginMath.getPayoff(user, spot, order);
 
             // If payoff is positive but we don't want to count positive open positions
@@ -306,14 +320,9 @@ contract ParetoV1Margin is
      * @dev The maintainence margin is equal to the sum of maintainence margins for all positions
      * @dev TODO Support P&L netting
      * @param user Address to compute MM for
-     * @param spot The spot price
      * @return margin The maintainence margin summed for all positions
      */
-    function getMaintainenceMargin(address user, uint256 spot) 
-        internal
-        view
-        returns (uint256) 
-    {
+    function getMaintainenceMargin(address user) internal view returns (uint256) {
         bytes32[] memory positions = orderPositions[user];
         if (positions.length == 0) {
             return 0;
@@ -331,8 +340,8 @@ contract ParetoV1Margin is
 
             // In the case of multiple positions for the same option, 
             // compute the total amount the user wishes to buy and sell
-            uint256 totalBuyQuantity = 0;
-            uint256 totalSellQuantity = 0;
+            uint256 nettedBuy = 0;
+            uint256 nettedSell = 0;
 
             require(
                 (user == order.buyer) || (user == order.seller),
@@ -341,9 +350,9 @@ contract ParetoV1Margin is
 
             // Check if the user is a buyer or seller for `order`
             if (user == order.buyer) {
-                totalBuyQuantity += order.quantity;
+                nettedBuy += order.quantity;
             } else {
-                totalSellQuantity += order.quantity;
+                nettedSell += order.quantity;
             }
 
             // Nested loop to find the total quantity of this option.
@@ -354,23 +363,29 @@ contract ParetoV1Margin is
 
                 if (optionHash == optionHash2) {
                     if (user == order2.buyer) {
-                        totalBuyQuantity += order2.quantity;
+                        nettedBuy += order2.quantity;
                     } else {
-                        totalSellQuantity += order2.quantity;
+                        nettedSell += order2.quantity;
                     }
                 }
             }
 
             // Compute total buy - total sell
-            (uint256 netQuantity, bool isSeller) = NegativeMath.add(totalBuyQuantity, false, totalSellQuantity, true);
+            (uint256 nettedQuantity, bool isSeller) = NegativeMath.add(nettedBuy, false, nettedSell, true);
 
-            if (netQuantity > 0) {
+            if (nettedQuantity > 0) {
                 // Fetch smile and check it is valid
                 Derivative.VolatilitySmile memory smile = volSmiles[smileHash];
                 require(smile.exists_, "getMaintainenceMargin: found unknown option");
 
-                // Build margin using `netQuantity`
-                margin += (netQuantity * MarginMath.getMaintainenceMargin(spot, !isSeller, option, smile));
+                // Fetch spot price
+                uint256 spot = getSpot(option.underlying);
+
+                // Compute maintainence margin for option
+                uint256 maintainence = MarginMath.getMaintainenceMargin(spot, !isSeller, option, smile);
+
+                // Build margin using `nettedQuantity`
+                margin += (nettedQuantity * maintainence);
             }
         }
         return margin;
@@ -510,8 +525,8 @@ contract ParetoV1Margin is
              * Case 1: If this is an existing smile, then update it
              * @dev Smiles are unique to the option not the order
              */
-            // FIXME: replace `1 ether` with spot price
-            Derivative.updateSmile(1 ether, order, volSmiles[smileHash]);
+            uint256 spot = getSpot(underlying);
+            Derivative.updateSmile(spot, order, volSmiles[smileHash]);
         } else {
             uint256 lastExpiry = orderExpiries[underlying];
 
