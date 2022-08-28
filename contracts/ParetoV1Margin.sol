@@ -7,6 +7,7 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
 import "./interfaces/IERC20.sol";
+import "./interfaces/IOracle.sol";
 import "./libraries/SafeERC20.sol";
 import "./libraries/Derivative.sol";
 import "./libraries/MarginMath.sol";
@@ -34,11 +35,14 @@ contract ParetoV1Margin is
     using SafeERC20 for IERC20;
 
     /************************************************
-     * Constants and Immutables
+     * Constants and State
      ***********************************************/
 
     /// @notice Stores the address for USDC
     address public usdc;
+
+    /// @notice Stores addresses for oracles of each underlying
+    mapping(address => address) private oracles;
 
     /// @notice List of keepers who can add positions
     mapping(address => bool) private keepers;
@@ -434,9 +438,27 @@ contract ParetoV1Margin is
     }
 
     /**
+     * @notice Add oracle for an underlying
+     * @param underlying Address for an underlying token
+     * @param oracleFeed Address for an oracle price feed contract
+     */
+    function addOracle(address underlying, address oracleFeed) external onlyKeeper {
+        oracles[underlying] = oracleFeed;
+    }
+
+    /**
+     * @notice Remove oracle for an underlying
+     * @param underlying Address for an underlying token
+     */
+    function addOracle(address underlying) external onlyKeeper {
+        delete oracles[underlying];
+    }
+
+    /**
      * @notice Record a position (matched order) from off-chain orderbook
      * @dev Saves the order to storage variables. Only the owner can call
      * this function
+     * @dev An oracle must exist for the underlying position for it to be added
      */
     function addPosition(
         string memory orderId,
@@ -457,6 +479,7 @@ contract ParetoV1Margin is
         require(tradePrice > 0, "addPosition: tradePrice must be > 0");
         require(quantity > 0, "addPosition: quantity must be > 0");
         require(underlying != address(0), "addPosition: underlying is empty");
+        require(oracles[underlying] != address(0), "addPosition: no oracle for underlying");
         require(strike > 0, "addPosition: strike must be positive");
         require(
             expiry > block.timestamp,
