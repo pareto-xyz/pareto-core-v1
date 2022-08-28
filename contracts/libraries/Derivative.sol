@@ -18,7 +18,11 @@ library Derivative {
      * Constants
      ***********************************************/
     
+    /// @notice Maximum number of iterations for computing sigma
     uint256 internal constant MAX_ITER = 10;
+
+    /// @notice Minimum vega allowed when updating smile = 1 / 10**3 = 0.001
+    uint8 internal constant MIN_VEGA_DECIMALS = 3;
 
     /************************************************
      * Structs and Enums
@@ -99,13 +103,7 @@ library Derivative {
      * @param order Order object
      * @param smile Current volatility smile stored on-chain
      */
-    function updateSmile(
-        uint256 spot,
-        Order memory order,
-        VolatilitySmile storage smile
-    )
-        external
-    {
+    function updateSmile(uint256 spot, Order memory order, VolatilitySmile storage smile) external {
         Option memory option = order.option;
         require(option.expiry >= block.timestamp, "createSmile: option expired");
 
@@ -132,12 +130,17 @@ library Derivative {
                 spot,
                 option.strike,
                 sigma,
-                option.expiry - block.timestamp,
+                tau,
                 0, // FIXME: risk-free rate
                 10**(18-option.decimals),
                 option.optionType == OptionType.CALL
             )
         );
+
+        if (vega == 0) {
+            // Set vega to minimum
+            vega = 10**(option.decimals - MIN_VEGA_DECIMALS);
+        }
 
         if (indexLower == indexUpper) {
             // A single point to update

@@ -55,7 +55,7 @@ contract ParetoV1Margin is
     /// @notice Track total balance (used for checks)
     uint256 private totalBalance;
 
-    /// @notice Store volatility smiles per option (not order)
+    /// @notice Store volatility smiles per expiry & underlying
     mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
 
     /************************************************
