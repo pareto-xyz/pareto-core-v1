@@ -11,6 +11,7 @@ import "./interfaces/IOracle.sol";
 import "./libraries/SafeERC20.sol";
 import "./libraries/Derivative.sol";
 import "./libraries/MarginMath.sol";
+import "./libraries/DateMath.sol";
 import "./libraries/NegativeMath.sol";
 import "./libraries/BlackScholesMath.sol";
 
@@ -41,6 +42,16 @@ contract ParetoV1Margin is
     /// @notice Stores the address for USDC
     address public usdc;
 
+    /// @notice The current active expiry
+    /// @dev This assumes all underlying has only one expiry.
+    uint256 private activeExpiry;
+
+    /// @notice If the contract is paused or not
+    bool private isPaused;
+
+    /// @notice Store a list of underlyings
+    address[] private underlyings;
+
     /// @notice Stores addresses for oracles of each underlying
     mapping(address => address) private oracles;
 
@@ -51,23 +62,23 @@ contract ParetoV1Margin is
     mapping(address => uint256) private balances;
 
     /// @notice Stores hashes of open positions for every user
-    mapping(address => bytes32[]) private orderPositions;
+    mapping(address => bytes32[]) private userPositions;
+
+    /// @notice Stores mapping from expiry into positions
+    mapping(uint256 => bytes32[]) private expiryPositions;
 
     /// @notice Stores hash to derivative order
     mapping(bytes32 => Derivative.Order) private orderHashs;
 
-    /// @notice Store volatility smiles per expiry & underlying
+    /// @notice Store volatility smiles per hash(expiry,underlying)
     mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
-
-    /// @notice Store the smile hash to expiry
-    mapping(address => uint256) private orderExpiries;
 
     /************************************************
      * Initialization and Upgradeability
      ***********************************************/
 
     /**
-     * @param usdc_ Address for the cash token (e.g. USDC)
+     * @param usdc_ Address for the USDC token (e.g. cash)
      */
     function initialize(address usdc_) public initializer {
         usdc = usdc_;
@@ -246,12 +257,18 @@ contract ParetoV1Margin is
     }
 
     /**
-     * @notice Settles all expired positions using current block timestamp
+     * @notice Part one of the settlement process. Transfers amount paid by ower
+     * to this contract. Adds amount owed to each user to their margin account
      * @dev This will do netting to reduce the number of transactions
-     * @dev Anyone can call this though the burden calls on keepers
+     * @dev Anyone can call this though the burden falls on keepers
      */
-    function settleBulk() external nonReentrant {
-        
+    function settle() external nonReentrant {
+        if (expiry <= block.timestamp) {
+            bytes32[] memory positions = expiryPositions[expiry];
+            for (uint256 j = 0; j < positions.length; j++) {
+                Derivative.Order memory order = orderHashs[positions[j]];
+            }
+        }
     }
 
     /************************************************
@@ -284,7 +301,7 @@ contract ParetoV1Margin is
         view
         returns (uint256, bool) 
     {
-        bytes32[] memory positions = orderPositions[user];
+        bytes32[] memory positions = userPositions[user];
         if (positions.length == 0) {
             return (0, false);
         }
@@ -320,7 +337,7 @@ contract ParetoV1Margin is
      * @return margin The maintainence margin summed for all positions
      */
     function getMaintainenceMargin(address user) internal view returns (uint256) {
-        bytes32[] memory positions = orderPositions[user];
+        bytes32[] memory positions = userPositions[user];
         if (positions.length == 0) {
             return 0;
         }
@@ -450,26 +467,61 @@ contract ParetoV1Margin is
     }
 
     /**
-     * @notice Add oracle for an underlying
+     * @notice Set the oracle for an underlying token
+     * @dev This function can also be used to replace or delete oracles
      * @param underlying Address for an underlying token
      * @param oracleFeed Address for an oracle price feed contract
      */
-    function addOracle(address underlying, address oracleFeed) external onlyKeeper {
+    function setOracle(address underlying, address oracleFeed) external onlyKeeper {
+        if (oracles[underlying] != address(0)) {
+            underlyings.push(underlying);
+        }
         oracles[underlying] = oracleFeed;
     }
 
     /**
-     * @notice Remove oracle for an underlying
-     * @param underlying Address for an underlying token
+     * @notice Allows owner to pause the contract in emergencies
+     * @dev We may want to change this to keeper permissions
      */
-    function removeOracle(address underlying) external onlyKeeper {
-        delete oracles[underlying];
+    function togglePause() external onlyOwner {
+        isPaused = !isPaused;
+    }
+
+    /**
+     * @notice Ends the current expiry and turns on next expiry
+     */
+    function transition() external nonReentrant onlyKeeper {
+        require(!isPaused, "transition: contract paused");
+        require(activeExpiry < block.timestamp, "transition: too early");
+
+        // Update the active expiry
+        uint256 lastExpiry = activeExpiry;
+        activeExpiry = DateMath.getNextExpiry(lastExpiry);
+
+        // Update smiles for each underlying token
+        for (uint256 i = 0; i < underlyings.length; i++) {
+            // Compute the new hash
+            bytes32 smileHash = Derivative.hashForSmile(underlyings[i], activeExpiry);
+
+            if (activeExpiry > 0) {
+                // New round and options are being overwritten. In these cases, 
+                // we initialize the smile from last round's smile
+                bytes32 lastSmileHash = Derivative.hashForSmile(underlyings[i], lastExpiry);
+                volSmiles[smileHash] = volSmiles[lastSmileHash];
+
+                // No longer need last round's smile
+                delete volSmiles[lastSmileHash];
+            } else {
+                // Either the first time ever or new underlying.
+                // Here, create a new uniform (uninformed) smile 
+                volSmiles[smileHash] = Derivative.createSmile();
+            }
+        }
     }
 
     /**
      * @notice Record a position (matched order) from off-chain orderbook
-     * @dev Saves the order to storage variables. Only the owner can call
-     * this function
+     * @dev Saves the order to storage variables. Only the keeper can call this function
      * @dev An oracle must exist for the underlying position for it to be added
      */
     function addPosition(
@@ -491,12 +543,9 @@ contract ParetoV1Margin is
         require(tradePrice > 0, "addPosition: tradePrice must be > 0");
         require(quantity > 0, "addPosition: quantity must be > 0");
         require(underlying != address(0), "addPosition: underlying is empty");
-        require(oracles[underlying] != address(0), "addPosition: no oracle for underlying");
         require(strike > 0, "addPosition: strike must be positive");
-        require(
-            expiry > block.timestamp,
-            "addPosition: expiry must be > current time"
-        );
+        require(oracles[underlying] != address(0), "addPosition: no oracle for underlying");
+        require(expiry == activeExpiry, "addPosition: only one expiry supported");
 
         uint8 decimals = IERC20(underlying).decimals();
         Derivative.Order memory order = Derivative.Order(
@@ -508,52 +557,29 @@ contract ParetoV1Margin is
             Derivative.Option(optionType, strike, expiry, underlying, decimals)
         );
         bytes32 orderHash = Derivative.hashOrder(order);
+
+        // Hash together the underlying and expiry
         bytes32 smileHash = Derivative.hashForSmile(underlying, expiry);
 
         require(
             bytes(orderHashs[orderHash].orderId).length == 0,
-            "addPosition: order already exists"
+            "addPosition: orderId already exists"
         );
 
-        if (volSmiles[smileHash].exists_) {
-            /**
-             * Case 1: If this is an existing smile, then update it
-             * @dev Smiles are unique to the option not the order
-             */
-            uint256 spot = getSpot(underlying);
-            Derivative.updateSmile(spot, order, volSmiles[smileHash]);
-        } else {
-            uint256 lastExpiry = orderExpiries[underlying];
+        require(volSmiles[smileHash].exists_, "addPosition: missing smile");
 
-            // It must be that the last expiry is in the past
-            require(lastExpiry <= block.timestamp);
-
-            if (lastExpiry > 0) {
-                /**
-                 * Case 2: hash doesn't exist because it's a new round and options
-                 * are being overwritten. In these cases, we initialize the smile
-                 * from last round's smile!
-                 */
-                bytes32 lastSmileHash = Derivative.hashForSmile(underlying, lastExpiry);
-                volSmiles[smileHash] = volSmiles[lastSmileHash];
-            } else {
-                /**
-                 * Case 3: Either the first time ever or new underlying.
-                 * Here, create a new uniform (uninformed) smile 
-                 */
-                volSmiles[smileHash] = Derivative.createSmile();
-            }
-
-            // Set underlying => expiry
-            orderExpiries[underlying] = order.option.expiry;
-        }
+        // Update the smile with order information
+        Derivative.updateSmile(getSpot(underlying), order, volSmiles[smileHash]);
 
         // Save the order object
         orderHashs[orderHash] = order;
 
         // Save that the buyer/seller have this position
-        orderPositions[buyer].push(orderHash);
-        orderPositions[seller].push(orderHash);
+        userPositions[buyer].push(orderHash);
+        userPositions[seller].push(orderHash);
+
+        // Save position to mapping by expiry
+        expiryPositions[expiry].push(orderHash);
 
         // Emit event 
         emit RecordPositionEvent(
