@@ -58,6 +58,9 @@ contract ParetoV1Margin is
     /// @notice Store volatility smiles per expiry & underlying
     mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
 
+    /// @notice Store the smile hash to expiry
+    mapping(address => uint256) private orderExpiries;
+
     /************************************************
      * Initialization and Upgradeability
      ***********************************************/
@@ -320,7 +323,7 @@ contract ParetoV1Margin is
             Derivative.Order memory order = orderHashs[positions[i]];
             Derivative.Option memory option = order.option;
             bytes32 optionHash = Derivative.hashOption(option);
-            bytes32 smileHash = Derivative.hashOptionForSmile(option);
+            bytes32 smileHash = Derivative.hashForSmile(option.underlying, option.expiry);
 
             // In the case of multiple positions for the same option, 
             // compute the total amount the user wishes to buy and sell
@@ -476,7 +479,7 @@ contract ParetoV1Margin is
             )
         );
         bytes32 orderHash = Derivative.hashOrder(order);
-        bytes32 smileHash = Derivative.hashOptionForSmile(order.option);
+        bytes32 smileHash = Derivative.hashForSmile(underlying, expiry);
 
         // Save the order object
         orderHashs[orderHash] = order;
@@ -491,8 +494,28 @@ contract ParetoV1Margin is
             // FIXME: replace `1 ether` with spot price
             Derivative.updateSmile(1 ether, order, volSmiles[smileHash]);
         } else {
-            // Create a fresh volatility smile
-            volSmiles[smileHash] = Derivative.createSmile();
+            uint256 lastExpiry = orderExpiries[underlying];
+
+            // It must be that the last expiry is in the past
+            require(lastExpiry <= block.timestamp);
+
+            if (lastExpiry > 0) {
+                /**
+                 * Case 1: hash doesn't exist because it's a new round and options
+                 * are being overwritten. In these cases, we initialize the smile
+                 * from last round's smile!
+                 */
+                bytes32 lastSmileHash = Derivative.hashForSmile(underlying, lastExpiry);
+                volSmiles[smileHash] = volSmiles[lastSmileHash];
+            } else {
+                /**
+                 * Case 2: Either the first time ever or new underlying
+                 */
+                // Create a fresh volatility smile
+                volSmiles[smileHash] = Derivative.createSmile();
+            }
+            // Set underlying => expiry
+            orderExpiries[underlying] = order.option.expiry;
         }
 
         // Emit event 

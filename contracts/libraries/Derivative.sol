@@ -291,15 +291,16 @@ library Derivative {
     /**
      * @notice Calls and puts of the same expiry and underlying but different 
      * strikes share the same smile
-     * @param option Option object 
+     * @param underlying Address for underlying token
+     * @param expiry Expiry timestamp
      * @param hash_ SHA-3 hash of the Option object
      */
-    function hashOptionForSmile(Option memory option)
+    function hashForSmile(address underlying, uint256 expiry)
         public
         pure
         returns (bytes32 hash_)
     {
-        hash_ = keccak256(abi.encodePacked(option.underlying, option.expiry));
+        hash_ = keccak256(abi.encodePacked(underlying, expiry));
     }
 
     /************************************************
