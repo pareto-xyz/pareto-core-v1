@@ -70,56 +70,35 @@ export function checkPutPrice(
   return price;
 }
 
-export function checkVolFromCallPrice(
+export function getSigmaByNewton(
   spot: number,
   strike: number,
   tau: number,
   rate: number,
   tradePrice: number,
+  isCall: boolean,
+  tolerance: number,
+  maxIter: number,
 ): number {
-  let tauInYears = tau / 31556952;
-  let C = tradePrice;
-  let S = spot;
-  let X = strike * Math.exp(-rate * tauInYears);
-  let TwoCXS = 2 * C + X - S;
-  let SX = S + X;
-  let sqrtTerm = Math.sqrt(Math.pow(TwoCXS, 2) - 
-    1.85 * SX * Math.pow(X-S, 2) / (Math.PI * Math.sqrt(X * S)));
-  let piTerm = Math.sqrt(2 * Math.PI) / (2 * SX);
-  let vol = piTerm * (TwoCXS + sqrtTerm);
-  return vol;
+  var sigma = 1
+  for (var i = 0; i < maxIter; i++) {
+    var markPrice;
+    if (isCall) {
+        markPrice = checkCallPrice(spot, strike, sigma, tau, rate);
+    } else {
+        markPrice = checkPutPrice(spot, strike, sigma, tau, rate);
+    }
+    var diff = markPrice - tradePrice;
+    if (Math.abs(diff) < tolerance) {
+      break;
+    }
+    var vega = Math.max(checkVega(spot, strike, sigma, tau, rate), 0.01);
+    sigma = sigma - (diff / vega);
+  }
+  return sigma;
 }
 
-export function checkVolFromPutPrice(
-  spot: number,
-  strike: number,
-  tau: number,
-  rate: number,
-  tradePrice: number,
-): number {
-  let tauInYears = tau / 31556952;
-  let P = tradePrice;
-  let S = spot;
-  let X = strike * Math.exp(-rate * tauInYears);
-  let TwoPSX = 2 * P + S - X;
-  let SX = S + X;
-  let sqrtTerm = Math.sqrt(Math.pow(TwoPSX, 2) - 
-    1.85 * SX * Math.pow(S-X, 2) / (Math.PI * Math.sqrt(X * S)));
-  let piTerm = Math.sqrt(2 * Math.PI) / (2 * SX);
-  let vol = piTerm * (TwoPSX + sqrtTerm);
-  return vol;
-}
-
-export function checkVolToSigma(
-  vol: number,
-  tau: number,
-): number {
-  let tauInYears = tau / 31556952;
-  let sqrtTau = Math.sqrt(tauInYears);
-  return vol / sqrtTau;
-}
-
-export function checkCallVega(
+export function checkVega(
   spot: number,
   strike: number,
   sigma: number,
@@ -130,20 +109,5 @@ export function checkCallVega(
   let tauInYears = tau / 31556952;
   let spotSqrtTau = spot * Math.sqrt(tauInYears);
   let vega = spotSqrtTau * normalPDF(d1);
-  return vega;
-}
-
-export function checkPutVega(
-  spot: number,
-  strike: number,
-  sigma: number,
-  tau: number,
-  rate: number,
-): number {
-  let [_, d2] = checkProbabilityFactors(spot, strike, sigma, tau, rate);
-  let tauInYears = tau / 31556952;
-  let strikeSqrtTau = strike * Math.sqrt(tauInYears);
-  let discountRate = Math.exp(-rate * tauInYears);
-  let vega = strikeSqrtTau * discountRate * normalPDF(d2);
   return vega;
 }

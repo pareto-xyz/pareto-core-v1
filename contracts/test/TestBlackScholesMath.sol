@@ -3,12 +3,12 @@ pragma solidity ^0.8.9;
 
 import "../libraries/BlackScholesMath.sol";
 import "../libraries/Units.sol";
-import "hardhat/console.sol";
 
 /**
  * @notice Test contract to wrap around `CumulativeNormalDistribution.sol`
  */
 contract TestBlackScholesMath {
+
     function getProbabilityFactors(
         uint256 spot,
         uint256 strike,
@@ -21,6 +21,7 @@ contract TestBlackScholesMath {
         pure
         returns (uint256 d1abs, uint256 d2abs, bool d1IsNeg, bool d2IsNeg) 
     {
+        // doesn't matter what to set `isCall`
         BlackScholesMath.PriceCalculationInput memory inputs = 
             BlackScholesMath.PriceCalculationInput(
                 spot,
@@ -28,7 +29,8 @@ contract TestBlackScholesMath {
                 sigma,
                 tau,
                 rate,
-                scaleFactor
+                scaleFactor,
+                true
             );
         BlackScholesMath.PriceCalculationX64 memory inputsX64 = 
             BlackScholesMath.priceInputToX64(inputs);
@@ -50,13 +52,14 @@ contract TestBlackScholesMath {
         }
     }
 
-    function getCallPrice(
+    function getPrice(
         uint256 spot,
         uint256 strike,
         uint256 sigma,
         uint256 tau,
         uint256 rate,
-        uint256 scaleFactor
+        uint256 scaleFactor,
+        bool isCall
     ) 
         external
         pure 
@@ -69,55 +72,25 @@ contract TestBlackScholesMath {
                 sigma,
                 tau,
                 rate,
-                scaleFactor
+                scaleFactor,
+                isCall
             );
             
-        return BlackScholesMath.getCallPrice(inputs);
+        return BlackScholesMath.getPrice(inputs);
     }
 
-    function getPutPrice(
-        uint256 spot,
-        uint256 strike,
-        uint256 sigma,
-        uint256 tau,
-        uint256 rate,
-        uint256 scaleFactor
-    )
-        external
-        pure
-        returns (uint256 price)
-    {
-        BlackScholesMath.PriceCalculationInput memory inputs = 
-            BlackScholesMath.PriceCalculationInput(
-                spot,
-                strike,
-                sigma,
-                tau,
-                rate,
-                scaleFactor
-            );
-        return BlackScholesMath.getPutPrice(inputs);
-    }
-
-    function volToSigma(uint256 vol, uint256 tau)
-        external
-        pure
-        returns (uint256 sigma) 
-    {
-        return BlackScholesMath.volToSigma(vol, tau);
-    }
-
-    function approxVolFromCallPrice(
+    function getSigmaByNewton(
         uint256 spot,
         uint256 strike,
         uint256 tau,
         uint256 rate,
         uint256 tradePrice,
-        uint256 scaleFactor
+        uint256 scaleFactor,
+        bool isCall
     )
         external
         pure
-        returns (uint256 vol) 
+        returns (uint256) 
     {
         BlackScholesMath.VolCalculationInput memory inputs = 
             BlackScholesMath.VolCalculationInput(
@@ -126,23 +99,24 @@ contract TestBlackScholesMath {
                 tau,
                 rate,
                 tradePrice,
-                scaleFactor
+                scaleFactor,
+                isCall
             );
-        return BlackScholesMath.approxVolFromCallPrice(inputs);
-
+        return BlackScholesMath.getSigmaByNewton(inputs, 10);
     }
 
-    function approxVolFromPutPrice(
+    function getSigmaByBisection(
         uint256 spot,
         uint256 strike,
         uint256 tau,
         uint256 rate,
         uint256 tradePrice,
-        uint256 scaleFactor
+        uint256 scaleFactor,
+        bool isCall
     )
         external
         pure
-        returns (uint256 vol)
+        returns (uint256) 
     {
         BlackScholesMath.VolCalculationInput memory inputs = 
             BlackScholesMath.VolCalculationInput(
@@ -151,23 +125,26 @@ contract TestBlackScholesMath {
                 tau,
                 rate,
                 tradePrice,
-                scaleFactor
+                scaleFactor,
+                isCall
             );
-        return BlackScholesMath.approxVolFromPutPrice(inputs);
+        return BlackScholesMath.getSigmaByBisection(inputs, 10);
     }
 
-    function getCallVega(
+    function getVega(
         uint256 spot,
         uint256 strike,
         uint256 sigma,
         uint256 tau,
         uint256 rate,
-        uint256 scaleFactor
+        uint256 scaleFactor,
+        bool isCall
     ) 
         external
         pure
         returns (uint256 vega) 
     {
+        // doesn't matter what to put for isCall due to parity
         BlackScholesMath.PriceCalculationInput memory inputs = 
             BlackScholesMath.PriceCalculationInput(
                 spot,
@@ -175,32 +152,9 @@ contract TestBlackScholesMath {
                 sigma,
                 tau,
                 rate,
-                scaleFactor
+                scaleFactor,
+                isCall
             );
-        return BlackScholesMath.getCallVega(inputs);
-    }
-
-    function getPutVega(
-        uint256 spot,
-        uint256 strike,
-        uint256 sigma,
-        uint256 tau,
-        uint256 rate,
-        uint256 scaleFactor
-    ) 
-        external
-        pure
-        returns (uint256 vega) 
-    {
-        BlackScholesMath.PriceCalculationInput memory inputs = 
-            BlackScholesMath.PriceCalculationInput(
-                spot,
-                strike,
-                sigma,
-                tau,
-                rate,
-                scaleFactor
-            );
-        return BlackScholesMath.getPutVega(inputs);
+        return BlackScholesMath.getVega(inputs);
     }
 }

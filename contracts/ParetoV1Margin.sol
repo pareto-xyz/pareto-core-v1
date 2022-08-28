@@ -55,8 +55,11 @@ contract ParetoV1Margin is
     /// @notice Track total balance (used for checks)
     uint256 private totalBalance;
 
-    /// @notice Store volatility smiles per option (not order)
+    /// @notice Store volatility smiles per expiry & underlying
     mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
+
+    /// @notice Store the smile hash to expiry
+    mapping(address => uint256) private orderExpiries;
 
     /************************************************
      * Initialization and Upgradeability
@@ -320,6 +323,7 @@ contract ParetoV1Margin is
             Derivative.Order memory order = orderHashs[positions[i]];
             Derivative.Option memory option = order.option;
             bytes32 optionHash = Derivative.hashOption(option);
+            bytes32 smileHash = Derivative.hashForSmile(option.underlying, option.expiry);
 
             // In the case of multiple positions for the same option, 
             // compute the total amount the user wishes to buy and sell
@@ -354,12 +358,11 @@ contract ParetoV1Margin is
             }
 
             // Compute total buy - total sell
-            (uint256 netQuantity, bool isSeller) = 
-                NegativeMath.add(totalBuyQuantity, false, totalSellQuantity, true);
+            (uint256 netQuantity, bool isSeller) = NegativeMath.add(totalBuyQuantity, false, totalSellQuantity, true);
 
             if (netQuantity > 0) {
                 // Fetch smile and check it is valid
-                Derivative.VolatilitySmile memory smile = volSmiles[optionHash];
+                Derivative.VolatilitySmile memory smile = volSmiles[smileHash];
                 require(smile.exists_, "getMaintainenceMargin: found unknown option");
 
                 // Build margin using `netQuantity`
@@ -467,16 +470,10 @@ contract ParetoV1Margin is
             seller,
             tradePrice,
             quantity,
-            Derivative.Option(
-                optionType,
-                strike,
-                expiry,
-                underlying,
-                decimals
-            )
+            Derivative.Option(optionType, strike, expiry, underlying, decimals)
         );
         bytes32 orderHash = Derivative.hashOrder(order);
-        bytes32 optionHash = Derivative.hashOption(order.option);
+        bytes32 smileHash = Derivative.hashForSmile(underlying, expiry);
 
         // Save the order object
         orderHashs[orderHash] = order;
@@ -485,14 +482,37 @@ contract ParetoV1Margin is
         orderPositions[buyer].push(orderHash);
         orderPositions[seller].push(orderHash);
 
-        /// @dev Smiles are unique to the option not the order
-        if (volSmiles[optionHash].exists_) {
-            // Update the volatility smile
+        if (volSmiles[smileHash].exists_) {
+            /**
+             * Case 1: If this is an existing smile, then update it
+             * @dev Smiles are unique to the option not the order
+             */
             // FIXME: replace `1 ether` with spot price
-            Derivative.updateSmile(1 ether, order, volSmiles[optionHash]);
+            Derivative.updateSmile(1 ether, order, volSmiles[smileHash]);
         } else {
-            // Create a new volatility smile
-            volSmiles[optionHash] = Derivative.createSmile(order);
+            uint256 lastExpiry = orderExpiries[underlying];
+
+            // It must be that the last expiry is in the past
+            require(lastExpiry <= block.timestamp);
+
+            if (lastExpiry > 0) {
+                /**
+                 * Case 2: hash doesn't exist because it's a new round and options
+                 * are being overwritten. In these cases, we initialize the smile
+                 * from last round's smile!
+                 */
+                bytes32 lastSmileHash = Derivative.hashForSmile(underlying, lastExpiry);
+                volSmiles[smileHash] = volSmiles[lastSmileHash];
+            } else {
+                /**
+                 * Case 3: Either the first time ever or new underlying.
+                 * Here, create a new uniform (uninformed) smile 
+                 */
+                volSmiles[smileHash] = Derivative.createSmile();
+            }
+
+            // Set underlying => expiry
+            orderExpiries[underlying] = order.option.expiry;
         }
 
         // Emit event 

@@ -50,10 +50,7 @@ library MarginMath {
             uint256 curMoneyness = (spot * 10**option.decimals * 100) / option.strike;
 
             // Interpolate against existing smiles to get sigma
-            uint256 vol = Derivative.interpolate([50,75,100,125,150], smile.volAtMoneyness, curMoneyness);
-
-            // Convert implied vol to sigma
-            uint256 sigma = BlackScholesMath.volToSigma(vol, tau);
+            uint256 sigma = Derivative.interpolate([50,75,100,125,150], smile.sigmaAtMoneyness, curMoneyness);
 
             // Compute mark price
             uint256 markPrice = Derivative.getMarkPrice(option, spot, sigma, tau);
