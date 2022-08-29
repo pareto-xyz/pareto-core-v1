@@ -73,4 +73,67 @@ library GaussianMath {
         // 1 - factor*expTerm
         result = ONE_INT.sub(factor.mul(expTerm));
     }
+
+    int128 public constant LOW_TAIL = 0x666666666666666;   // 0.025
+    int128 public constant HIGH_TAIL = 0xF999999999999999; // 0.975
+
+    /**
+     * @notice Returns the inverse CDF, or quantile function of `p`.
+     * @dev Source: https://arxiv.org/pdf/1002.0567.pdf
+     * Maximum error of central region is 1.16x10−4
+     * @return x fcentral(p) = q * (a2 + (a1r + a0) / (r^2 + b1r +b0))
+     */
+    function getInverseCDF(int128 p) internal pure returns (int128 x) {
+        require(p > 0 && p < ONE_INT, "getInverseCDF: p must be within (0, 1)");
+        // Short circuit for the central region, central region inclusive of tails
+        if (p <= HIGH_TAIL && p >= LOW_TAIL) {
+            return central(p);
+        } else if (p < LOW_TAIL) { 
+            return tail(p);
+        } else {
+            int128 negativeTail = -tail(ONE_INT.sub(p));
+            return negativeTail;
+        }
+    }
+
+    int128 public constant INVERSE0 = 0x26A8F3C1F21B336E;
+    int128 public constant INVERSE1 = -0x87C57E5DA70D3C90;
+    int128 public constant INVERSE2 = 0x15D71F5721242C787;
+    int128 public constant INVERSE3 = 0x21D0A04B0E9B94F1;
+    int128 public constant INVERSE4 = -0xC2BF5D74C724E53F;
+
+    /**
+     * @dev Maximum error: 1.16x10−4
+     * @return Inverse CDF around the central area of 0.025 <= p <= 0.975
+     */
+    function central(int128 p) internal pure returns (int128) {
+        int128 q = p.sub(HALF_INT);
+        int128 r = q.mul(q);
+        int128 result = q.mul(
+            INVERSE2.add((INVERSE1.mul(r).add(INVERSE0)).div(
+                (r.mul(r).add(INVERSE4.mul(r)).add(INVERSE3))))
+        );
+        return result;
+    }
+
+    int128 public constant C1 = -0x2CB2447D36D513DAE;
+    int128 public constant C3 = -0x1000BF627FA188411;
+    int128 public constant C0_D = 0x10AEAC93F55267A9A5;
+    int128 public constant C1_D = 0x41ED34A2561490236;
+    int128 public constant C2_D = 0x7A1E70F720ECA43;
+    int128 public constant D0 = 0x72C7D592D021FB1DB;
+    int128 public constant D1 = 0x8C27B4617F5F800EA;
+
+    /**
+     * @dev Maximum error: 2.458x10-5
+     * @return Inverse CDF of the tail, defined for p < 0.0465, used with p < 0.025
+     */
+    function tail(int128 p) internal pure returns (int128) {
+        int128 r = ONE_INT.div(p.mul(p)).ln().sqrt();
+        int128 step0 = C3.mul(r).add(C2_D);
+        int128 numerator = C1_D.mul(r).add(C0_D);
+        int128 denominator = r.mul(r).add(D1.mul(r)).add(D0);
+        int128 result = step0.add(numerator.div(denominator));
+        return result;
+    }
 }

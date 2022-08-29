@@ -112,7 +112,7 @@ contract ParetoV1Margin is
         curRound = 1;
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
         newUnderlying(underlying_, oracle_);
-        maxInsuredPerc = 10;
+        maxInsuredPerc = 50;
     }
 
     /**
@@ -209,7 +209,7 @@ contract ParetoV1Margin is
     /**
      * @notice Event when maximum insured percentage is updated
      * @param owner Address who called the pause event
-     * @param paused Is the contract paused?
+     * @param perc Max percentage for maximum insurance fund
      */
     event MaxInsuredPercEvent(address indexed owner, uint256 perc);
 
