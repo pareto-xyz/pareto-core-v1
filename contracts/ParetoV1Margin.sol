@@ -263,11 +263,7 @@ contract ParetoV1Margin is
      * @return diff |AB + UP - MM|, always positive
      * @return satisfied True if AB + UP > MM, else false
      */
-    function checkMargin(address user)
-        public
-        nonReentrant
-        returns (uint256, bool)
-    {
+    function checkMargin(address user) public view returns (uint256, bool) {
         uint256 balance = balances[user];
         uint256 maintainence = getMaintainenceMargin(user);
 
@@ -287,7 +283,6 @@ contract ParetoV1Margin is
     /**
      * @notice Performs netted settlement. Transfers amount paid by ower
      * to this contract. Adds amount owed to each user to their margin account
-     * @dev This will do netting to reduce the number of transactions
      * @dev Anyone can call this though the burden falls on keepers
      */
     function settle() external nonReentrant {
@@ -312,9 +307,20 @@ contract ParetoV1Margin is
                 balances[ower] -= netPayoff;
                 balances[owee] += netPayoff;
             } else {
-                // Transfer what we can
-                balances[owee] += balances[ower];
-                balances[ower] = 0;
+                // TODO: can this be frontrun by a withdrawal?
+                // Make up the difference in the insurance fund
+                uint256 partialAmount = balances[ower];
+                uint256 remainAmount = netPayoff - partialAmount;
+
+                if (balances[insuranceFund] >= remainAmount) {
+                    balances[owee] += netPayoff;
+                    balances[insuranceFund] -= remainAmount;
+                    balances[ower] = 0;
+                } else {
+                    // Do the best we can
+                    balances[owee] += partialAmount;
+                    balances[ower] = 0;
+                }
             }
         } 
     }
