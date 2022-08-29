@@ -36,13 +36,6 @@ contract ParetoV1Margin is
     using SafeERC20 for IERC20;
 
     /************************************************
-     * Constant variables
-     ***********************************************/
-
-    /// @notice Maximum percentage the insurance fund can payoff for a single position in USDC
-    uint256 constant MAX_INSURED_PERC = 10;
-
-    /************************************************
      * State variables
      ***********************************************/
 
@@ -54,6 +47,9 @@ contract ParetoV1Margin is
 
     /// @notice Current round
     uint8 public curRound;
+
+    /// @notice Maximum percentage the insurance fund can payoff for a single position in USDC
+    uint256 public maxInsuredPerc;
 
     /// @notice The current active expiry
     /// @dev This assumes all underlying has only one expiry.
@@ -116,6 +112,7 @@ contract ParetoV1Margin is
         curRound = 1;
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
         newUnderlying(underlying_, oracle_);
+        maxInsuredPerc = 10;
     }
 
     /**
@@ -203,11 +200,18 @@ contract ParetoV1Margin is
     );
 
     /**
-     * @notice Pause or unpaused
+     * @notice Event when contract is paused or unpaused
      * @param owner Address who called the pause event
      * @param paused Is the contract paused?
      */
     event TogglePauseEvent(address indexed owner, bool paused);
+
+    /**
+     * @notice Event when maximum insured percentage is updated
+     * @param owner Address who called the pause event
+     * @param paused Is the contract paused?
+     */
+    event MaxInsuredPercEvent(address indexed owner, uint256 perc);
 
     /************************************************
      * External functions
@@ -329,7 +333,7 @@ contract ParetoV1Margin is
                 // Make up the difference in the insurance fund
                 uint256 partialAmount = balances[ower];
                 uint256 insuredAmount = netPayoff - partialAmount;
-                uint256 maxInsuredAmount = netPayoff * MAX_INSURED_PERC / 100;
+                uint256 maxInsuredAmount = netPayoff * maxInsuredPerc / 100;
 
                 // We cannot payback for more than the max insured amount
                 if (insuredAmount > maxInsuredAmount) {
@@ -665,7 +669,7 @@ contract ParetoV1Margin is
      * @param underlying Address for an underlying token
      * @param oracleFeed Address for an oracle price feed contract
      */
-    function setOracle(address underlying, address oracleFeed) external onlyKeeper {
+    function setOracle(address underlying, address oracleFeed) external onlyOwner {
         if (oracles[underlying] == address(0)) {
             // Brand new oracle
             newUnderlying(underlying, oracleFeed);
@@ -673,6 +677,15 @@ contract ParetoV1Margin is
             // Existing underlying, overwrite oracle
             oracles[underlying] = oracleFeed;
         }
+    }
+
+    /**
+     * @notice Set the maximum amount to be insured
+     */
+    function setMaxInsuredPerc(uint256 perc) external onlyOwner {
+        require(perc <= 100, "setMaxInsuredPerc: must be < 100");
+        maxInsuredPerc = perc;
+        emit MaxInsuredPercEvent(msg.sender, perc);
     }
 
     /**
