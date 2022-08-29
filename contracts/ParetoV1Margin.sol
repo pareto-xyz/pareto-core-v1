@@ -344,16 +344,18 @@ contract ParetoV1Margin is
 
     /**
      * @notice Performs partial liquidation on user. Liquidates the user's 
-     * positions one by one until margin check succeeds
+     * positions one by one until margin check succeeds. User is penalized with the 35% of MM
+     * which are split between liquidator and insurance fund
      * @dev Any EOA can call this on any EOA
      * @param user Address of the user to liquidate
      * @return fullyLiquidated if true, user is fully liquidated
-     * TODO: sort positions by some metric
      */
     function liquidate(address user) external nonReentrant returns (bool fullyLiquidated) {
         (, bool satisfied) = checkMargin(user);
         require(!satisfied, "liquidate: user passes margin check");
         require(userRoundIxs[user].length > 0, "liquidate: user has no positions");
+
+        address liquidator = msg.sender;
 
         // Default is to assume user can be fully liquidated
         fullyLiquidated = true;
@@ -362,30 +364,62 @@ contract ParetoV1Margin is
             uint256 index = userRoundIxs[user][i];
             Derivative.Order storage order = roundPositions[index];
 
-            // Delete position, dropping it from current user
-            deleteUserPosition(user, index);
+            // Compute mark price for option
+            uint256 spot = getSpot(order.option.underlying);
+            bytes32 smileHash = Derivative.hashForSmile(order.option.underlying, order.option.expiry);
+            uint256 markPrice = MarginMath.getMarkPriceFromOption(spot, order.option, volSmiles[smileHash]);
 
-            // Ovewrite user's position with msg.sender
-            if (order.buyer == user) {
-                order.buyer = msg.sender;
-            } else {
-                order.seller = msg.sender;
-            }
-
-            // Add order to new user's positions
-            userRoundIxs[msg.sender].push(uint16(index));
-
-            // Check liquidator can handle the new position, otherwise quit
-            (, bool liquidatorOk) = checkMargin(msg.sender);
-
-            if (!liquidatorOk) {
+            // Liquidator must pay user mark price
+            if (balances[liquidator] < markPrice) {
                 fullyLiquidated = false;
                 break;
             }
+            balances[liquidator] -= markPrice;
+            balances[user] += markPrice;
+
+            // Add order to new user's positions
+            userRoundIxs[liquidator].push(uint16(index));
+
+            // Check liquidator can handle the new position and the payment to liquidatee
+            (, bool liquidatorOk) = checkMargin(liquidator);
+
+            if (!liquidatorOk) {
+                // If the liquidator is now below margin, undo changes
+                /// @dev We don't just revert to allow liquidators to take one of many positions
+                delete userRoundIxs[liquidator][userRoundIxs[liquidator].length - 1];
+
+                // Undo adding the new position (last index)
+                fullyLiquidated = false;
+
+                // Undo changes to balances
+                balances[liquidator] += markPrice;
+                balances[user] -= markPrice;
+                break;
+            }
+
+            // If we have reached here, then the liquidator is able to inherit position
+            // Delete position, dropping it from current user
+            deleteUserPosition(user, index);
+
+            // Ovewrite user's position with liquidator
+            bool isSeller;
+            if (order.buyer == user) {
+                order.buyer = liquidator;
+            } else {
+                isSeller = true;
+                order.seller = liquidator;
+            }
+
+            // Now that user no longer owns position, we reward liquidator using MM from this 
+            // position (which cannot push user back below margin even if 100% of MM is gone).
+            // 25% of MM -> liquidator; 10% of MM -> insurance fund
+            uint256 margin = MarginMath.getMaintainenceMargin(spot, !isSeller, order.option, volSmiles[smileHash]);
+            balances[user] -= (margin * 35 / 100);
+            balances[liquidator] += (margin * 25 / 100);
+            balances[insurance] += (margin / 10);
 
             // Check if the user is no longer below margin, if so quit
             (, satisfied) = checkMargin(user);
-
             if (satisfied) {
                 break;
             }
@@ -676,7 +710,8 @@ contract ParetoV1Margin is
             }
         }
 
-        // Clear positions for the user
+        // Clear positions for the user. It is up to the caller to maintain and provide 
+        // a correct list of user addresses, otherwise memory will not be freed properly
         for (uint256 i = 0; i < roundUsers.length; i++) {
             delete userRoundIxs[roundUsers[i]];
         }

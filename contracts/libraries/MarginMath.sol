@@ -17,6 +17,34 @@ library MarginMath {
      ***********************************************/
 
     /**
+     * @notice Helper function to compute mark price from an `Option` object
+     * @param spot Current spot price
+     * @param option Option object containing strike, expiry info
+     * @param smile Volatility smile to get implied vol
+     */
+    function getMarkPriceFromOption(
+        uint256 spot,
+        Derivative.Option memory option,
+        Derivative.VolatilitySmile memory smile
+    )
+        public
+        view
+        returns (uint256 markPrice)
+    {
+        // Compute time to expiry
+        uint256 tau = option.expiry - block.timestamp;
+
+        // Compute current moneyness (times by 100 for moneyness decimals)
+        uint256 curMoneyness = (spot * 10**option.decimals * 100) / option.strike;
+
+        // Interpolate against existing smiles to get sigma
+        uint256 sigma = Derivative.interpolate([50,75,100,125,150], smile.sigmaAtMoneyness, curMoneyness);
+
+        // Compute mark price
+        markPrice = Derivative.getMarkPrice(option, spot, sigma, tau);
+    }
+
+    /**
      * @notice Compute maintainence margin for a single unit of underlying
      * @dev Separate heuristics for short/long call/put
      * @param spot Current spot price
@@ -43,17 +71,7 @@ library MarginMath {
         // Case 1: long position
         // min(100% of mark price, 6.5% of spot)
         if (isBuyer) {
-            // Compute time to expiry
-            uint256 tau = option.expiry - block.timestamp;
-
-            // Compute current moneyness (times by 100 for moneyness decimals)
-            uint256 curMoneyness = (spot * 10**option.decimals * 100) / option.strike;
-
-            // Interpolate against existing smiles to get sigma
-            uint256 sigma = Derivative.interpolate([50,75,100,125,150], smile.sigmaAtMoneyness, curMoneyness);
-
-            // Compute mark price
-            uint256 markPrice = Derivative.getMarkPrice(option, spot, sigma, tau);
+            uint256 markPrice = getMarkPriceFromOption(spot, option, smile);
 
             // min(100% of mark price, 6.5% of spot)
             // = min(mark price, 0.065 * spot)
