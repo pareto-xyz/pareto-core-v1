@@ -129,7 +129,7 @@ library Derivative {
                 option.strike,
                 sigma,
                 tau,
-                0, // FIXME: risk-free rate
+                0, // TODO: risk-free rate
                 10**(18-option.decimals),
                 option.optionType == OptionType.CALL
             )
@@ -148,6 +148,25 @@ library Derivative {
             updateSigma(indexLower, smile, order.tradePrice, markPrice, order.quantity, vega, 1000);
             updateSigma(indexUpper, smile, order.tradePrice, markPrice, order.quantity, vega, 1000);
         }
+    }
+
+    /**
+     * @notice Helper function to fetch an estimated for IV for moneyness input
+     * @param spot Spot price
+     * @param strike Strike price
+     * @param smile Implied volatility smile
+     * @param decimals Decimals for spot/strike price
+     */
+    function querySmile(uint256 spot, uint256 strike, VolatilitySmile storage smile, uint8 decimals) 
+        external
+        view
+        returns (uint256 sigma)
+    {
+        // Compute current moneyness (times by 100 for moneyness decimals)
+        uint256 curMoneyness = (spot * 10**decimals * 100) / strike;
+
+        // Interpolate against existing smiles to get sigma
+        sigma = interpolate([50,75,100,125,150], smile.sigmaAtMoneyness, curMoneyness);
     }
 
     /**
@@ -237,7 +256,7 @@ library Derivative {
                 option.strike,
                 sigma,
                 tau,
-                0,  // FIXME: need to get rate
+                0,  // TODO: need to get rate
                 10**(18-option.decimals),
                 option.optionType == OptionType.CALL
             )
