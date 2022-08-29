@@ -122,11 +122,20 @@ contract ParetoV1Margin is
         // The owner is a keeper
         keepers[owner()] = true;
 
-        // Initialize state variables
-        curRound = 1;
-        activeExpiry = DateMath.getNextExpiry(block.timestamp);
-        newUnderlying(underlying_, oracle_);
+        // Set insurance fund to cover max 50%
         maxInsuredPerc = 50;
+
+        // Begin first round
+        curRound = 1;
+    
+        // Set the expiry to the next friday
+        activeExpiry = DateMath.getNextExpiry(block.timestamp);
+
+        // Create a new underlying 
+        newUnderlying(underlying_, oracle_);
+
+        // Compute strikes for the underlying
+        roundStrikes[underlying_] = getStrikesAtDelta(underlying_, 5000);
     }
 
     /**
@@ -478,11 +487,11 @@ contract ParetoV1Margin is
      * @notice Given spot, compute 11 strikes. Intended for use at a new round
      * @dev Hardcodes 11 deltas
      * @param underlying Address of the underlying token
-     * @param spot Current spot price 
-     * @param histSigma Historical volatility
+     * @param sigma Volatility - likely this is historical volatility as we cannot 
+     * use the smile without knowing the strike
      * @return strikes Eleven strikes
      */
-    function getStrikesAtDelta(address underlying, uint256 spot, uint256 histSigma)
+    function getStrikesAtDelta(address underlying, uint256 sigma)
         internal
         view
         returns (uint256[11] memory strikes)
@@ -498,8 +507,8 @@ contract ParetoV1Margin is
             strikes[i] = BlackScholesMath.getStrikeFromDelta(
                 BlackScholesMath.StrikeCalculationInput(
                     uint256(deltas[i]),
-                    spot,
-                    histSigma,
+                    getSpot(underlying),
+                    sigma,
                     activeExpiry - block.timestamp,
                     0,  // TODO: replace with rate
                     10**(18 - decimals)
@@ -784,6 +793,7 @@ contract ParetoV1Margin is
             }
 
             // Update strikes
+            roundStrikes[underlyings[i]] = getStrikesAtDelta(underlyings[i], 5000);
         }
 
         // Clear positions for the user. It is up to the caller to maintain and provide 
