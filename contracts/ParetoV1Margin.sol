@@ -39,12 +39,8 @@ contract ParetoV1Margin is
      * Enum variables
      ***********************************************/
 
-    /// @notice Eleven different strike levels
-    enum StrikeLevel {
-        ITM5, ITM4, ITM3, ITM2, ITM1,
-        ATM,
-        OTM1, OTM2, OTM3, OTM4, OTM5
-    }
+    /// @notice Eleven different strike levels, 5 ITM, 1 ATM, 5 OTM
+    enum StrikeLevel { ITM5,ITM4,ITM3,ITM2,ITM1,ATM,OTM1,OTM2,OTM3,OTM4,OTM5 }
 
     /************************************************
      * State variables
@@ -102,12 +98,14 @@ contract ParetoV1Margin is
      * @param insurance_ Address for the insurance fund
      * @param underlying_ Address of underlying token to support at deployment
      * @param oracle_ Address of oracle for the underlying
+     * @param strikes_ Strike prices for the first round for the underlying
      */
     function initialize(
         address usdc_,
         address insurance_,
         address underlying_,
-        address oracle_
+        address oracle_,
+        uint256[11] calldata strikes_
     )
         public
         initializer 
@@ -135,7 +133,7 @@ contract ParetoV1Margin is
         newUnderlying(underlying_, oracle_);
 
         // Compute strikes for the underlying
-        roundStrikes[underlying_] = getStrikesAtDelta(underlying_, 5000);
+        roundStrikes[underlying_] = strikes_;
     }
 
     /**
@@ -467,6 +465,14 @@ contract ParetoV1Margin is
         return fullyLiquidated;
     }
 
+    /**
+     * @notice Get balance for user
+     * @return balance Amount of USDC
+     */
+    function getBalance() external view returns (uint256) {
+        return balances[msg.sender];
+    }
+
     /************************************************
      * Internal functions
      ***********************************************/
@@ -792,7 +798,7 @@ contract ParetoV1Margin is
                 volSmiles[smileHash] = Derivative.createSmile();
             }
 
-            // Update strikes
+            // Update strikes - TODO: replace with historical volatility
             roundStrikes[underlyings[i]] = getStrikesAtDelta(underlyings[i], 5000);
         }
 
