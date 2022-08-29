@@ -36,7 +36,14 @@ contract ParetoV1Margin is
     using SafeERC20 for IERC20;
 
     /************************************************
-     * Constants and State
+     * Constant variables
+     ***********************************************/
+
+    /// @notice Maximum percentage the insurance fund can payoff for a single position in USDC
+    uint256 constant MAX_INSURED_PERC = 10;
+
+    /************************************************
+     * State variables
      ***********************************************/
 
     /// @notice Stores the address for USDC
@@ -321,11 +328,17 @@ contract ParetoV1Margin is
                 // TODO: can this be frontrun by a withdrawal?
                 // Make up the difference in the insurance fund
                 uint256 partialAmount = balances[ower];
-                uint256 remainAmount = netPayoff - partialAmount;
+                uint256 insuredAmount = netPayoff - partialAmount;
+                uint256 maxInsuredAmount = netPayoff * MAX_INSURED_PERC / 100;
 
-                if (balances[insurance] >= remainAmount) {
+                // We cannot payback for more than the max insured amount
+                if (insuredAmount > maxInsuredAmount) {
+                    insuredAmount = maxInsuredAmount;
+                }
+
+                if (balances[insurance] >= insuredAmount) {
                     balances[owee] += netPayoff;
-                    balances[insurance] -= remainAmount;
+                    balances[insurance] -= insuredAmount;
                     balances[ower] = 0;
                 } else {
                     // Do the best we can
