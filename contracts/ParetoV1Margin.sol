@@ -45,8 +45,8 @@ contract ParetoV1Margin is
     /// @notice Address of the insurance fund
     address public insuranceFund;
 
-    /// @notice Round
-    uint8 public round;
+    /// @notice Current round
+    uint8 public curRound;
 
     /// @notice The current active expiry
     /// @dev This assumes all underlying has only one expiry.
@@ -112,9 +112,9 @@ contract ParetoV1Margin is
         keepers[owner()] = true;
 
         // Initialize state variables
-        round = 1;
+        curRound = 1;
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
-        roundExpiries[round] = activeExpiry;
+        roundExpiries[curRound] = activeExpiry;
         newUnderlying(underlying_, oracle_);
     }
 
@@ -189,6 +189,18 @@ contract ParetoV1Margin is
     event RemoveKeepersEvent(
         address indexed owner,
         uint256 numKeepers
+    );
+
+    /**
+     * @notice Event when positions are settled
+     * @param caller Caller of the settlment event
+     * @param round Round that was settled
+     * @param numPositions Number of positions settled
+     */
+    event SettlementEvent(
+        address indexed caller,
+        uint8 round,
+        uint256 numPositions
     );
 
     /************************************************
@@ -281,12 +293,14 @@ contract ParetoV1Margin is
     }
 
     /**
-     * @notice Performs netted settlement. Transfers amount paid by ower
+     * @notice Performs settlement for positions of the current round. Transfers amount paid by ower
      * to this contract. Adds amount owed to each user to their margin account
      * @dev Anyone can call this though the burden falls on keepers
+     * @param round Settle positions of this round
      */
-    function settle() external nonReentrant {
+    function settle(uint8 round) external nonReentrant {
         uint256 roundExpiry = roundExpiries[round];
+        require(roundExpiry <= block.timestamp, "settle: expiry must be in the past");
         bytes32[] memory positions = expiryPositions[roundExpiry];
 
         for (uint256 j = 0; j < positions.length; j++) {
@@ -322,7 +336,10 @@ contract ParetoV1Margin is
                     balances[ower] = 0;
                 }
             }
-        } 
+        }
+
+        // Emit event
+        emit SettlementEvent(msg.sender, round, positions.length);
     }
 
     /************************************************
@@ -337,14 +354,13 @@ contract ParetoV1Margin is
     function getSpot(address underlying) internal view returns (uint256) {
         require(oracles[underlying] != address(0), "getSpot: missing oracle");
         (,int256 answer,,,) = IOracle(oracles[underlying]).latestRoundData();
-        // NOTE: check that this conversion is okay
+        // TODO: check that this conversion is okay
         return uint256(answer);
     }
 
     /**
      * @notice Compute the initial margin for all positions owned by user
      * @dev The initial margin is equal to the sum of initial margins for all positions
-     * @dev TODO Support P&L netting
      * @param user Address to compute IM for
      * @param onlyLoss Do not count unrealized profits from open positions
      * @return payoff The payoff summed for all positions
@@ -386,7 +402,6 @@ contract ParetoV1Margin is
     /**
      * @notice Compute the maintainence margin for all positions owned by user
      * @dev The maintainence margin is equal to the sum of maintainence margins for all positions
-     * @dev TODO Support P&L netting
      * @param user Address to compute MM for
      * @return margin The maintainence margin summed for all positions
      */
@@ -471,6 +486,7 @@ contract ParetoV1Margin is
      */
     function checkMarginOnWithdrawal(address user, uint256 amount) 
         internal
+        view
         returns (uint256, bool) 
     {
         require(amount > 0, "checkMarginOnWithdrawal: amount must be > 0");
@@ -569,10 +585,10 @@ contract ParetoV1Margin is
         activeExpiry = DateMath.getNextExpiry(lastExpiry);
 
         // Update round
-        round += 1;
+        curRound += 1;
 
         // Stores the expiry for round
-        roundExpiries[round] = activeExpiry;
+        roundExpiries[curRound] = activeExpiry;
 
         // Update smiles for each underlying token
         for (uint256 i = 0; i < underlyings.length; i++) {
@@ -608,7 +624,6 @@ contract ParetoV1Margin is
         uint256 quantity,
         Derivative.OptionType optionType,
         uint256 strike,
-        uint256 expiry,
         address underlying
     ) 
         external
@@ -621,7 +636,6 @@ contract ParetoV1Margin is
         require(underlying != address(0), "addPosition: underlying is empty");
         require(strike > 0, "addPosition: strike must be positive");
         require(oracles[underlying] != address(0), "addPosition: no oracle for underlying");
-        require(expiry == activeExpiry, "addPosition: only one expiry supported");
 
         uint8 decimals = IERC20(underlying).decimals();
         Derivative.Order memory order = Derivative.Order(
@@ -630,12 +644,12 @@ contract ParetoV1Margin is
             seller,
             tradePrice,
             quantity,
-            Derivative.Option(optionType, strike, expiry, underlying, decimals)
+            Derivative.Option(optionType, strike, activeExpiry, underlying, decimals)
         );
         bytes32 orderHash = Derivative.hashOrder(order);
 
         // Hash together the underlying and expiry
-        bytes32 smileHash = Derivative.hashForSmile(underlying, expiry);
+        bytes32 smileHash = Derivative.hashForSmile(underlying, activeExpiry);
 
         require(
             bytes(orderHashs[orderHash].orderId).length == 0,
@@ -672,7 +686,7 @@ contract ParetoV1Margin is
             optionType,
             underlying,
             strike,
-            expiry
+            activeExpiry
         );
     }
 }
