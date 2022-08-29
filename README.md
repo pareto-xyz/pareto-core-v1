@@ -12,19 +12,19 @@ For those interested in local development.
 
 ### Installation
 
-`yarn install`
+`npx hardhat install`
 
 ### Compile Contracts
 
-`yarn compile`
+`npx hardhat compile`
 
 ### Run Tests
 
-`yarn test`
+`npx hardhat test`
 
 ### Run Coverage
 
-`yarn coverage`
+`npx hardhat coverage`
 
 ## Security
 
