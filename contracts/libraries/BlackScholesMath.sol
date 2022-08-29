@@ -102,7 +102,7 @@ library BlackScholesMath {
     }
 
     /**
-     * @notice Struct that groups together inputs for computing BS price
+     * @notice Struct that groups together inputs for computing IV
      * @param spot Spot price in stable asset
      * @param strike Strike price of the asset 
      * @param tau Time to expiry (in seconds), not in years
@@ -128,6 +128,32 @@ library BlackScholesMath {
         int128 tauX64;
         int128 rateX64;
         int128 priceX64;
+    }
+
+    /**
+     * @notice Struct that groups together inputs for computing strike
+     * @param delta Desired delta for the strike. Written as a percentage with 4 decimals
+     * @param spot Spot price in stable asset
+     * @param tau Time to expiry (in seconds), not in years
+     * @param rate Risk-free rate
+     * @param scaleFactor Unsigned 256-bit integer scaling factor
+     */
+    struct StrikeCalculationInput {
+        uint256 delta;
+        uint256 spot;
+        uint256 sigma;
+        uint256 tau;
+        uint256 rate;
+        uint256 scaleFactor;
+    }
+
+    /// @notice Convert `StrikeCalculationInput` to 64.64 types
+    struct StrikeCalculationX64 {
+        int128 deltaX64;
+        int128 spotX64;
+        int128 sigmaX64;
+        int128 tauX64;
+        int128 rateX64;
     }
 
     /**
@@ -165,6 +191,25 @@ library BlackScholesMath {
             inputs.tau.toYears(),
             inputs.rate.scaleToX64(inputs.scaleFactor),
             inputs.tradePrice.scaleToX64(inputs.scaleFactor)
+        );
+    }
+
+    /**
+     * @notice Convert `StrikeCalculationInput` to `StrikeCalculationX64`
+     * @param inputs StrikeCalculationInput object
+     * @param outputs StrikeCalculationX64 object
+     */
+    function strikeInputToX64(StrikeCalculationInput memory inputs)
+        internal
+        pure
+        returns (StrikeCalculationX64 memory outputs) 
+    {
+        outputs = StrikeCalculationX64(
+            inputs.delta.percentageToX64(),
+            inputs.spot.scaleToX64(inputs.scaleFactor),
+            inputs.sigma.percentageToX64(),
+            inputs.tau.toYears(),
+            inputs.rate.scaleToX64(inputs.scaleFactor)
         );
     }
 
@@ -438,5 +483,44 @@ library BlackScholesMath {
         // Compute S * sqrt(tau) * PDF(d1)
         int128 spotSqrtTauX64 = inputsX64.spotX64.mul(inputsX64.tauX64.sqrt());
         vegaX64 = spotSqrtTauX64.mul(GaussianMath.getPDF(d1));
+    }
+    
+    /************************************************
+     * Solving for strike given delta
+     ***********************************************/
+
+    /**
+     * @notice Compute strike price under Black-Scholes model given a chosen delta,
+     * implied volatility, and spot price
+     */
+    function getStrikeFromDelta(StrikeCalculationInput memory inputs) 
+        internal
+        pure
+        returns (uint256 strike)
+    {
+        StrikeCalculationX64 memory inputsX64 = strikeInputToX64(inputs);
+        int128 strikeX64 = getStrikeFromDeltaX64(inputsX64);
+        strike = strikeX64.scaleFromX64(inputs.scaleFactor);
+    }
+
+    /**
+     * @notice Derivate strike from delta
+     * @dev K = S exp { (r + tau * sigma^2) / 2 - sigma * sqrt(tau) * CDF^{-1}(Delta) }
+     */
+    function getStrikeFromDeltaX64(StrikeCalculationX64 memory inputsX64)
+        internal
+        pure
+        returns (int128 strikeX64)
+    {
+        // CDF^{-1}(Delta)
+        int128 scoreX64 = inputsX64.deltaX64.getInverseCDF();
+        // sigma * sqrt(tau)
+        int128 volX64 = inputsX64.sigmaX64.mul(inputsX64.tauX64.sqrt());
+        // rate + tau * sigma^2
+        int128 rtsigsqrX64 = inputsX64.rateX64.add(inputsX64.tauX64.mul(inputsX64.sigmaX64.pow(2)));
+        // (rtsigsqrX64) / 2 - volX64 * scoreX64
+        int128 logitX64 = (rtsigsqrX64.div(TWO_INT).sub(volX64.mul(scoreX64)));
+        // spot * exp { logitX64 }
+        strikeX64 = inputsX64.spotX64.mul(logitX64.exp());
     }
 }

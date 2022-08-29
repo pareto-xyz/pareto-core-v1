@@ -36,6 +36,13 @@ contract ParetoV1Margin is
     using SafeERC20 for IERC20;
 
     /************************************************
+     * Enum variables
+     ***********************************************/
+
+    /// @notice Eleven different strike levels, 5 ITM, 1 ATM, 5 OTM
+    enum StrikeLevel { ITM5,ITM4,ITM3,ITM2,ITM1,ATM,OTM1,OTM2,OTM3,OTM4,OTM5 }
+
+    /************************************************
      * State variables
      ***********************************************/
 
@@ -76,6 +83,9 @@ contract ParetoV1Margin is
     /// @notice Stores map from user address to index into the current round positions
     mapping(address => uint16[]) private userRoundIxs;
 
+    /// @notice Stores strike prices for the current round per underlying
+    mapping(address => uint256[11]) private roundStrikes;
+
     /// @notice Store volatility smiles per hash(expiry,underlying)
     mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
 
@@ -88,12 +98,14 @@ contract ParetoV1Margin is
      * @param insurance_ Address for the insurance fund
      * @param underlying_ Address of underlying token to support at deployment
      * @param oracle_ Address of oracle for the underlying
+     * @param strikes_ Strike prices for the first round for the underlying
      */
     function initialize(
         address usdc_,
         address insurance_,
         address underlying_,
-        address oracle_
+        address oracle_,
+        uint256[11] calldata strikes_
     )
         public
         initializer 
@@ -108,11 +120,20 @@ contract ParetoV1Margin is
         // The owner is a keeper
         keepers[owner()] = true;
 
-        // Initialize state variables
+        // Set insurance fund to cover max 50%
+        maxInsuredPerc = 50;
+
+        // Begin first round
         curRound = 1;
+    
+        // Set the expiry to the next friday
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
+
+        // Create a new underlying 
         newUnderlying(underlying_, oracle_);
-        maxInsuredPerc = 10;
+
+        // Compute strikes for the underlying
+        roundStrikes[underlying_] = strikes_;
     }
 
     /**
@@ -153,7 +174,7 @@ contract ParetoV1Margin is
         uint256 quantity,
         Derivative.OptionType optionType,
         address underlying,
-        uint256 strike,
+        StrikeLevel strikeLevel,
         uint256 expiry
     );
 
@@ -209,7 +230,7 @@ contract ParetoV1Margin is
     /**
      * @notice Event when maximum insured percentage is updated
      * @param owner Address who called the pause event
-     * @param paused Is the contract paused?
+     * @param perc Max percentage for maximum insurance fund
      */
     event MaxInsuredPercEvent(address indexed owner, uint256 perc);
 
@@ -444,6 +465,14 @@ contract ParetoV1Margin is
         return fullyLiquidated;
     }
 
+    /**
+     * @notice Get balance for user
+     * @return balance Amount of USDC
+     */
+    function getBalance() external view returns (uint256) {
+        return balances[msg.sender];
+    }
+
     /************************************************
      * Internal functions
      ***********************************************/
@@ -458,6 +487,40 @@ contract ParetoV1Margin is
         (,int256 answer,,,) = IOracle(oracles[underlying]).latestRoundData();
         // TODO: check that this conversion is okay
         return uint256(answer);
+    }
+
+    /**
+     * @notice Given spot, compute 11 strikes. Intended for use at a new round
+     * @dev Hardcodes 11 deltas
+     * @param underlying Address of the underlying token
+     * @param sigma Volatility - likely this is historical volatility as we cannot 
+     * use the smile without knowing the strike
+     * @return strikes Eleven strikes
+     */
+    function getStrikesAtDelta(address underlying, uint256 sigma)
+        internal
+        view
+        returns (uint256[11] memory strikes)
+    {
+        require(activeExpiry > block.timestamp, "getStrikesAtDelta: expiry in the past");
+        uint8 decimals = IERC20(underlying).decimals();
+
+        // Hardcoded deltas for the 11 strikes (decimals 4)
+        uint16[11] memory deltas = [250,500,1000,2250,3500,5000,6500,7750,9000,9500,9750];
+
+        for (uint256 i = 0; i < 11; i++) {
+            // Compute strike from chosen delta
+            strikes[i] = BlackScholesMath.getStrikeFromDelta(
+                BlackScholesMath.StrikeCalculationInput(
+                    uint256(deltas[i]),
+                    getSpot(underlying),
+                    sigma,
+                    activeExpiry - block.timestamp,
+                    0,  // TODO: replace with rate
+                    10**(18 - decimals)
+                )
+            );
+        }
     }
 
     /**
@@ -716,9 +779,9 @@ contract ParetoV1Margin is
         // Update round
         curRound += 1;
 
-        // Update smiles for each underlying token
+        // Loop through underlying tokens
         for (uint256 i = 0; i < underlyings.length; i++) {
-            // Compute the new hash
+            // Update smiles for each underlying token
             bytes32 smileHash = Derivative.hashForSmile(underlyings[i], activeExpiry);
 
             if (activeExpiry > 0) {
@@ -734,6 +797,9 @@ contract ParetoV1Margin is
                 // Here, create a new uniform (uninformed) smile 
                 volSmiles[smileHash] = Derivative.createSmile();
             }
+
+            // Update strikes - TODO: replace with historical volatility
+            roundStrikes[underlyings[i]] = getStrikesAtDelta(underlyings[i], 5000);
         }
 
         // Clear positions for the user. It is up to the caller to maintain and provide 
@@ -756,7 +822,7 @@ contract ParetoV1Margin is
         uint256 tradePrice,
         uint256 quantity,
         Derivative.OptionType optionType,
-        uint256 strike,
+        StrikeLevel strikeLevel,
         address underlying
     ) 
         external
@@ -766,10 +832,15 @@ contract ParetoV1Margin is
         require(tradePrice > 0, "addPosition: tradePrice must be > 0");
         require(quantity > 0, "addPosition: quantity must be > 0");
         require(underlying != address(0), "addPosition: underlying is empty");
-        require(strike > 0, "addPosition: strike must be positive");
         require(oracles[underlying] != address(0), "addPosition: no oracle for underlying");
 
         uint8 decimals = IERC20(underlying).decimals();
+
+        // Get strike at chosen level from current round strikes
+        uint256 strike = roundStrikes[underlying][uint8(strikeLevel)];
+        require(strike > 0, "addPosition: underlying not found");
+
+        // Build an order object
         Derivative.Order memory order = Derivative.Order(
             buyer,
             seller,
@@ -808,7 +879,7 @@ contract ParetoV1Margin is
             quantity,
             optionType,
             underlying,
-            strike,
+            strikeLevel,
             activeExpiry
         );
     }
