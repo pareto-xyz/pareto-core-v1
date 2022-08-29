@@ -71,7 +71,7 @@ contract ParetoV1Margin is
     mapping(uint16 => Derivative.Order[]) private roundPositions;
 
     /// @notice Stores map from user address to index into `roundPositions`
-    mapping(address => uint16[]) private userPositions;
+    mapping(address => uint16[]) private userRoundIxs;
 
     /// @notice Store volatility smiles per hash(expiry,underlying)
     mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
@@ -358,12 +358,12 @@ contract ParetoV1Margin is
     function liquidate(address user) external nonReentrant returns (bool fullyLiquidated) {
         (, bool satisfied) = checkMargin(user);
         require(!satisfied, "liquidate: user passes margin check");
-        require(userPositions[user].length > 0, "liquidate: user has no positions");
+        require(userRoundIxs[user].length > 0, "liquidate: user has no positions");
 
         fullyLiquidated = true;
 
-        for (uint256 i = 0; i < userPositions[user].length; i++) {
-            uint256 index = userPositions[user][i];
+        for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
+            uint256 index = userRoundIxs[user][i];
             Derivative.Order storage order = roundPositions[curRound][index];
 
             // Delete position, dropping it from current user
@@ -377,7 +377,7 @@ contract ParetoV1Margin is
             }
 
             // Add order to new user's positions
-            userPositions[msg.sender].push(order);
+            userRoundIxs[msg.sender].push(order);
 
             // Check liquidator can handle the new position, otherwise quit
             (, bool liquidatorOk) = checkMargin(msg.sender);
@@ -426,16 +426,16 @@ contract ParetoV1Margin is
         view
         returns (uint256, bool) 
     {
-        if (userPositions[user].length == 0) {
+        if (userRoundIxs[user].length == 0) {
             return (0, false);
         }
 
         uint256 payoff;
         bool isNegative;
 
-        for (uint256 i = 0; i < userPositions[user].length; i++) {
+        for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
             // Fetch the order in the position
-            Derivative.Order memory order = roundPositions[curRound][userPositions[user][i]];
+            Derivative.Order memory order = roundPositions[curRound][userRoundIxs[user][i]];
 
             // Fetch the underlying token for the option
             uint256 spot = getSpot(order.option.underlying);
@@ -460,7 +460,7 @@ contract ParetoV1Margin is
      * @return margin The maintainence margin summed for all positions
      */
     function getMaintainenceMargin(address user) internal view returns (uint256) {
-        if (userPositions[user].length == 0) {
+        if (userRoundIxs[user].length == 0) {
             return 0;
         }
 
@@ -468,8 +468,8 @@ contract ParetoV1Margin is
         uint256 margin;
 
         // Loop through open positions by user
-        for (uint256 i = 0; i < userPositions[user].length; i++) {
-            Derivative.Order memory order = roundPositions[curRound][userPositions[user][i]];
+        for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
+            Derivative.Order memory order = roundPositions[curRound][userRoundIxs[user][i]];
             Derivative.Option memory option = order.option;
             bytes32 optionHash = Derivative.hashOption(option);
             bytes32 smileHash = Derivative.hashForSmile(option.underlying, option.expiry);
@@ -493,8 +493,8 @@ contract ParetoV1Margin is
 
             // Nested loop to find the total quantity of this option.
             // Consider case with multiple positions with same order
-            for (uint256 j = i + 1; j < userPositions[user].length; j++) {
-                Derivative.Order memory order2 = roundPositions[curRound][userPositions[user][j]];
+            for (uint256 j = i + 1; j < userRoundIxs[user].length; j++) {
+                Derivative.Order memory order2 = roundPositions[curRound][userRoundIxs[user][j]];
                 bytes32 optionHash2 = Derivative.hashOption(order2.option);
 
                 if (optionHash == optionHash2) {
@@ -574,12 +574,12 @@ contract ParetoV1Margin is
      * @param index Index to delete
      */
     function deleteUserPosition(address user, uint256 index) internal pure {
-        uint256 size = userPositions[user].length;
+        uint256 size = userRoundIxs[user].length;
         if (size > 1) {
-            userPositions[user][index] = userPositions[user][size - 1];
+            userRoundIxs[user][index] = userRoundIxs[user][size - 1];
         }
         // Implicitly recovers gas from last element storage
-        userPositions[user].length--;
+        userRoundIxs[user].length--;
     }
 }
 
@@ -732,8 +732,8 @@ contract ParetoV1Margin is
         uint16 orderIndex = uint16(roundPositions[curRound].length - 1);
 
         // Save that the buyer/seller have this position
-        userPositions[buyer].push(orderIndex);
-        userPositions[seller].push(orderIndex);
+        userRoundIxs[buyer].push(orderIndex);
+        userRoundIxs[seller].push(orderIndex);
 
         // Check margin for buyer and seller
         (, bool checkBuyerMargin) = checkMargin(buyer);
