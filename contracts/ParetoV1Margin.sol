@@ -36,7 +36,7 @@ contract ParetoV1Margin is
     using SafeERC20 for IERC20;
 
     /************************************************
-     * Constants and State
+     * State variables
      ***********************************************/
 
     /// @notice Stores the address for USDC
@@ -47,6 +47,9 @@ contract ParetoV1Margin is
 
     /// @notice Current round
     uint8 public curRound;
+
+    /// @notice Maximum percentage the insurance fund can payoff for a single position in USDC
+    uint256 public maxInsuredPerc;
 
     /// @notice The current active expiry
     /// @dev This assumes all underlying has only one expiry.
@@ -109,6 +112,7 @@ contract ParetoV1Margin is
         curRound = 1;
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
         newUnderlying(underlying_, oracle_);
+        maxInsuredPerc = 10;
     }
 
     /**
@@ -196,11 +200,18 @@ contract ParetoV1Margin is
     );
 
     /**
-     * @notice Pause or unpaused
+     * @notice Event when contract is paused or unpaused
      * @param owner Address who called the pause event
      * @param paused Is the contract paused?
      */
     event TogglePauseEvent(address indexed owner, bool paused);
+
+    /**
+     * @notice Event when maximum insured percentage is updated
+     * @param owner Address who called the pause event
+     * @param paused Is the contract paused?
+     */
+    event MaxInsuredPercEvent(address indexed owner, uint256 perc);
 
     /************************************************
      * External functions
@@ -321,11 +332,17 @@ contract ParetoV1Margin is
                 // TODO: can this be frontrun by a withdrawal?
                 // Make up the difference in the insurance fund
                 uint256 partialAmount = balances[ower];
-                uint256 remainAmount = netPayoff - partialAmount;
+                uint256 insuredAmount = netPayoff - partialAmount;
+                uint256 maxInsuredAmount = netPayoff * maxInsuredPerc / 100;
 
-                if (balances[insurance] >= remainAmount) {
+                // We cannot payback for more than the max insured amount
+                if (insuredAmount > maxInsuredAmount) {
+                    insuredAmount = maxInsuredAmount;
+                }
+
+                if (balances[insurance] >= insuredAmount) {
                     balances[owee] += netPayoff;
-                    balances[insurance] -= remainAmount;
+                    balances[insurance] -= insuredAmount;
                     balances[ower] = 0;
                 } else {
                     // Do the best we can
@@ -344,48 +361,82 @@ contract ParetoV1Margin is
 
     /**
      * @notice Performs partial liquidation on user. Liquidates the user's 
-     * positions one by one until margin check succeeds
+     * positions one by one until margin check succeeds. User is penalized with the 35% of MM
+     * which are split between liquidator and insurance fund
      * @dev Any EOA can call this on any EOA
      * @param user Address of the user to liquidate
      * @return fullyLiquidated if true, user is fully liquidated
-     * TODO: sort positions by some metric
      */
     function liquidate(address user) external nonReentrant returns (bool fullyLiquidated) {
         (, bool satisfied) = checkMargin(user);
         require(!satisfied, "liquidate: user passes margin check");
         require(userRoundIxs[user].length > 0, "liquidate: user has no positions");
 
+        address liquidator = msg.sender;
+
         // Default is to assume user can be fully liquidated
         fullyLiquidated = true;
 
         for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
             uint256 index = userRoundIxs[user][i];
-            Derivative.Order storage order = roundPositions[curRound][index];
+            Derivative.Order storage order = roundPositions[index];
 
-            // Delete position, dropping it from current user
-            deleteUserPosition(user, index);
+            // Compute mark price for option
+            uint256 spot = getSpot(order.option.underlying);
+            bytes32 smileHash = Derivative.hashForSmile(order.option.underlying, order.option.expiry);
+            uint256 markPrice = MarginMath.getMarkPriceFromOption(spot, order.option, volSmiles[smileHash]);
 
-            // Ovewrite user's position with msg.sender
-            if (order.buyer == user) {
-                order.buyer = msg.sender;
-            } else {
-                order.seller = msg.sender;
-            }
-
-            // Add order to new user's positions
-            userRoundIxs[msg.sender].push(order);
-
-            // Check liquidator can handle the new position, otherwise quit
-            (, bool liquidatorOk) = checkMargin(msg.sender);
-
-            if (!liquidatorOk) {
+            // Liquidator must pay user mark price
+            if (balances[liquidator] < markPrice) {
                 fullyLiquidated = false;
                 break;
             }
+            balances[liquidator] -= markPrice;
+            balances[user] += markPrice;
+
+            // Add order to new user's positions
+            userRoundIxs[liquidator].push(uint16(index));
+
+            // Check liquidator can handle the new position and the payment to liquidatee
+            (, bool liquidatorOk) = checkMargin(liquidator);
+
+            if (!liquidatorOk) {
+                // If the liquidator is now below margin, undo changes
+                /// @dev We don't just revert to allow liquidators to take one of many positions
+                delete userRoundIxs[liquidator][userRoundIxs[liquidator].length - 1];
+
+                // Undo adding the new position (last index)
+                fullyLiquidated = false;
+
+                // Undo changes to balances
+                balances[liquidator] += markPrice;
+                balances[user] -= markPrice;
+                break;
+            }
+
+            // If we have reached here, then the liquidator is able to inherit position
+            // Delete position, dropping it from current user
+            deleteUserPosition(user, index);
+
+            // Ovewrite user's position with liquidator
+            bool isSeller;
+            if (order.buyer == user) {
+                order.buyer = liquidator;
+            } else {
+                isSeller = true;
+                order.seller = liquidator;
+            }
+
+            // Now that user no longer owns position, we reward liquidator using MM from this 
+            // position (which cannot push user back below margin even if 100% of MM is gone).
+            // 25% of MM -> liquidator; 10% of MM -> insurance fund
+            uint256 margin = MarginMath.getMaintainenceMargin(spot, !isSeller, order.option, volSmiles[smileHash]);
+            balances[user] -= (margin * 35 / 100);
+            balances[liquidator] += (margin * 25 / 100);
+            balances[insurance] += (margin / 10);
 
             // Check if the user is no longer below margin, if so quit
             (, satisfied) = checkMargin(user);
-
             if (satisfied) {
                 break;
             }
@@ -431,7 +482,7 @@ contract ParetoV1Margin is
 
         for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
             // Fetch the order in the position
-            Derivative.Order memory order = roundPositions[curRound][userRoundIxs[user][i]];
+            Derivative.Order memory order = roundPositions[userRoundIxs[user][i]];
 
             // Fetch the underlying token for the option
             uint256 spot = getSpot(order.option.underlying);
@@ -465,7 +516,7 @@ contract ParetoV1Margin is
 
         // Loop through open positions by user
         for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
-            Derivative.Order memory order = roundPositions[curRound][userRoundIxs[user][i]];
+            Derivative.Order memory order = roundPositions[userRoundIxs[user][i]];
             Derivative.Option memory option = order.option;
             bytes32 optionHash = Derivative.hashOption(option);
             bytes32 smileHash = Derivative.hashForSmile(option.underlying, option.expiry);
@@ -490,7 +541,7 @@ contract ParetoV1Margin is
             // Nested loop to find the total quantity of this option.
             // Consider case with multiple positions with same order
             for (uint256 j = i + 1; j < userRoundIxs[user].length; j++) {
-                Derivative.Order memory order2 = roundPositions[curRound][userRoundIxs[user][j]];
+                Derivative.Order memory order2 = roundPositions[userRoundIxs[user][j]];
                 bytes32 optionHash2 = Derivative.hashOption(order2.option);
 
                 if (optionHash == optionHash2) {
@@ -569,15 +620,14 @@ contract ParetoV1Margin is
      * @param user Address of the user
      * @param index Index to delete
      */
-    function deleteUserPosition(address user, uint256 index) internal pure {
+    function deleteUserPosition(address user, uint256 index) internal {
         uint256 size = userRoundIxs[user].length;
         if (size > 1) {
             userRoundIxs[user][index] = userRoundIxs[user][size - 1];
         }
         // Implicitly recovers gas from last element storage
-        userRoundIxs[user].length--;
+        delete userRoundIxs[user][size - 1];
     }
-}
 
     /************************************************
      * Admin functions
@@ -619,7 +669,7 @@ contract ParetoV1Margin is
      * @param underlying Address for an underlying token
      * @param oracleFeed Address for an oracle price feed contract
      */
-    function setOracle(address underlying, address oracleFeed) external onlyKeeper {
+    function setOracle(address underlying, address oracleFeed) external onlyOwner {
         if (oracles[underlying] == address(0)) {
             // Brand new oracle
             newUnderlying(underlying, oracleFeed);
@@ -627,6 +677,15 @@ contract ParetoV1Margin is
             // Existing underlying, overwrite oracle
             oracles[underlying] = oracleFeed;
         }
+    }
+
+    /**
+     * @notice Set the maximum amount to be insured
+     */
+    function setMaxInsuredPerc(uint256 perc) external onlyOwner {
+        require(perc <= 100, "setMaxInsuredPerc: must be < 100");
+        maxInsuredPerc = perc;
+        emit MaxInsuredPercEvent(msg.sender, perc);
     }
 
     /**
@@ -646,7 +705,7 @@ contract ParetoV1Margin is
      * positions in the current round to clear memory. This list must be 
      * maintained using a off-chain mechanism
      */
-    function rollover(address[] roundUsers) external nonReentrant onlyKeeper {
+    function rollover(address[] calldata roundUsers) external nonReentrant onlyKeeper {
         require(!isPaused, "rollover: contract paused");
         require(activeExpiry < block.timestamp, "rollover: too early");
 
@@ -677,9 +736,10 @@ contract ParetoV1Margin is
             }
         }
 
-        // Clear positions for the user
+        // Clear positions for the user. It is up to the caller to maintain and provide 
+        // a correct list of user addresses, otherwise memory will not be freed properly
         for (uint256 i = 0; i < roundUsers.length; i++) {
-            delete userPositions[roundUsers[i]];
+            delete userRoundIxs[roundUsers[i]];
         }
     }
 
@@ -726,10 +786,10 @@ contract ParetoV1Margin is
         Derivative.updateSmile(getSpot(underlying), order, volSmiles[smileHash]);
 
         // Save position to mapping by expiry
-        roundPositions[curRound].push(order);
+        roundPositions.push(order);
 
         // Get the index for the newly added value
-        uint16 orderIndex = uint16(roundPositions[curRound].length - 1);
+        uint16 orderIndex = uint16(roundPositions.length - 1);
 
         // Save that the buyer/seller have this position
         userRoundIxs[buyer].push(orderIndex);
