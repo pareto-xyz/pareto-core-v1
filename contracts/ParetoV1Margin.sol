@@ -216,12 +216,13 @@ contract ParetoV1Margin is
     /**
      * @notice Withdraw assets from margin account
      * @dev Only successful if margin accounts remain satisfied post withdraw
+     * @dev Withdrawals are only allowed when user has no open positions
      * @param amount Amount to withdraw
      */
     function withdraw(uint256 amount) external nonReentrant {
         require(amount > 0, "withdraw: amount must be > 0");
         require(amount <= balances[msg.sender], "withdraw: amount > balance");
-        
+
         // Check margin post withdrawal
         (, bool satisfied) = checkMarginOnWithdrawal(msg.sender, amount);
         require(satisfied, "withdraw: margin check failed");
@@ -284,18 +285,38 @@ contract ParetoV1Margin is
     }
 
     /**
-     * @notice Part one of the settlement process. Transfers amount paid by ower
+     * @notice Performs netted settlement. Transfers amount paid by ower
      * to this contract. Adds amount owed to each user to their margin account
      * @dev This will do netting to reduce the number of transactions
      * @dev Anyone can call this though the burden falls on keepers
-     * @param round Round of orders to settle
      */
-    function settle(uint8 round) external nonReentrant {
+    function settle() external nonReentrant {
         uint256 roundExpiry = roundExpiries[round];
-        bytes32[] memory positions = expiryPositions[expiry];
+        bytes32[] memory positions = expiryPositions[roundExpiry];
+
         for (uint256 j = 0; j < positions.length; j++) {
             Derivative.Order memory order = orderHashs[positions[j]];
-        }
+            uint256 spot = getSpot(order.option.underlying);
+
+            // Compute buyer payoff; seller payoff is exact opposite
+            (uint256 buyerPayoff, bool buyerIsNeg) = MarginMath.getPayoff(order.buyer, spot, order);
+
+            // Add together the payoff and the premium
+            (uint256 netPayoff, bool netIsNeg) = NegativeMath.add(buyerPayoff, buyerIsNeg, order.tradePrice, true);
+
+            address ower = netIsNeg ? order.buyer : order.seller;
+            address owee = netIsNeg ? order.seller : order.buyer;
+
+            if (balances[ower] >= netPayoff) {
+                // If the ower has enough in the margin account, then make shift
+                balances[ower] -= netPayoff;
+                balances[owee] += netPayoff;
+            } else {
+                // Transfer what we can
+                balances[owee] += balances[ower];
+                balances[ower] = 0;
+            }
+        } 
     }
 
     /************************************************
@@ -629,6 +650,13 @@ contract ParetoV1Margin is
 
         // Save position to mapping by expiry
         expiryPositions[expiry].push(orderHash);
+
+        // Check margin for buyer and seller
+        (, bool checkBuyerMargin) = checkMargin(buyer);
+        (, bool checkSellerMargin) = checkMargin(seller);
+
+        require(checkBuyerMargin, "addPosition: buyer failed margin check");
+        require(checkSellerMargin, "addPosition: seller failed margin check");
 
         // Emit event 
         emit RecordPositionEvent(
