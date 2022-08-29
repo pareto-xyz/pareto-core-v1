@@ -360,7 +360,7 @@ contract ParetoV1Margin is
 
         for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
             uint256 index = userRoundIxs[user][i];
-            Derivative.Order storage order = roundPositions[curRound][index];
+            Derivative.Order storage order = roundPositions[index];
 
             // Delete position, dropping it from current user
             deleteUserPosition(user, index);
@@ -373,7 +373,7 @@ contract ParetoV1Margin is
             }
 
             // Add order to new user's positions
-            userRoundIxs[msg.sender].push(order);
+            userRoundIxs[msg.sender].push(uint16(index));
 
             // Check liquidator can handle the new position, otherwise quit
             (, bool liquidatorOk) = checkMargin(msg.sender);
@@ -431,7 +431,7 @@ contract ParetoV1Margin is
 
         for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
             // Fetch the order in the position
-            Derivative.Order memory order = roundPositions[curRound][userRoundIxs[user][i]];
+            Derivative.Order memory order = roundPositions[userRoundIxs[user][i]];
 
             // Fetch the underlying token for the option
             uint256 spot = getSpot(order.option.underlying);
@@ -465,7 +465,7 @@ contract ParetoV1Margin is
 
         // Loop through open positions by user
         for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
-            Derivative.Order memory order = roundPositions[curRound][userRoundIxs[user][i]];
+            Derivative.Order memory order = roundPositions[userRoundIxs[user][i]];
             Derivative.Option memory option = order.option;
             bytes32 optionHash = Derivative.hashOption(option);
             bytes32 smileHash = Derivative.hashForSmile(option.underlying, option.expiry);
@@ -490,7 +490,7 @@ contract ParetoV1Margin is
             // Nested loop to find the total quantity of this option.
             // Consider case with multiple positions with same order
             for (uint256 j = i + 1; j < userRoundIxs[user].length; j++) {
-                Derivative.Order memory order2 = roundPositions[curRound][userRoundIxs[user][j]];
+                Derivative.Order memory order2 = roundPositions[userRoundIxs[user][j]];
                 bytes32 optionHash2 = Derivative.hashOption(order2.option);
 
                 if (optionHash == optionHash2) {
@@ -569,15 +569,14 @@ contract ParetoV1Margin is
      * @param user Address of the user
      * @param index Index to delete
      */
-    function deleteUserPosition(address user, uint256 index) internal pure {
+    function deleteUserPosition(address user, uint256 index) internal {
         uint256 size = userRoundIxs[user].length;
         if (size > 1) {
             userRoundIxs[user][index] = userRoundIxs[user][size - 1];
         }
         // Implicitly recovers gas from last element storage
-        userRoundIxs[user].length--;
+        delete userRoundIxs[user][size - 1];
     }
-}
 
     /************************************************
      * Admin functions
@@ -646,7 +645,7 @@ contract ParetoV1Margin is
      * positions in the current round to clear memory. This list must be 
      * maintained using a off-chain mechanism
      */
-    function rollover(address[] roundUsers) external nonReentrant onlyKeeper {
+    function rollover(address[] calldata roundUsers) external nonReentrant onlyKeeper {
         require(!isPaused, "rollover: contract paused");
         require(activeExpiry < block.timestamp, "rollover: too early");
 
@@ -679,7 +678,7 @@ contract ParetoV1Margin is
 
         // Clear positions for the user
         for (uint256 i = 0; i < roundUsers.length; i++) {
-            delete userPositions[roundUsers[i]];
+            delete userRoundIxs[roundUsers[i]];
         }
     }
 
@@ -726,10 +725,10 @@ contract ParetoV1Margin is
         Derivative.updateSmile(getSpot(underlying), order, volSmiles[smileHash]);
 
         // Save position to mapping by expiry
-        roundPositions[curRound].push(order);
+        roundPositions.push(order);
 
         // Get the index for the newly added value
-        uint16 orderIndex = uint16(roundPositions[curRound].length - 1);
+        uint16 orderIndex = uint16(roundPositions.length - 1);
 
         // Save that the buyer/seller have this position
         userRoundIxs[buyer].push(orderIndex);
