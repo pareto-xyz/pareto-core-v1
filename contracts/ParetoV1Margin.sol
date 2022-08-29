@@ -43,7 +43,7 @@ contract ParetoV1Margin is
     address public usdc;
 
     /// @notice Address of the insurance fund
-    address public insuranceFund;
+    address public insurance;
 
     /// @notice Current round
     uint8 public curRound;
@@ -67,17 +67,14 @@ contract ParetoV1Margin is
     /// @notice Stores the amount of "cash" owned by users
     mapping(address => uint256) private balances;
 
-    /// @notice Store all positions in the map
-    mapping(uint16 => Derivative.Order[]) private roundPositions;
+    /// @notice Store all positions for the current round in the map
+    Derivative.Order[] private roundPositions;
 
-    /// @notice Stores map from user address to index into `roundPositions`
+    /// @notice Stores map from user address to index into the current round positions
     mapping(address => uint16[]) private userRoundIxs;
 
     /// @notice Store volatility smiles per hash(expiry,underlying)
     mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
-
-    /// @notice Stores expiries for each round
-    mapping(uint8 => uint256) private roundExpiries;
 
     /************************************************
      * Initialization and Upgradeability
@@ -85,13 +82,13 @@ contract ParetoV1Margin is
 
     /**
      * @param usdc_ Address for the USDC token (e.g. cash)
-     * @param insuranceFund_ Address for the insurance fund
+     * @param insurance_ Address for the insurance fund
      * @param underlying_ Address of underlying token to support at deployment
      * @param oracle_ Address of oracle for the underlying
      */
     function initialize(
         address usdc_,
-        address insuranceFund_,
+        address insurance_,
         address underlying_,
         address oracle_
     )
@@ -99,7 +96,7 @@ contract ParetoV1Margin is
         initializer 
     {
         usdc = usdc_;
-        insuranceFund = insuranceFund_;
+        insurance = insurance_;
 
         // Initialize the upgradeable dependencies
         __ReentrancyGuard_init();
@@ -111,7 +108,6 @@ contract ParetoV1Margin is
         // Initialize state variables
         curRound = 1;
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
-        roundExpiries[curRound] = activeExpiry;
         newUnderlying(underlying_, oracle_);
     }
 
@@ -299,14 +295,13 @@ contract ParetoV1Margin is
      * @notice Performs settlement for positions of the current round. Transfers amount paid by ower
      * to this contract. Adds amount owed to each user to their margin account
      * @dev Anyone can call this though the burden falls on keepers
-     * @param round Settle positions of this round
+     * @dev This must be called before `rollover` or else positions are lost
      */
-    function settle(uint8 round) external nonReentrant {
-        uint256 roundExpiry = roundExpiries[round];
-        require(roundExpiry <= block.timestamp, "settle: expiry must be in the past");
+    function settle() external nonReentrant {
+        require(activeExpiry <= block.timestamp, "settle: expiry must be in the past");
 
-        for (uint256 j = 0; j < roundPositions[round].length; j++) {
-            Derivative.Order memory order = roundPositions[round][j];
+        for (uint256 j = 0; j < roundPositions.length; j++) {
+            Derivative.Order memory order = roundPositions[j];
             uint256 spot = getSpot(order.option.underlying);
 
             // Compute buyer payoff; seller payoff is exact opposite
@@ -328,9 +323,9 @@ contract ParetoV1Margin is
                 uint256 partialAmount = balances[ower];
                 uint256 remainAmount = netPayoff - partialAmount;
 
-                if (balances[insuranceFund] >= remainAmount) {
+                if (balances[insurance] >= remainAmount) {
                     balances[owee] += netPayoff;
-                    balances[insuranceFund] -= remainAmount;
+                    balances[insurance] -= remainAmount;
                     balances[ower] = 0;
                 } else {
                     // Do the best we can
@@ -341,10 +336,10 @@ contract ParetoV1Margin is
         }
 
         // Free up memory for the round
-        delete roundPositions[round];
+        delete roundPositions;
 
         // Emit event
-        emit SettlementEvent(msg.sender, round, roundPositions[round].length);
+        emit SettlementEvent(msg.sender, curRound, roundPositions.length);
     }
 
     /**
@@ -388,7 +383,7 @@ contract ParetoV1Margin is
                 break;
             }
 
-            // Check if the user is no longer below margin, otherwise quit
+            // Check if the user is no longer below margin, if so quit
             (, satisfied) = checkMargin(user);
 
             if (satisfied) {
@@ -646,9 +641,12 @@ contract ParetoV1Margin is
     }
 
     /**
-     * @notice Ends the current expiry and turns on next expiry
+     * @notice Ends the current expiry and activates next expiry
+     * @dev The keeper/owner is responsible for passing a list of users with 
+     * positions in the current round to clear memory. This list must be 
+     * maintained using a off-chain mechanism
      */
-    function rollover() external nonReentrant onlyKeeper {
+    function rollover(address[] roundUsers) external nonReentrant onlyKeeper {
         require(!isPaused, "rollover: contract paused");
         require(activeExpiry < block.timestamp, "rollover: too early");
 
@@ -658,9 +656,6 @@ contract ParetoV1Margin is
 
         // Update round
         curRound += 1;
-
-        // Stores the expiry for round
-        roundExpiries[curRound] = activeExpiry;
 
         // Update smiles for each underlying token
         for (uint256 i = 0; i < underlyings.length; i++) {
@@ -680,6 +675,11 @@ contract ParetoV1Margin is
                 // Here, create a new uniform (uninformed) smile 
                 volSmiles[smileHash] = Derivative.createSmile();
             }
+        }
+
+        // Clear positions for the user
+        for (uint256 i = 0; i < roundUsers.length; i++) {
+            delete userPositions[roundUsers[i]];
         }
     }
 
@@ -720,7 +720,6 @@ contract ParetoV1Margin is
 
         // Hash together the underlying and expiry
         bytes32 smileHash = Derivative.hashForSmile(underlying, activeExpiry);
-
         require(volSmiles[smileHash].exists_, "addPosition: missing smile");
 
         // Update the smile with order information
