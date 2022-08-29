@@ -360,6 +360,7 @@ contract ParetoV1Margin is
         require(!satisfied, "liquidate: user passes margin check");
         require(userRoundIxs[user].length > 0, "liquidate: user has no positions");
 
+        // Default is to assume user can be fully liquidated
         fullyLiquidated = true;
 
         for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
@@ -387,7 +388,7 @@ contract ParetoV1Margin is
                 break;
             }
 
-            // Check if the user is no longer below margin
+            // Check if the user is no longer below margin, otherwise quit
             (, satisfied) = checkMargin(user);
 
             if (satisfied) {
