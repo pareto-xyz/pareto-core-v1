@@ -33,14 +33,12 @@ library Derivative {
 
     /**
      * @notice A matched order from the Pareto orderbook
-     * @param orderId Identifier of the unique order (like a nonce)
      * @param buyer Address of the buyer; the short position
      * @param seller Address of the seller; the long position
      * @param tradePrice Price of the actual order. Distinct from mark price
      * @param quantity Amount within the order
      */
     struct Order {
-        string orderId;
         address buyer;
         address seller;
         uint256 tradePrice;
@@ -261,7 +259,6 @@ library Derivative {
         returns (bytes32 hash_) 
     {
         hash_ = keccak256(abi.encodePacked(
-            order.orderId,
             order.buyer,
             order.seller,
             order.tradePrice,

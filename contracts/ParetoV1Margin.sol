@@ -67,14 +67,11 @@ contract ParetoV1Margin is
     /// @notice Stores the amount of "cash" owned by users
     mapping(address => uint256) private balances;
 
-    /// @notice Stores hashes of open positions for every user
-    mapping(address => bytes32[]) private userPositions;
+    /// @notice Store all positions in the map
+    mapping(uint16 => Derivative.Order[]) private roundPositions;
 
-    /// @notice Stores mapping from expiry into positions
-    mapping(uint256 => bytes32[]) private expiryPositions;
-
-    /// @notice Stores hash to derivative order
-    mapping(bytes32 => Derivative.Order) private orderHashs;
+    /// @notice Stores map from user address to index into `roundPositions`
+    mapping(address => uint16[]) private userPositions;
 
     /// @notice Store volatility smiles per hash(expiry,underlying)
     mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
@@ -152,7 +149,6 @@ contract ParetoV1Margin is
      * @dev See `Derivative.Order` docs
      */
     event RecordPositionEvent(
-        string indexed orderId,
         uint256 tradePrice,
         uint256 quantity,
         Derivative.OptionType optionType,
@@ -202,6 +198,13 @@ contract ParetoV1Margin is
         uint8 round,
         uint256 numPositions
     );
+
+    /**
+     * @notice Pause or unpaused
+     * @param owner Address who called the pause event
+     * @param paused Is the contract paused?
+     */
+    event TogglePauseEvent(address indexed owner, bool paused);
 
     /************************************************
      * External functions
@@ -301,10 +304,9 @@ contract ParetoV1Margin is
     function settle(uint8 round) external nonReentrant {
         uint256 roundExpiry = roundExpiries[round];
         require(roundExpiry <= block.timestamp, "settle: expiry must be in the past");
-        bytes32[] memory positions = expiryPositions[roundExpiry];
 
-        for (uint256 j = 0; j < positions.length; j++) {
-            Derivative.Order memory order = orderHashs[positions[j]];
+        for (uint256 j = 0; j < roundPositions[round].length; j++) {
+            Derivative.Order memory order = roundPositions[round][j];
             uint256 spot = getSpot(order.option.underlying);
 
             // Compute buyer payoff; seller payoff is exact opposite
@@ -338,8 +340,61 @@ contract ParetoV1Margin is
             }
         }
 
+        // Free up memory for the round
+        delete roundPositions[round];
+
         // Emit event
-        emit SettlementEvent(msg.sender, round, positions.length);
+        emit SettlementEvent(msg.sender, round, roundPositions[round].length);
+    }
+
+    /**
+     * @notice Performs partial liquidation on user. Liquidates the user's 
+     * positions one by one until margin check succeeds
+     * @dev Any EOA can call this on any EOA
+     * @param user Address of the user to liquidate
+     * @return fullyLiquidated if true, user is fully liquidated
+     * TODO: sort positions by some metric
+     */
+    function liquidate(address user) external nonReentrant returns (bool fullyLiquidated) {
+        (, bool satisfied) = checkMargin(user);
+        require(!satisfied, "liquidate: user passes margin check");
+        require(userPositions[user].length > 0, "liquidate: user has no positions");
+
+        fullyLiquidated = true;
+
+        for (uint256 i = 0; i < userPositions[user].length; i++) {
+            uint256 index = userPositions[user][i];
+            Derivative.Order storage order = roundPositions[curRound][index];
+
+            // Delete position, dropping it from current user
+            deleteUserPosition(user, index);
+
+            // Ovewrite user's position with msg.sender
+            if (order.buyer == user) {
+                order.buyer = msg.sender;
+            } else {
+                order.seller = msg.sender;
+            }
+
+            // Add order to new user's positions
+            userPositions[msg.sender].push(order);
+
+            // Check liquidator can handle the new position, otherwise quit
+            (, bool liquidatorOk) = checkMargin(msg.sender);
+
+            if (!liquidatorOk) {
+                fullyLiquidated = false;
+                break;
+            }
+
+            // Check if the user is no longer below margin
+            (, satisfied) = checkMargin(user);
+
+            if (satisfied) {
+                break;
+            }
+        }
+        return fullyLiquidated;
     }
 
     /************************************************
@@ -371,17 +426,16 @@ contract ParetoV1Margin is
         view
         returns (uint256, bool) 
     {
-        bytes32[] memory positions = userPositions[user];
-        if (positions.length == 0) {
+        if (userPositions[user].length == 0) {
             return (0, false);
         }
 
         uint256 payoff;
         bool isNegative;
 
-        for (uint256 i = 0; i < positions.length; i++) {
+        for (uint256 i = 0; i < userPositions[user].length; i++) {
             // Fetch the order in the position
-            Derivative.Order memory order = orderHashs[positions[i]];
+            Derivative.Order memory order = roundPositions[curRound][userPositions[user][i]];
 
             // Fetch the underlying token for the option
             uint256 spot = getSpot(order.option.underlying);
@@ -406,8 +460,7 @@ contract ParetoV1Margin is
      * @return margin The maintainence margin summed for all positions
      */
     function getMaintainenceMargin(address user) internal view returns (uint256) {
-        bytes32[] memory positions = userPositions[user];
-        if (positions.length == 0) {
+        if (userPositions[user].length == 0) {
             return 0;
         }
 
@@ -415,8 +468,8 @@ contract ParetoV1Margin is
         uint256 margin;
 
         // Loop through open positions by user
-        for (uint256 i = 0; i < positions.length; i++) {
-            Derivative.Order memory order = orderHashs[positions[i]];
+        for (uint256 i = 0; i < userPositions[user].length; i++) {
+            Derivative.Order memory order = roundPositions[curRound][userPositions[user][i]];
             Derivative.Option memory option = order.option;
             bytes32 optionHash = Derivative.hashOption(option);
             bytes32 smileHash = Derivative.hashForSmile(option.underlying, option.expiry);
@@ -440,8 +493,8 @@ contract ParetoV1Margin is
 
             // Nested loop to find the total quantity of this option.
             // Consider case with multiple positions with same order
-            for (uint256 j = i + 1; j < positions.length; j++) {
-                Derivative.Order memory order2 = orderHashs[positions[j]];
+            for (uint256 j = i + 1; j < userPositions[user].length; j++) {
+                Derivative.Order memory order2 = roundPositions[curRound][userPositions[user][j]];
                 bytes32 optionHash2 = Derivative.hashOption(order2.option);
 
                 if (optionHash == optionHash2) {
@@ -515,6 +568,21 @@ contract ParetoV1Margin is
         oracles[underlying] = oracleFeed;
     }
 
+    /**
+     * @notice Delete one of the user's position
+     * @param user Address of the user
+     * @param index Index to delete
+     */
+    function deleteUserPosition(address user, uint256 index) internal pure {
+        uint256 size = userPositions[user].length;
+        if (size > 1) {
+            userPositions[user][index] = userPositions[user][size - 1];
+        }
+        // Implicitly recovers gas from last element storage
+        userPositions[user].length--;
+    }
+}
+
     /************************************************
      * Admin functions
      ***********************************************/
@@ -571,14 +639,17 @@ contract ParetoV1Margin is
      */
     function togglePause() external onlyOwner {
         isPaused = !isPaused;
+
+        // emit event
+        emit TogglePauseEvent(msg.sender, isPaused);
     }
 
     /**
      * @notice Ends the current expiry and turns on next expiry
      */
-    function transition() external nonReentrant onlyKeeper {
-        require(!isPaused, "transition: contract paused");
-        require(activeExpiry < block.timestamp, "transition: too early");
+    function rollover() external nonReentrant onlyKeeper {
+        require(!isPaused, "rollover: contract paused");
+        require(activeExpiry < block.timestamp, "rollover: too early");
 
         // Update the active expiry
         uint256 lastExpiry = activeExpiry;
@@ -615,9 +686,10 @@ contract ParetoV1Margin is
      * @notice Record a position (matched order) from off-chain orderbook
      * @dev Saves the order to storage variables. Only the keeper can call this function
      * @dev An oracle must exist for the underlying position for it to be added
+     * @dev This function does not explicitly check that the same position is not added
+     * twice. This is hard to do efficiently on-chain and will be done off-chain
      */
     function addPosition(
-        string memory orderId,
         address buyer,
         address seller,
         uint256 tradePrice,
@@ -630,7 +702,6 @@ contract ParetoV1Margin is
         nonReentrant
         onlyKeeper 
     {
-        require(bytes(orderId).length > 0, "addPosition: bookId is empty");
         require(tradePrice > 0, "addPosition: tradePrice must be > 0");
         require(quantity > 0, "addPosition: quantity must be > 0");
         require(underlying != address(0), "addPosition: underlying is empty");
@@ -639,37 +710,30 @@ contract ParetoV1Margin is
 
         uint8 decimals = IERC20(underlying).decimals();
         Derivative.Order memory order = Derivative.Order(
-            orderId,
             buyer,
             seller,
             tradePrice,
             quantity,
             Derivative.Option(optionType, strike, activeExpiry, underlying, decimals)
         );
-        bytes32 orderHash = Derivative.hashOrder(order);
 
         // Hash together the underlying and expiry
         bytes32 smileHash = Derivative.hashForSmile(underlying, activeExpiry);
-
-        require(
-            bytes(orderHashs[orderHash].orderId).length == 0,
-            "addPosition: orderId already exists"
-        );
 
         require(volSmiles[smileHash].exists_, "addPosition: missing smile");
 
         // Update the smile with order information
         Derivative.updateSmile(getSpot(underlying), order, volSmiles[smileHash]);
 
-        // Save the order object
-        orderHashs[orderHash] = order;
+        // Save position to mapping by expiry
+        roundPositions[curRound].push(order);
+
+        // Get the index for the newly added value
+        uint16 orderIndex = uint16(roundPositions[curRound].length - 1);
 
         // Save that the buyer/seller have this position
-        userPositions[buyer].push(orderHash);
-        userPositions[seller].push(orderHash);
-
-        // Save position to mapping by expiry
-        expiryPositions[expiry].push(orderHash);
+        userPositions[buyer].push(orderIndex);
+        userPositions[seller].push(orderIndex);
 
         // Check margin for buyer and seller
         (, bool checkBuyerMargin) = checkMargin(buyer);
@@ -680,7 +744,6 @@ contract ParetoV1Margin is
 
         // Emit event 
         emit RecordPositionEvent(
-            orderId,
             tradePrice,
             quantity,
             optionType,
