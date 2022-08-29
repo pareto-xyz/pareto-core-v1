@@ -64,7 +64,6 @@ describe("Derivative Library", () => {
       // Use black scholes to estimate a reasonable price
       const tradePrice = checkCallPrice(1, 1.1, 0.5, ONE_WEEK, 0);
       const order = {
-        orderId: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: toBn(tradePrice.toString(), 18),
@@ -89,7 +88,6 @@ describe("Derivative Library", () => {
     it("can hash an order", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order = {
-        orderId: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(11).div(100),
@@ -107,7 +105,6 @@ describe("Derivative Library", () => {
     it("identical orders hash the same", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order1 = {
-        orderId: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(11).div(100),
@@ -121,7 +118,6 @@ describe("Derivative Library", () => {
         }
       };
       const order2 = {
-        orderId: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(11).div(100),
@@ -141,7 +137,6 @@ describe("Derivative Library", () => {
     it("two different orders hash different", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order1 = {
-        orderId: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(11).div(100),
@@ -155,7 +150,6 @@ describe("Derivative Library", () => {
         }
       };
       const order2 = {
-        orderId: "test2",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(11).div(100),
