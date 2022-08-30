@@ -1,5 +1,4 @@
 import { ethers } from "hardhat";
-import { BigNumber } from "ethers";
 import { Contract } from "ethers";
 import { expect } from "chai";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
