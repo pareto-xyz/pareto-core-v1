@@ -36,7 +36,7 @@ describe("PriceFeed Library", () => {
   });
   it("user cannot set latest answer", async () => {
     await expect(
-        priceFeed.connect(user).setLatestAnswer(ONE_ETH)
+      priceFeed.connect(user).setLatestAnswer(ONE_ETH)
     ).to.be.revertedWith("onlyAdmin: caller is not an admin");
   });
   it("owner can add admin", async () => {
@@ -49,7 +49,7 @@ describe("PriceFeed Library", () => {
   });
   it("admin cannot add admin", async () => {
     await expect(
-        priceFeed.connect(admin).setAdmin(user.address, true)
+      priceFeed.connect(admin).setAdmin(user.address, true)
     ).to.be.reverted;
   });
   it("can get latest answer", async () => {
