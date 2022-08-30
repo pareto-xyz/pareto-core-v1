@@ -308,12 +308,13 @@ contract ParetoV1Margin is
      * MM = maintainence margin on open positions
      * @dev If the margin check fails, then the user margin account can be liquidated
      * @param user Address of the account to check
+     * @param useInitialMargin Use IM instead of MM. Recall IM > MM
      * @return diff |AB + UP - MM|, always positive
      * @return satisfied True if AB + UP > MM, else false
      */
-    function checkMargin(address user) public view returns (uint256, bool) {
+    function checkMargin(address user, bool useInitialMargin) public view returns (uint256, bool) {
         uint256 balance = balances[user];
-        uint256 maintainence = getMaintainenceMargin(user);
+        uint256 maintainence = computeMargin(user, useInitialMargin);
 
         // Compute the unrealized PnL (actually this is only unrealized losses)
         (uint256 pnl, bool pnlIsNeg) = getPayoff(user, true);
@@ -394,7 +395,7 @@ contract ParetoV1Margin is
      * @return fullyLiquidated if true, user is fully liquidated
      */
     function liquidate(address user) external nonReentrant returns (bool fullyLiquidated) {
-        (, bool satisfied) = checkMargin(user);
+        (, bool satisfied) = checkMargin(user, false);
         require(!satisfied, "liquidate: user passes margin check");
         require(userRoundIxs[user].length > 0, "liquidate: user has no positions");
 
@@ -424,7 +425,7 @@ contract ParetoV1Margin is
             userRoundIxs[liquidator].push(uint16(index));
 
             // Check liquidator can handle the new position and the payment to liquidatee
-            (, bool liquidatorOk) = checkMargin(liquidator);
+            (, bool liquidatorOk) = checkMargin(liquidator, false);
 
             if (!liquidatorOk) {
                 // If the liquidator is now below margin, undo changes
@@ -462,7 +463,7 @@ contract ParetoV1Margin is
             balances[insurance] += (margin / 10);
 
             // Check if the user is no longer below margin, if so quit
-            (, satisfied) = checkMargin(user);
+            (, satisfied) = checkMargin(user, false);
             if (satisfied) {
                 break;
             }
@@ -584,9 +585,10 @@ contract ParetoV1Margin is
      * @notice Compute the maintainence margin for all positions owned by user
      * @dev The maintainence margin is equal to the sum of maintainence margins for all positions
      * @param user Address to compute MM for
+     * @param useInitialMargin By default, computes MM; if true, compute IM
      * @return margin The maintainence margin summed for all positions
      */
-    function getMaintainenceMargin(address user) internal view returns (uint256) {
+    function computeMargin(address user, bool useInitialMargin) internal view returns (uint256) {
         if (userRoundIxs[user].length == 0) {
             return 0;
         }
@@ -608,7 +610,7 @@ contract ParetoV1Margin is
 
             require(
                 (user == order.buyer) || (user == order.seller),
-                "getInitialMargin: trader must be buyer or seller"
+                "computeMargin: trader must be buyer or seller"
             );
 
             // Check if the user is a buyer or seller for `order`
@@ -639,13 +641,18 @@ contract ParetoV1Margin is
             if (nettedQuantity > 0) {
                 // Fetch smile and check it is valid
                 Derivative.VolatilitySmile memory smile = volSmiles[smileHash];
-                require(smile.exists_, "getMaintainenceMargin: found unknown option");
+                require(smile.exists_, "computeMargin: found unknown option");
 
                 // Fetch spot price
                 uint256 spot = getSpot(option.underlying);
 
-                // Compute maintainence margin for option
-                uint256 maintainence = MarginMath.getMaintainenceMargin(spot, !isSeller, option, smile);
+                // Compute maintainence (or initial) margin for option
+                uint256 maintainence;
+                if (useInitialMargin) {
+                    maintainence = MarginMath.getInitialMargin(spot, !isSeller, option, smile);
+                } else {
+                    maintainence = MarginMath.getMaintainenceMargin(spot, !isSeller, option, smile);
+                }
 
                 // Build margin using `nettedQuantity`
                 margin += (nettedQuantity * maintainence);
@@ -673,7 +680,7 @@ contract ParetoV1Margin is
         require(amount < balances[user], "checkMarginOnWithdrawal: amount must be < balance");
 
         // Perform standard margin check
-        (uint256 margin, bool satisfied) = checkMargin(user);
+        (uint256 margin, bool satisfied) = checkMargin(user, false);
 
         // `satisfied = true` => `isNegative = false`, vice versa
         bool isMarginNeg = !satisfied;
@@ -891,8 +898,8 @@ contract ParetoV1Margin is
         userRoundIxs[seller].push(orderIndex);
 
         // Check margin for buyer and seller
-        (, bool checkBuyerMargin) = checkMargin(buyer);
-        (, bool checkSellerMargin) = checkMargin(seller);
+        (, bool checkBuyerMargin) = checkMargin(buyer, false);
+        (, bool checkSellerMargin) = checkMargin(seller, false);
 
         require(checkBuyerMargin, "addPosition: buyer failed margin check");
         require(checkSellerMargin, "addPosition: seller failed margin check");
