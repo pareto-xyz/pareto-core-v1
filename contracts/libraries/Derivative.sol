@@ -6,8 +6,6 @@ import "./BasicMath.sol";
 import "./NegativeMath.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
 
-import "hardhat/console.sol";
-
 /**
  * @notice Contains enums and structs representing Pareto derivatives
  */
