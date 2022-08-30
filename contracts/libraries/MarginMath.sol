@@ -27,7 +27,7 @@ library MarginMath {
         Derivative.Option memory option,
         Derivative.VolatilitySmile memory smile
     )
-        public
+        internal
         view
         returns (uint256 markPrice)
     {
@@ -59,7 +59,7 @@ library MarginMath {
         Derivative.Option memory option,
         Derivative.VolatilitySmile memory smile
     ) 
-        external
+        internal
         view
         returns (uint256 margin) 
     {
@@ -118,7 +118,7 @@ library MarginMath {
         uint256 spot,
         Derivative.Order memory order
     ) 
-        external
+        internal
         pure
         returns (uint256 payoff, bool isNegative) 
     {

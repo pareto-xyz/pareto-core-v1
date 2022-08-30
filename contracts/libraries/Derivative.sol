@@ -84,7 +84,7 @@ library Derivative {
      * incorrect but will be updated as orders progress
      * @return smile A volatility smile
      */
-    function createSmile() external pure returns (VolatilitySmile memory smile) {
+    function createSmile() internal pure returns (VolatilitySmile memory smile) {
         for (uint256 i = 0; i < 5; i++) {
             smile.sigmaAtMoneyness[i] = 5000;  // 4 decimals
         }
@@ -101,7 +101,7 @@ library Derivative {
      * @param order Order object
      * @param smile Current volatility smile stored on-chain
      */
-    function updateSmile(uint256 spot, Order memory order, VolatilitySmile storage smile) external {
+    function updateSmile(uint256 spot, Order memory order, VolatilitySmile storage smile) internal {
         Option memory option = order.option;
         require(option.expiry >= block.timestamp, "createSmile: option expired");
 
@@ -158,7 +158,7 @@ library Derivative {
      * @param decimals Decimals for spot/strike price
      */
     function querySmile(uint256 spot, uint256 strike, VolatilitySmile storage smile, uint8 decimals) 
-        external
+        internal
         view
         returns (uint256 sigma)
     {
@@ -246,7 +246,7 @@ library Derivative {
         uint256 sigma,
         uint256 tau
     ) 
-        public
+        internal
         pure
         returns (uint256 price) 
     {   
@@ -273,7 +273,7 @@ library Derivative {
      * @param hash_ SHA-3 hash of the Order object
      */
     function hashOrder(Order memory order)
-        public
+        internal
         pure
         returns (bytes32 hash_) 
     {
@@ -292,7 +292,7 @@ library Derivative {
      * @param hash_ SHA-3 hash of the Option object
      */
     function hashOption(Option memory option)
-        public
+        internal
         pure
         returns (bytes32 hash_)
     {
@@ -312,7 +312,7 @@ library Derivative {
      * @param hash_ SHA-3 hash of the Option object
      */
     function hashForSmile(address underlying, uint256 expiry)
-        public
+        internal
         pure
         returns (bytes32 hash_)
     {

@@ -38,4 +38,15 @@ contract TestGaussianMath {
         int128 probX64 = GaussianMath.getCDF(inputX64);
         prob = Units.scaleFromX64(probX64, scaleFactor);
     }
+
+    function getInverseCDF(uint256 p, uint8 decimals) 
+        external
+        pure
+        returns (uint256 x) 
+    {
+        uint256 scaleFactor = 10**(18 - decimals);
+        int128 pX64 = Units.scaleToX64(p, scaleFactor);
+        int128 xX64 = GaussianMath.getInverseCDF(pX64);
+        x = Units.scaleFromX64(xX64, scaleFactor);
+    }
 }

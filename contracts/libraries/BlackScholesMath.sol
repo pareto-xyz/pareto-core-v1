@@ -223,7 +223,7 @@ library BlackScholesMath {
      * @return price Black Scholes price of call
      */
     function getPrice(PriceCalculationInput memory inputs) 
-        external
+        internal
         pure 
         returns (uint256 price)
     {
@@ -307,7 +307,7 @@ library BlackScholesMath {
         VolCalculationInput memory inputs,
         uint256 maxIter
     ) 
-        external
+        internal
         pure
         returns (uint256 sigma) 
     {
@@ -379,7 +379,7 @@ library BlackScholesMath {
         VolCalculationInput memory inputs,
         uint256 maxIter
     ) 
-        external
+        internal
         pure
         returns (uint256 sigma) 
     {
@@ -456,7 +456,7 @@ library BlackScholesMath {
      * @return vega The greek vega
      */
     function getVega(PriceCalculationInput memory inputs) 
-        external
+        internal
         pure
         returns (uint256 vega) 
     {

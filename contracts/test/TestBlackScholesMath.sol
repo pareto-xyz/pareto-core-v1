@@ -157,4 +157,29 @@ contract TestBlackScholesMath {
             );
         return BlackScholesMath.getVega(inputs);
     }
+
+
+    function getStrikeFromDelta(
+        uint256 delta,
+        uint256 spot,
+        uint256 sigma,
+        uint256 tau,
+        uint256 rate,
+        uint256 scaleFactor
+    )
+        external
+        pure
+        returns (uint256 strike)
+    {
+        BlackScholesMath.StrikeCalculationInput memory inputs = 
+            BlackScholesMath.StrikeCalculationInput(
+                delta,
+                spot,
+                sigma,
+                tau,
+                rate,
+                scaleFactor
+            );
+        return BlackScholesMath.getStrikeFromDelta(inputs);
+    }
 }
