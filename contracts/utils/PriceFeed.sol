@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 /**
  * @notice Since chainlink updates too slowly, we opt to use a custom oracle.
  * The median price of Binance, FTX and Bitfinex is posted.
+ * @dev This does not store past round data
  */
 contract PriceFeed is IOracle, Ownable {
     int256 public answer;
@@ -64,11 +65,7 @@ contract PriceFeed is IOracle, Ownable {
     }
 
     /**
-     * @return roundId The round ID
-     * @return answer The price
-     * @return startedAt Timestamp of when the round started
-     * @return updatedAt Timestamp of when the round was updated
-     * @return answeredInRound: The round ID of the round in which the answer was computed
+     * @notice See `interfaces/IOracle.sol`
      */
     function latestRoundData()
         external
