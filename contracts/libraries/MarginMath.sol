@@ -81,27 +81,102 @@ library MarginMath {
         // Case 2: short call position 
         // max((10% - OTM Amount/spot)*spot, 8% * spot) 
         } else if (isCall(option)) {
+            // max((10% - OTM Amount/spot)*spot, 8% * spot)
+            // max(10% spot - OTM Amount, 8% * spot)
+            // max(0.1 * spot - OTM Amount, 0.08 * spot)
+            // max(0.1 * spot - OTM Amount, 0.08 * spot) * 100 / 100
+            // max((0.1 * spot - OTM Amount) * 100, 0.08 * spot * 100) / 100
+            // max((10 * spot - 100 * OTM Amount), 8 * spot) / 100
             (uint256 otmAmount, bool isNegative) = option.strike.absdiff(spot);
-            uint256 spot100SubOTM = isNegative ? (100 * spot + otmAmount) : (100 * spot - otmAmount);
-            uint256 spot80 = 80 * spot;
+            uint256 spot100SubOTM = isNegative ? (10 * spot + 100 * otmAmount) : (10 * spot - 100 * otmAmount);
+            uint256 spot80 = 8 * spot;
 
-            // max((10% - OTM Amount/spot)*spot, 8% * spot) 
-            margin = spot100SubOTM.max(spot80) / 1000;
+            margin = spot100SubOTM.max(spot80) / 100;
 
         // Case 3: short put position
-        // min(max((10% - OTM Amount/spot)*spot, 12.5% * spot), 50% of strike)
+        // min(max((10% - OTM Amount/spot)*spot, 8% * spot), 50% of strike)
         } else {
-            // Compute max((10% - OTM Amount/spot)*spot, 12.5% * spot)
+            // max((10% - OTM Amount/spot)*spot, 8% * spot)
+            // max(10% spot - OTM Amount, 8% * spot)
+            // max(0.1 * spot - OTM Amount, 0.08 * spot)
+            // max(0.1 * spot - OTM Amount, 0.08 * spot) * 100 / 100
+            // max((0.1 * spot - OTM Amount) * 100, 0.08 * spot * 100) / 100
+            // max((10 * spot - 100 * OTM Amount), 8 * spot) / 100
             (uint256 otmAmount, bool isNegative) = option.strike.absdiff(spot);
-            uint256 spot100SubOTM = isNegative ? (100 * spot + otmAmount) : (100 * spot - otmAmount);
-            uint256 spot80 = 80 * spot;
+            uint256 spot100SubOTM = isNegative ? (10 * spot + 100 * otmAmount) : (10 * spot - 100 * otmAmount);
+            uint256 spot80 = 8 * spot;
 
-            // Compute max but don't divide by 1000 yet
+            // Compute max but don't divide by 100 yet
             uint256 maxChoice = spot100SubOTM.max(spot80);
 
-            // Compute min(maxChoice, 50% of strike)
-            uint256 halfStrike = 500 * option.strike;
-            margin = maxChoice.min(halfStrike) / 1000;
+            // min(maxChoice, 50% of strike * 100) / 100
+            // min(maxChoice, 0.5 * strike * 100) / 100
+            // min(maxChoice, 50 * strike) / 100
+            margin = maxChoice.min(50 * option.strike) / 100;
+        }
+    }
+
+    /**
+     * @notice Compute initial margin for a single unit of underlying
+     * @dev This is typically used for unmatched orders, which never make it on chain
+     * but we may use it as a more aggressive margin off-chain
+     * @dev Almost a clone of `getMaintainenceMargin`
+     */
+    function getInitialMargin(
+        uint256 spot,
+        bool isBuyer,
+        Derivative.Option memory option,
+        Derivative.VolatilitySmile memory smile
+    )
+        internal
+        view
+        returns (uint256 margin) 
+    {
+        // Case 1: long position
+        // min(100% of mark price, 10% of spot)
+        if (isBuyer) {
+            uint256 markPrice = getMarkPriceFromOption(spot, option, smile);
+
+            // min(100% of mark price, 10% of spot)
+            // = min(mark price, 0.1 * spot)
+            // = min(10 * mark price, spot) / 10
+            margin = (spot).min(markPrice * 10) / 10;
+        
+        // Case 2: short call position 
+        // max((20% - OTM Amount/spot)*spot, 12.5% * spot)
+        } else if (isCall(option)) {
+            // max((20% - OTM Amount/spot)*spot, 12.5% * spot)
+            // max((20% spot - OTM Amount), 12.5% * spot)
+            // max((0.2 * spot - OTM Amount), 0.125 * spot)
+            // max((0.2 * spot - OTM Amount), 0.125 * spot) * 1000 / 1000
+            // max((0.2 * spot - OTM Amount) * 1000, 0.125 * spot * 1000) / 1000
+            // max((200 * spot - 1000 * OTM Amount), 125 * spot) / 1000
+            (uint256 otmAmount, bool isNegative) = option.strike.absdiff(spot);
+            uint256 spot200SubOTM = isNegative ? (200 * spot + 1000 * otmAmount) : (200 * spot - 1000 * otmAmount);
+            uint256 spot125 = 125 * spot;
+
+            margin = spot200SubOTM.max(spot125) / 1000;
+
+        // Case 3: short put position
+        // min(max((20% - OTM Amount/spot)*spot, 12.5% * spot), 50% of strike)
+        } else {
+            // max((20% - OTM Amount/spot)*spot, 12.5% * spot)
+            // max(20% spot - OTM Amount, 12.5% * spot)
+            // max(0.2 * spot - OTM Amount, 0.125 * spot)
+            // max(0.2 * spot - OTM Amount, 0.125 * spot) * 1000 / 1000
+            // max((0.2 * spot - OTM Amount) * 1000, 0.125 * spot * 1000) / 1000
+            // max((200 * spot - 1000 * OTM Amount), 125 * spot) / 1000
+            (uint256 otmAmount, bool isNegative) = option.strike.absdiff(spot);
+            uint256 spot200SubOTM = isNegative ? (200 * spot + 1000 * otmAmount) : (200 * spot - 1000 * otmAmount);
+            uint256 spot125 = 125 * spot;
+
+            // Compute max but don't divide by 1000 yet
+            uint256 maxChoice = spot200SubOTM.max(spot125);
+
+            // min(maxChoice, 50% of strike * 1000) / 1000
+            // min(maxChoice, 0.5 * strike * 1000) / 1000
+            // min(maxChoice, 500 * strike) / 1000
+            margin = maxChoice.min(500 * option.strike) / 1000;
         }
     }
 
