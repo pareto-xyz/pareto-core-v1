@@ -12,13 +12,14 @@ contract TestMarginMath {
         uint256 spot,
         bool isBuyer,
         Derivative.Option memory option,
-        Derivative.VolatilitySmile memory smile
+        Derivative.VolatilitySmile memory smile,
+        uint256 minMarginPerc
     ) 
         external
         view
         returns (uint256 margin) 
     {
-        return MarginMath.getMaintainenceMargin(spot, isBuyer, option, smile);
+        return MarginMath.getMaintainenceMargin(spot, isBuyer, option, smile, minMarginPerc);
     }
 
     function getPayoff(
