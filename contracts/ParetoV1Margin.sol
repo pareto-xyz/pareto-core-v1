@@ -58,6 +58,10 @@ contract ParetoV1Margin is
     /// @notice Maximum percentage the insurance fund can payoff for a single position in USDC
     uint256 public maxInsuredPerc;
 
+    /// @notice Percentage multiplier used to decide alternative minimums
+    /// Four decimals so 100 => 1% (0.01), 1000 => 10% (0.1)
+    uint256 public minMarginPerc;
+
     /// @notice The current active expiry
     /// @dev This assumes all underlying has only one expiry.
     uint256 private activeExpiry;
@@ -130,6 +134,9 @@ contract ParetoV1Margin is
 
         // Begin first round
         curRound = 1;
+
+        // Default alternative minimum % to 1%
+        minMarginPerc = 100;
     
         // Set the expiry to the next friday
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
@@ -239,6 +246,13 @@ contract ParetoV1Margin is
      */
     event MaxInsuredPercEvent(address indexed owner, uint256 perc);
 
+    /**
+     * @notice Event when alternative minimum percent for margin is updated
+     * @param owner Address who called the pause event
+     * @param perc Max percentage for maximum insurance fund
+     */
+    event MinMarginPercEvent(address indexed owner, uint256 perc);
+
     /************************************************
      * External functions
      ***********************************************/
@@ -314,7 +328,7 @@ contract ParetoV1Margin is
      */
     function checkMargin(address user, bool useInitialMargin) public view returns (uint256, bool) {
         uint256 balance = balances[user];
-        uint256 maintainence = computeMargin(user, useInitialMargin);
+        uint256 maintainence = getMargin(user, useInitialMargin);
 
         // Compute the unrealized PnL (actually this is only unrealized losses)
         (uint256 pnl, bool pnlIsNeg) = getPayoff(user, true);
@@ -457,7 +471,7 @@ contract ParetoV1Margin is
             // Now that user no longer owns position, we reward liquidator using MM from this 
             // position (which cannot push user back below margin even if 100% of MM is gone).
             // 25% of MM -> liquidator; 10% of MM -> insurance fund
-            uint256 margin = MarginMath.getMaintainenceMargin(spot, !isSeller, order.option, volSmiles[smileHash]);
+            uint256 margin = MarginMath.getMaintainenceMargin(spot, !isSeller, order.option, volSmiles[smileHash], minMarginPerc);
             balances[user] -= (margin * 35 / 100);
             balances[liquidator] += (margin * 25 / 100);
             balances[insurance] += (margin / 10);
@@ -588,7 +602,7 @@ contract ParetoV1Margin is
      * @param useInitialMargin By default, computes MM; if true, compute IM
      * @return margin The maintainence margin summed for all positions
      */
-    function computeMargin(address user, bool useInitialMargin) internal view returns (uint256) {
+    function getMargin(address user, bool useInitialMargin) internal view returns (uint256) {
         if (userRoundIxs[user].length == 0) {
             return 0;
         }
@@ -610,7 +624,7 @@ contract ParetoV1Margin is
 
             require(
                 (user == order.buyer) || (user == order.seller),
-                "computeMargin: trader must be buyer or seller"
+                "getMargin: trader must be buyer or seller"
             );
 
             // Check if the user is a buyer or seller for `order`
@@ -641,21 +655,21 @@ contract ParetoV1Margin is
             if (nettedQuantity > 0) {
                 // Fetch smile and check it is valid
                 Derivative.VolatilitySmile memory smile = volSmiles[smileHash];
-                require(smile.exists_, "computeMargin: found unknown option");
+                require(smile.exists_, "getMargin: found unknown option");
 
                 // Fetch spot price
                 uint256 spot = getSpot(option.underlying);
 
                 // Compute maintainence (or initial) margin for option
-                uint256 maintainence;
+                uint256 curMargin;
                 if (useInitialMargin) {
-                    maintainence = MarginMath.getInitialMargin(spot, !isSeller, option, smile);
+                    curMargin = MarginMath.getInitialMargin(spot, !isSeller, option, smile, minMarginPerc);
                 } else {
-                    maintainence = MarginMath.getMaintainenceMargin(spot, !isSeller, option, smile);
+                    curMargin = MarginMath.getMaintainenceMargin(spot, !isSeller, option, smile, minMarginPerc);
                 }
 
                 // Build margin using `nettedQuantity`
-                margin += (nettedQuantity * maintainence);
+                margin += (nettedQuantity * curMargin);
             }
         }
         return margin;
@@ -780,6 +794,15 @@ contract ParetoV1Margin is
         require(perc <= 100, "setMaxInsuredPerc: must be < 100");
         maxInsuredPerc = perc;
         emit MaxInsuredPercEvent(msg.sender, perc);
+    }
+
+    /**
+     * @notice Set the alternative minimum percent to be insured
+     */
+    function setminMarginPerc(uint256 perc) external onlyOwner {
+        require(perc <= 100, "setminMarginPerc: must be < 100");
+        minMarginPerc = perc;
+        emit MinMarginPercEvent(msg.sender, perc);
     }
 
     /**

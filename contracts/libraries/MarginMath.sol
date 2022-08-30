@@ -51,13 +51,15 @@ library MarginMath {
      * @param isBuyer Is the trader going long or short
      * @param option Option object containing strike, expiry info
      * @param smile Volatility smile to get implied vol
+     * @param minMarginPerc Alternative minimum percentage
      * @return margin Maintainence margin for position
      */
     function getMaintainenceMargin(
         uint256 spot,
         bool isBuyer,
         Derivative.Option memory option,
-        Derivative.VolatilitySmile memory smile
+        Derivative.VolatilitySmile memory smile,
+        uint256 minMarginPerc
     ) 
         internal
         view
@@ -114,6 +116,14 @@ library MarginMath {
             // min(maxChoice, 50 * strike) / 100
             margin = maxChoice.min(50 * option.strike) / 100;
         }
+
+        // Compute alternative minimum margin
+        uint256 minMargin = getAlternativeMinimum(spot, minMarginPerc);
+
+        // Ensure margin is at least minimum
+        if (minMargin > margin) {
+            margin = minMargin;
+        }
     }
 
     /**
@@ -126,7 +136,8 @@ library MarginMath {
         uint256 spot,
         bool isBuyer,
         Derivative.Option memory option,
-        Derivative.VolatilitySmile memory smile
+        Derivative.VolatilitySmile memory smile,
+        uint256 minMarginPerc
     )
         internal
         view
@@ -178,6 +189,27 @@ library MarginMath {
             // min(maxChoice, 500 * strike) / 1000
             margin = maxChoice.min(500 * option.strike) / 1000;
         }
+
+        // Compute alternative minimum margin
+        uint256 minMargin = getAlternativeMinimum(spot, minMarginPerc);
+
+        // Ensure margin is at least minimum
+        if (minMargin > margin) {
+            margin = minMargin;
+        }
+    }
+
+    /**
+     * @notice Compute alternative minimum for 1 naked calls / puts.
+     * For example, if you were to sell 1 ABC call while ABC is trading at $500 and the variable percentage for ABC is 1%, 
+     * the alternative minimum requirement for this ABC position would be $250 ($500 x 0.5%).
+     * @param spot The spot price
+     * @param percent Percentage multiplier 
+     */
+    function getAlternativeMinimum(uint256 spot, uint256 percent) 
+        internal pure returns (uint256) 
+    {
+        return spot * percent / 10**4;
     }
 
     /**
