@@ -96,11 +96,11 @@ library GaussianMath {
         }
     }
 
-    int128 public constant INVERSE0 = 0x26A8F3C1F21B336E;
-    int128 public constant INVERSE1 = -0x87C57E5DA70D3C90;
-    int128 public constant INVERSE2 = 0x15D71F5721242C787;
-    int128 public constant INVERSE3 = 0x21D0A04B0E9B94F1;
-    int128 public constant INVERSE4 = -0xC2BF5D74C724E53F;
+    int128 public constant INVERSE0 = 0x26A8F3C1F21B336E;   // 0.15101550564768899995
+    int128 public constant INVERSE1 = -0x87C57E5DA70D3C90;  // -0.530357263435736699976
+    int128 public constant INVERSE2 = 0x15D71F5721242C787;  // 1.365020122861333999977
+    int128 public constant INVERSE3 = 0x21D0A04B0E9B94F1;   // 0.132089632343747999962
+    int128 public constant INVERSE4 = -0xC2BF5D74C724E53F;  // -0.760732499132376799951
 
     /**
      * @dev Maximum error: 1.16x10−4

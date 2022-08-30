@@ -4,6 +4,7 @@ pragma solidity ^0.8.9;
 import "../libraries/GaussianMath.sol";
 import "../libraries/Units.sol";
 import "../libraries/ABDKMath64x64.sol";
+import "hardhat/console.sol";
 
 /**
  * @notice Test contract to wrap around `GaussianMath.sol`
@@ -39,14 +40,19 @@ contract TestGaussianMath {
         prob = Units.scaleFromX64(probX64, scaleFactor);
     }
 
-    function getInverseCDF(uint256 p, uint8 decimals) 
+    function getInverseCDF(uint256 p, uint8 probDecimals, uint256 valueDecimals) 
         external
         pure
-        returns (uint256 x) 
+        returns (uint256 x, bool isNegative) 
     {
-        uint256 scaleFactor = 10**(18 - decimals);
-        int128 pX64 = Units.scaleToX64(p, scaleFactor);
+        uint256 probFactor = 10**(18 - probDecimals);
+        uint256 valueFactor = 10**(18 - valueDecimals);
+        int128 pX64 = Units.scaleToX64(p, probFactor);
         int128 xX64 = GaussianMath.getInverseCDF(pX64);
-        x = Units.scaleFromX64(xX64, scaleFactor);
+        if (xX64 < 0) {
+          isNegative = true;
+          xX64 = xX64.neg();
+        }
+        x = Units.scaleFromX64(xX64, valueFactor);
     }
 }
