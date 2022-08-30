@@ -50,14 +50,18 @@ contract PriceFeed is IOracle, Ownable {
         isAdmin[account_] = isAdmin_;
     }
 
-    function latestAnswer() public view returns (int256) {
+    /// @notice Get the latest answer
+    function latestAnswer() external view returns (int256) {
         return answer;
     }
 
-    function latestRound() public view returns (uint80) {
+    /// @notice Get the latest round id
+    function latestRound() external view returns (uint80) {
         return roundId;
     }
 
+    /// @notice Set the latest oracle answer
+    /// @dev Only callable by admin
     function setLatestAnswer(int256 _answer) external onlyAdmin {
         roundId = roundId + 1;
         roundTimestamp = block.timestamp;
