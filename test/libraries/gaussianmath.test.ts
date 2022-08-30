@@ -71,5 +71,17 @@ describe("GaussianMath Library", () => {
       expect(isNeg).to.be.false;
       expect(x).to.be.closeTo(normalInverseCDF(0.9), 1e-3);
     });
+    it("icdf(p=0.01,mu=0,sigma=1)", async () => {
+      const [xRaw, isNeg] = await gaussianMath.getInverseCDF(100, 4, 18);
+      const x = parseFloat(fromBn(xRaw, 18));
+      expect(isNeg).to.be.true;
+      expect(x).to.be.closeTo(Math.abs(normalInverseCDF(0.01)), 1e-3);
+    });
+    it("icdf(p=0.99,mu=0,sigma=1)", async () => {
+      const [xRaw, isNeg] = await gaussianMath.getInverseCDF(9900, 4, 18);
+      const x = parseFloat(fromBn(xRaw, 18));
+      expect(isNeg).to.be.false;
+      expect(x).to.be.closeTo(normalInverseCDF(0.99), 1e-3);
+    });
   });
 });
