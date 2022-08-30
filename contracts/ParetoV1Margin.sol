@@ -68,8 +68,11 @@ contract ParetoV1Margin is
     /// @notice Store a list of underlyings
     address[] private underlyings;
 
-    /// @notice Stores addresses for oracles of each underlying
-    mapping(address => address) private oracles;
+    /// @notice Stores addresses for spot oracles of each underlying
+    mapping(address => address) private spotOracles;
+
+    /// @notice Stores addresses for historical volatility oracles of each underlying
+    mapping(address => address) private volOracles;
 
     /// @notice List of keepers who can add positions
     mapping(address => bool) private keepers;
@@ -97,14 +100,16 @@ contract ParetoV1Margin is
      * @param usdc_ Address for the USDC token (e.g. cash)
      * @param insurance_ Address for the insurance fund
      * @param underlying_ Address of underlying token to support at deployment
-     * @param oracle_ Address of oracle for the underlying
+     * @param spotOracle_ Address of spot oracle for the underlying
+     * @param volOracle_ Address of historical vol oracle for the underlying
      * @param strikes_ Strike prices for the first round for the underlying
      */
     function initialize(
         address usdc_,
         address insurance_,
         address underlying_,
-        address oracle_,
+        address spotOracle_,
+        address volOracle_,
         uint256[11] calldata strikes_
     )
         public
@@ -130,7 +135,7 @@ contract ParetoV1Margin is
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
 
         // Create a new underlying 
-        newUnderlying(underlying_, oracle_);
+        newUnderlying(underlying_, spotOracle_, volOracle_);
 
         // Compute strikes for the underlying
         roundStrikes[underlying_] = strikes_;
@@ -483,8 +488,20 @@ contract ParetoV1Margin is
      * @return answer Latest price for underlying
      */
     function getSpot(address underlying) internal view returns (uint256) {
-        require(oracles[underlying] != address(0), "getSpot: missing oracle");
-        (,int256 answer,,,) = IOracle(oracles[underlying]).latestRoundData();
+        require(spotOracles[underlying] != address(0), "getSpot: missing oracle");
+        (,int256 answer,,,) = IOracle(spotOracles[underlying]).latestRoundData();
+        // TODO: check that this conversion is okay
+        return uint256(answer);
+    }
+
+    /**
+     * @notice Read latest oracle vol data
+     * @param underlying Address for the underlying token
+     * @return answer Latest historical vol for underlying
+     */
+    function getHistoricalVol(address underlying) internal view returns (uint256) {
+        require(volOracles[underlying] != address(0), "getHistoricalVol: missing oracle");
+        (,int256 answer,,,) = IOracle(volOracles[underlying]).latestRoundData();
         // TODO: check that this conversion is okay
         return uint256(answer);
     }
@@ -669,13 +686,15 @@ contract ParetoV1Margin is
      * @notice Add a new underlying
      * @dev For code reuse
      * @param underlying Address for an underlying token
-     * @param oracleFeed Address for an oracle price feed contract
+     * @param spotOracle Address for an oracle price feed contract
+     * @param volOracle Address for an oracle volatility feed contract
      */
-    function newUnderlying(address underlying, address oracleFeed) internal {
+    function newUnderlying(address underlying, address spotOracle, address volOracle) internal {
         underlyings.push(underlying);
         bytes32 smileHash = Derivative.hashForSmile(underlying, activeExpiry);
         volSmiles[smileHash] = Derivative.createSmile();
-        oracles[underlying] = oracleFeed;
+        spotOracles[underlying] = spotOracle;
+        volOracles[underlying] = volOracle;
     }
 
     /**
@@ -728,17 +747,22 @@ contract ParetoV1Margin is
 
     /**
      * @notice Set the oracle for an underlying token
-     * @dev This function can also be used to replace or delete oracles
+     * @dev This function can also be used to replace or delete spotOracles
      * @param underlying Address for an underlying token
-     * @param oracleFeed Address for an oracle price feed contract
+     * @param spotOracle Address for an oracle price feed contract
+     * @param volOracle Address for an oracle volatility feed contract
      */
-    function setOracle(address underlying, address oracleFeed) external onlyOwner {
-        if (oracles[underlying] == address(0)) {
+    function setOracle(address underlying, address spotOracle, address volOracle) 
+        external
+        onlyOwner 
+    {
+        if (spotOracles[underlying] == address(0)) {
             // Brand new oracle
-            newUnderlying(underlying, oracleFeed);
+            newUnderlying(underlying, spotOracle, volOracle);
         } else {
             // Existing underlying, overwrite oracle
-            oracles[underlying] = oracleFeed;
+            spotOracles[underlying] = spotOracle;
+            volOracles[underlying] = volOracle;
         }
     }
 
@@ -832,7 +856,7 @@ contract ParetoV1Margin is
         require(tradePrice > 0, "addPosition: tradePrice must be > 0");
         require(quantity > 0, "addPosition: quantity must be > 0");
         require(underlying != address(0), "addPosition: underlying is empty");
-        require(oracles[underlying] != address(0), "addPosition: no oracle for underlying");
+        require(spotOracles[underlying] != address(0), "addPosition: no oracle for underlying");
 
         uint8 decimals = IERC20(underlying).decimals();
 
