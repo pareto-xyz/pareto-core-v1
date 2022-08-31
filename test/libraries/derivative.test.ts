@@ -13,6 +13,7 @@ import { checkCallPrice, checkPutPrice } from "../utils/blackscholes";
 
  const ONE_ETH: BigNumber = ethers.utils.parseEther("1");
  const ONE_WEEK: number = 604800;
+ const ONE_MONTH: number = 2630000;
 
 /****************************************
  * Tests
@@ -225,28 +226,386 @@ describe("Derivative Library", () => {
         underlying: "0x0000000000000000000000000000000000000000",
         decimals: 18
       }
-      await derivative.getMarkPrice(option, ONE_ETH, 5000, ONE_WEEK);
+      await derivative.getMarkPrice(option, ONE_ETH, 5000);
     });
     // --
-    it("Correct mark price for ITM call,sigma=0.5", async () => {});
-    it("Correct mark price for ATM call,sigma=0.5", async () => {});
-    it("Correct mark price for OTM call,sigma=0.5", async () => {});
-    it("Correct mark price for ITM put,sigma=0.5", async () => {});
-    it("Correct mark price for ATM put,sigma=0.5", async () => {});
+    it("Correct mark price for ITM call,sigma=0.5", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 0,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_WEEK,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.2 spot is ITM for a 1.1 call
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(12).div(10), 5000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(1.2, 1.1, 0.5, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for ATM call,sigma=0.5", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 0,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_WEEK,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.1 spot is ATM for a 1.1 call
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(11).div(10), 5000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(1.1, 1.1, 0.5, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for OTM call,sigma=0.5", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 0,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_WEEK,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 0.9 spot is OTM for a 1.1 call
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(9).div(10), 5000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(0.9, 1.1, 0.5, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for ITM put,sigma=0.5", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 1,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_WEEK,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 0.9 spot is ITM for a 1.1 put
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(9).div(10), 5000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(0.9, 1.1, 0.5, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for ATM put,sigma=0.5", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 1,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_WEEK,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.1 spot is ITM for a 1.1 put
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(11).div(10), 5000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(1.1, 1.1, 0.5, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for OTM put,sigma=0.5", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 1,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_WEEK,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.2 spot is OTM for a 1.1 put
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(12).div(10), 5000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(1.2, 1.1, 0.5, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
     // --
-    it("Correct mark price for ITM call,sigma=0.9", async () => {});
-    it("Correct mark price for ATM call,sigma=0.9", async () => {});
-    it("Correct mark price for OTM call,sigma=0.9", async () => {});
-    it("Correct mark price for ITM put,sigma=0.9", async () => {});
-    it("Correct mark price for ATM put,sigma=0.9", async () => {});
-    it("Correct mark price for OTM put,sigma=0.9", async () => {});
+    it("Correct mark price for ITM call,sigma=0.9", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 0,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_WEEK,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.2 spot is ITM for a 1.1 call
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(12).div(10), 9000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(1.2, 1.1, 0.9, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for ATM call,sigma=0.9", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 0,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_WEEK,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.1 spot is ATM for a 1.1 call
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(11).div(10), 9000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(1.1, 1.1, 0.9, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for OTM call,sigma=0.9", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 0,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_WEEK,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 0.9 spot is OTM for a 1.1 call
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(9).div(10), 9000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(0.9, 1.1, 0.9, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for ITM put,sigma=0.9", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 1,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_WEEK,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 0.9 spot is ITM for a 1.1 put
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(9).div(10), 9000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(0.9, 1.1, 0.9, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for ATM put,sigma=0.9", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 1,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_WEEK,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.1 spot is ITM for a 1.1 put
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(11).div(10), 9000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(1.1, 1.1, 0.9, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for OTM put,sigma=0.9", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 1,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_WEEK,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.2 spot is OTM for a 1.1 put
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(12).div(10), 9000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(1.2, 1.1, 0.9, ONE_WEEK, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+  });
+
+  describe("Computing mark price (1 month expiry)", () => {
+    it("Can compute mark price", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 0,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_MONTH,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      await derivative.getMarkPrice(option, ONE_ETH, 5000);
+    });
     // --
-    it("Correct mark price for ITM call,sigma=1.5", async () => {});
-    it("Correct mark price for ATM call,sigma=1.5", async () => {});
-    it("Correct mark price for OTM call,sigma=1.5", async () => {});
-    it("Correct mark price for ITM put,sigma=1.5", async () => {});
-    it("Correct mark price for ATM put,sigma=1.5", async () => {});
-    it("Correct mark price for OTM put,sigma=1.5", async () => {});
+    it("Correct mark price for ITM call,sigma=0.5", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 0,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_MONTH,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.2 spot is ITM for a 1.1 call
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(12).div(10), 5000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(1.2, 1.1, 0.5, ONE_MONTH, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for ATM call,sigma=0.5", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 0,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_MONTH,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.1 spot is ATM for a 1.1 call
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(11).div(10), 5000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(1.1, 1.1, 0.5, ONE_MONTH, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for OTM call,sigma=0.5", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 0,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_MONTH,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 0.9 spot is OTM for a 1.1 call
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(9).div(10), 5000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(0.9, 1.1, 0.5, ONE_MONTH, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for ITM put,sigma=0.5", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 1,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_MONTH,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 0.9 spot is ITM for a 1.1 put
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(9).div(10), 5000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(0.9, 1.1, 0.5, ONE_MONTH, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for ATM put,sigma=0.5", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 1,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_MONTH,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.1 spot is ITM for a 1.1 put
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(11).div(10), 5000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(1.1, 1.1, 0.5, ONE_MONTH, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for OTM put,sigma=0.5", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 1,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_MONTH,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.2 spot is OTM for a 1.1 put
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(12).div(10), 5000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(1.2, 1.1, 0.5, ONE_MONTH, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    // --
+    it("Correct mark price for ITM call,sigma=0.9", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 0,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_MONTH,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.2 spot is ITM for a 1.1 call
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(12).div(10), 9000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(1.2, 1.1, 0.9, ONE_MONTH, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for ATM call,sigma=0.9", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 0,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_MONTH,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.1 spot is ATM for a 1.1 call
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(11).div(10), 9000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(1.1, 1.1, 0.9, ONE_MONTH, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for OTM call,sigma=0.9", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 0,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_MONTH,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 0.9 spot is OTM for a 1.1 call
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(9).div(10), 9000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkCallPrice(0.9, 1.1, 0.9, ONE_MONTH, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for ITM put,sigma=0.9", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 1,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_MONTH,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 0.9 spot is ITM for a 1.1 put
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(9).div(10), 9000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(0.9, 1.1, 0.9, ONE_MONTH, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for ATM put,sigma=0.9", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 1,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_MONTH,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.1 spot is ITM for a 1.1 put
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(11).div(10), 9000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(1.1, 1.1, 0.9, ONE_MONTH, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
+    it("Correct mark price for OTM put,sigma=0.9", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 1,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_MONTH,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      // 1.2 spot is OTM for a 1.1 put
+      const priceBn = await derivative.getMarkPrice(option, ONE_ETH.mul(12).div(10), 9000);
+      const price = parseFloat(fromBn(priceBn, 18));
+      const pricets = checkPutPrice(1.2, 1.1, 0.9, ONE_MONTH, 0);
+      expect(price).to.be.closeTo(pricets, 1e-5);
+    });
   });
 
   /****************************************
