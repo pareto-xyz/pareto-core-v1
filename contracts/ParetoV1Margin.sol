@@ -96,6 +96,12 @@ contract ParetoV1Margin is
     /// @notice Store volatility smiles per hash(expiry,underlying)
     mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
 
+    /// @notice Store average trade sizes for each expiry/underlying
+    mapping(bytes32 => uint256) private avgTradeSizes;
+
+    /// @notice Store number of trades for each expiry/underlying
+    mapping(bytes32 => uint256) private numTrades;
+
     /************************************************
      * Initialization and Upgradeability
      ***********************************************/
@@ -713,7 +719,8 @@ contract ParetoV1Margin is
     function newUnderlying(address underlying, address spotOracle, address volOracle) internal {
         underlyings.push(underlying);
         bytes32 smileHash = Derivative.hashForSmile(underlying, activeExpiry);
-        volSmiles[smileHash] = Derivative.createSmile();
+        (,int256 sigma,,,) = IOracle(volOracle).latestRoundData();
+        volSmiles[smileHash] = Derivative.createSmile(uint256(sigma));
         spotOracles[underlying] = spotOracle;
         volOracles[underlying] = volOracle;
     }
@@ -849,11 +856,17 @@ contract ParetoV1Margin is
             } else {
                 // Either the first time ever or new underlying.
                 // Here, create a new uniform (uninformed) smile 
-                volSmiles[smileHash] = Derivative.createSmile();
+                (,int256 sigma,,,) = IOracle(volOracles[underlyings[i]]).latestRoundData();
+                volSmiles[smileHash] = Derivative.createSmile(uint256(sigma));
             }
 
-            // Update strikes - TODO: replace with historical volatility
-            roundStrikes[underlyings[i]] = getStrikesAtDelta(underlyings[i], 5000);
+            // Update strikes using Deribit dVol
+            (,int256 dvol,,,) = IOracle(volOracles[underlyings[i]]).latestRoundData();
+            roundStrikes[underlyings[i]] = getStrikesAtDelta(underlyings[i], uint256(dvol));
+
+            // Clean up smile artifacts
+            delete numTrades[smileHash];
+            delete avgTradeSizes[smileHash];
         }
 
         // Clear positions for the user. It is up to the caller to maintain and provide 
@@ -907,8 +920,14 @@ contract ParetoV1Margin is
         bytes32 smileHash = Derivative.hashForSmile(underlying, activeExpiry);
         require(volSmiles[smileHash].exists_, "addPosition: missing smile");
 
+        // Update the rolling averages
+        /// @dev https://en.wikipedia.org/wiki/Moving_average
+        avgTradeSizes[smileHash] = (order.quantity + avgTradeSizes[smileHash] * numTrades[smileHash]) / (numTrades[smileHash] + 1);
+        // Update the count
+        numTrades[smileHash]++;
+
         // Update the smile with order information
-        Derivative.updateSmile(getSpot(underlying), order, volSmiles[smileHash]);
+        Derivative.updateSmile(getSpot(underlying), order, volSmiles[smileHash], avgTradeSizes[smileHash]);
 
         // Save position to mapping by expiry
         roundPositions.push(order);

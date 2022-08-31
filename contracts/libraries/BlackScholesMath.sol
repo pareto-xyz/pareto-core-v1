@@ -299,6 +299,7 @@ library BlackScholesMath {
      * @dev Tompkinks (1994, pp. 143)
      * @dev https://www.codearmo.com/blog/implied-volatility-european-call-python
      * @dev We have an error tolerance of 0.01 (generous to reduce gas cost)
+     * @dev We recommend using the bisection method and not this function
      * @param inputs Black Scholes model parameters 
      * @param maxIter To be gas efficient, we should limit the computation
      * @return sigma Implied volatility estimate (annual)

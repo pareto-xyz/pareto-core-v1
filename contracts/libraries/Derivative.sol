@@ -5,6 +5,7 @@ import "./BlackScholesMath.sol";
 import "./BasicMath.sol";
 import "./NegativeMath.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
+import "hardhat/console.sol";
 
 /**
  * @notice Contains enums and structs representing Pareto derivatives
@@ -80,11 +81,14 @@ library Derivative {
      * to solve for the implied volatility. 
      * @dev Volatility is initialized at 50% for all moneyness values, which is 
      * incorrect but will be updated as orders progress
+     * @param initSigma Value to initialize obtained from a deribit - 4 decimals
      * @return smile A volatility smile
      */
-    function createSmile() internal pure returns (VolatilitySmile memory smile) {
+    function createSmile(uint256 initSigma) internal pure returns (
+        VolatilitySmile memory smile
+    ) {
         for (uint256 i = 0; i < 5; i++) {
-            smile.sigmaAtMoneyness[i] = 5000;  // 4 decimals
+            smile.sigmaAtMoneyness[i] = initSigma;  // 4 decimals
         }
         // Set that the new smile exists
         smile.exists_ = true;
@@ -98,8 +102,14 @@ library Derivative {
      * @param spot Spot price
      * @param order Order object
      * @param smile Current volatility smile stored on-chain
+     * @param avgQuantity Average trade size for this expiry/underlying
      */
-    function updateSmile(uint256 spot, Order memory order, VolatilitySmile storage smile) internal {
+    function updateSmile(
+        uint256 spot,
+        Order memory order,
+        VolatilitySmile storage smile,
+        uint256 avgQuantity
+    ) internal {
         Option memory option = order.option;
         require(option.expiry >= block.timestamp, "createSmile: option expired");
 
@@ -107,13 +117,13 @@ library Derivative {
         uint256 tau = option.expiry - block.timestamp;
 
         // Compute current moneyness (times by 100 for moneyness decimals)
-        uint256 curMoneyness = (spot * 10**option.decimals * 100) / option.strike;
+        uint256 curMoneyness = (spot * 100) / option.strike;
 
         // Interpolate against existing smiles to get sigma
         uint256 sigma = interpolate([50,75,100,125,150], smile.sigmaAtMoneyness, curMoneyness);
 
         // Compute mark price using current option
-        uint256 markPrice = getMarkPrice(option, spot, sigma, tau);
+        uint256 markPrice = getMarkPrice(option, spot, sigma);
 
         // Find closest two data points
         (uint256 indexLower, uint256 indexUpper) = findClosestIndices([50,75,100,125,150], curMoneyness);
@@ -140,11 +150,11 @@ library Derivative {
 
         if (indexLower == indexUpper) {
             // A single point to update
-            updateSigma(indexLower, smile, order.tradePrice, markPrice, order.quantity, vega, 1000);
+            updateSigma(indexLower, smile, order.tradePrice, markPrice, order.quantity, vega, avgQuantity);
         } else {
             // Two points to update
-            updateSigma(indexLower, smile, order.tradePrice, markPrice, order.quantity, vega, 1000);
-            updateSigma(indexUpper, smile, order.tradePrice, markPrice, order.quantity, vega, 1000);
+            updateSigma(indexLower, smile, order.tradePrice, markPrice, order.quantity, vega, avgQuantity);
+            updateSigma(indexUpper, smile, order.tradePrice, markPrice, order.quantity, vega, avgQuantity);
         }
     }
 
@@ -153,15 +163,14 @@ library Derivative {
      * @param spot Spot price
      * @param strike Strike price
      * @param smile Implied volatility smile
-     * @param decimals Decimals for spot/strike price
      */
-    function querySmile(uint256 spot, uint256 strike, VolatilitySmile storage smile, uint8 decimals) 
+    function querySmile(uint256 spot, uint256 strike, VolatilitySmile memory smile) 
         internal
-        view
+        pure
         returns (uint256 sigma)
     {
         // Compute current moneyness (times by 100 for moneyness decimals)
-        uint256 curMoneyness = (spot * 10**decimals * 100) / strike;
+        uint256 curMoneyness = (spot * 100) / strike;
 
         // Interpolate against existing smiles to get sigma
         sigma = interpolate([50,75,100,125,150], smile.sigmaAtMoneyness, curMoneyness);
@@ -177,7 +186,7 @@ library Derivative {
      * @param markPrice Computed mark price using Black-Scholes
      * @param tradeSize Size of the trade
      * @param optionVega Vega of the option
-     * @param tradeNorm Normalization constant for trade size
+     * @param avgTradeSize Average trade size
      */
     function updateSigma(
         uint256 index,
@@ -186,7 +195,7 @@ library Derivative {
         uint256 markPrice,
         uint256 tradeSize,
         uint256 optionVega,
-        uint256 tradeNorm
+        uint256 avgTradeSize
     )
         internal
     {
@@ -197,9 +206,9 @@ library Derivative {
         // Fetch the current volatility from smile
         uint256 curSigma = smile.sigmaAtMoneyness[index];
 
-        // min(tradeSize/tradeNorm,1) = min(tradeSize,tradeNorm)/tradeNorm
-        if (tradeSize > tradeNorm) {
-            tradeSize = tradeNorm;
+        // min(tradeSize/avgTradeSize,1) = min(tradeSize,avgTradeSize)/avgTradeSize
+        if (tradeSize < avgTradeSize) {
+            tradeSize = avgTradeSize;
         }
 
         if (tradePrice >= markPrice) {
@@ -210,7 +219,7 @@ library Derivative {
         }
 
         // 100 is for decimals e.g. 5% => 500. This allows us to capture 0.0X%
-        adjustPerc = deltaPrice * tradeSize * 100 / (optionVega * tradeNorm);
+        adjustPerc = deltaPrice * 100 * tradeSize / (optionVega * avgTradeSize);
 
         // Do nothing if the adjustment percentage is very small
         if (adjustPerc > 0) {
@@ -236,18 +245,13 @@ library Derivative {
      * @param option Option object containing strike and expiry info
      * @param spot Current spot price
      * @param sigma Standard deviation in returns (volatility)
-     * @param tau Time to expiry
      */
-    function getMarkPrice(
-        Option memory option,
-        uint256 spot,
-        uint256 sigma,
-        uint256 tau
-    ) 
+    function getMarkPrice(Option memory option, uint256 spot, uint256 sigma) 
         internal
-        pure
+        view
         returns (uint256 price) 
     {   
+        uint256 tau = option.expiry - block.timestamp;
         price = BlackScholesMath.getPrice(
             BlackScholesMath.PriceCalculationInput(
                 spot,

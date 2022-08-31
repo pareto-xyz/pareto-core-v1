@@ -7,25 +7,59 @@ import "../libraries/Derivative.sol";
  * @notice Test contract to wrap around `Derivative.sol`
  */
 contract TestDerivative {
-    function createSmile()
+    mapping(bytes32 => Derivative.VolatilitySmile) public volSmiles;
+
+    function createSmile(uint256 key, uint256 initSigma)
         external
-        pure
         returns (Derivative.VolatilitySmile memory smile) 
     {
-        return Derivative.createSmile();
+        smile = Derivative.createSmile(initSigma);
+        volSmiles[keccak256(abi.encodePacked(key))] = smile;
     }
 
-    function getMarkPrice(
-        Derivative.Option memory option,
+    function fetchSmile(uint256 key) 
+        external 
+        view 
+        returns (Derivative.VolatilitySmile memory smile) 
+    {
+        return volSmiles[keccak256(abi.encodePacked(key))];
+    }
+
+    function updateSmile(
         uint256 spot,
-        uint256 sigma,
-        uint256 tau
+        Derivative.Order memory order,
+        uint256 key,
+        uint256 avgQuantity
+    )
+        external
+    {
+        Derivative.VolatilitySmile storage smile = volSmiles[
+            keccak256(abi.encodePacked(key))
+        ];
+        return Derivative.updateSmile(spot, order, smile, avgQuantity);
+    }
+
+    function querySmile(
+        uint256 spot,
+        uint256 strike,
+        uint256 key
     ) 
         external
-        pure
+        view
+        returns (uint256 sigma)
+    {
+        Derivative.VolatilitySmile memory smile = volSmiles[
+            keccak256(abi.encodePacked(key))
+        ];
+        return Derivative.querySmile(spot, strike, smile);
+    }
+
+    function getMarkPrice(Derivative.Option memory option, uint256 spot, uint256 sigma) 
+        external
+        view
         returns (uint256 price) 
     {
-        return Derivative.getMarkPrice(option, spot, sigma, tau);
+        return Derivative.getMarkPrice(option, spot, sigma);
     }
 
     function hashOrder(Derivative.Order memory order)
