@@ -24,8 +24,5 @@ jobs:
 
       - run: npm install --ignore-scripts
 
-      - name: Typechains
-        run: npx hardhat typechain
-
       - name: Test
         run: npx hardhat test
