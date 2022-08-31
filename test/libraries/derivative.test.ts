@@ -58,28 +58,28 @@ describe("Derivative Library", () => {
    ****************************************/
   describe("Querying a smile", () => {
     it("Can query smile at spot/strike=1, not updated", async () => {
-      const smile = await derivative.createSmile();
-      const sigma = await derivative.querySmile(ONE_ETH, ONE_ETH, smile);
+      await derivative.createSmile(1);
+      const sigma = await derivative.querySmile(ONE_ETH, ONE_ETH, 1);
       expect(fromBn(sigma, 4)).to.be.equal("0.5");
     });
     it("Can query smile at spot/strike=1/10, not updated", async () => {
-      const smile = await derivative.createSmile();
-      const sigma = await derivative.querySmile(ONE_ETH.div(10), ONE_ETH, smile);
+      await derivative.createSmile(1);
+      const sigma = await derivative.querySmile(ONE_ETH.div(10), ONE_ETH, 1);
       expect(fromBn(sigma, 4)).to.be.equal("0.5");
     });
     it("Can query smile at spot/strike=10, not updated", async () => {
-      const smile = await derivative.createSmile();
-      const sigma = await derivative.querySmile(ONE_ETH.mul(10), ONE_ETH, smile);
+      await derivative.createSmile(1);
+      const sigma = await derivative.querySmile(ONE_ETH.mul(10), ONE_ETH, 1);
       expect(fromBn(sigma, 4)).to.be.equal("0.5");
     });
     it("Can query smile at spot/strike=1.3, not updated", async () => {
-      const smile = await derivative.createSmile();
-      const sigma = await derivative.querySmile(ONE_ETH.mul(13).div(10), ONE_ETH, smile);
+      await derivative.createSmile(1);
+      const sigma = await derivative.querySmile(ONE_ETH.mul(13).div(10), ONE_ETH, 1);
       expect(fromBn(sigma, 4)).to.be.equal("0.5");
     });
     it("Can query smile at spot/strike=0.8, not updated", async () => {
-      const smile = await derivative.createSmile();
-      const sigma = await derivative.querySmile(ONE_ETH.mul(8).div(10), ONE_ETH, smile);
+      await derivative.createSmile(1);
+      const sigma = await derivative.querySmile(ONE_ETH.mul(8).div(10), ONE_ETH, 1);
       expect(fromBn(sigma, 4)).to.be.equal("0.5");
     });
   });
@@ -88,6 +88,37 @@ describe("Derivative Library", () => {
    * Smile updating
    ****************************************/
   describe("Updating a smile", () => {
+    let order: any;
+
+    beforeEach(async () => {
+      // Function saves to storage
+      await derivative.createSmile(1);
+      const curTime = Math.floor(Date.now() / 1000);
+      // Use black scholes to estimate a reasonable price
+      const tradePrice = checkCallPrice(1, 1.1, 0.5, ONE_WEEK, 0);
+      order = {
+        buyer: alice.address,
+        seller: bob.address,
+        tradePrice: toBn(tradePrice.toString(), 18),
+        quantity: 5,
+        option: {
+          optionType: 0,
+          strike: ONE_ETH.mul(11).div(10),
+          expiry: curTime + ONE_WEEK,
+          underlying: "0x0000000000000000000000000000000000000000",
+          decimals: 18
+        }
+      };
+    });
+    it("Can update smile", async () => {
+      await derivative.updateSmile(ONE_ETH.mul(11).div(10), order, 1, 10);
+    });
+    it("Correct value after updating", async () => {
+      await derivative.updateSmile(ONE_ETH.mul(11).div(10), order, 1, 10);
+      const sigma = fromBn(await derivative.querySmile(ONE_ETH, ONE_ETH, 1), 4);
+      // We expect sigma to have changed after updating
+      expect(sigma).to.not.be.equal("5000");
+    });
   });
 
   /****************************************

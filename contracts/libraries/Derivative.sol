@@ -99,8 +99,14 @@ library Derivative {
      * @param spot Spot price
      * @param order Order object
      * @param smile Current volatility smile stored on-chain
+     * @param avgQuantity Average trade size for this expiry/underlying
      */
-    function updateSmile(uint256 spot, Order memory order, VolatilitySmile storage smile) internal {
+    function updateSmile(
+        uint256 spot,
+        Order memory order,
+        VolatilitySmile storage smile,
+        uint256 avgQuantity
+    ) internal {
         Option memory option = order.option;
         require(option.expiry >= block.timestamp, "createSmile: option expired");
 
@@ -108,7 +114,7 @@ library Derivative {
         uint256 tau = option.expiry - block.timestamp;
 
         // Compute current moneyness (times by 100 for moneyness decimals)
-        uint256 curMoneyness = (spot * 10**option.decimals * 100) / option.strike;
+        uint256 curMoneyness = (spot * 100) / option.strike;
 
         // Interpolate against existing smiles to get sigma
         uint256 sigma = interpolate([50,75,100,125,150], smile.sigmaAtMoneyness, curMoneyness);
@@ -141,11 +147,11 @@ library Derivative {
 
         if (indexLower == indexUpper) {
             // A single point to update
-            updateSigma(indexLower, smile, order.tradePrice, markPrice, order.quantity, vega, 1000);
+            updateSigma(indexLower, smile, order.tradePrice, markPrice, order.quantity, vega, avgQuantity);
         } else {
             // Two points to update
-            updateSigma(indexLower, smile, order.tradePrice, markPrice, order.quantity, vega, 1000);
-            updateSigma(indexUpper, smile, order.tradePrice, markPrice, order.quantity, vega, 1000);
+            updateSigma(indexLower, smile, order.tradePrice, markPrice, order.quantity, vega, avgQuantity);
+            updateSigma(indexUpper, smile, order.tradePrice, markPrice, order.quantity, vega, avgQuantity);
         }
     }
 
@@ -177,7 +183,7 @@ library Derivative {
      * @param markPrice Computed mark price using Black-Scholes
      * @param tradeSize Size of the trade
      * @param optionVega Vega of the option
-     * @param tradeNorm Normalization constant for trade size
+     * @param avgTradeSize Average trade size
      */
     function updateSigma(
         uint256 index,
@@ -186,7 +192,7 @@ library Derivative {
         uint256 markPrice,
         uint256 tradeSize,
         uint256 optionVega,
-        uint256 tradeNorm
+        uint256 avgTradeSize
     )
         internal
     {
@@ -197,9 +203,9 @@ library Derivative {
         // Fetch the current volatility from smile
         uint256 curSigma = smile.sigmaAtMoneyness[index];
 
-        // min(tradeSize/tradeNorm,1) = min(tradeSize,tradeNorm)/tradeNorm
-        if (tradeSize > tradeNorm) {
-            tradeSize = tradeNorm;
+        // min(tradeSize/avgTradeSize,1) = min(tradeSize,avgTradeSize)/avgTradeSize
+        if (tradeSize < avgTradeSize) {
+            tradeSize = avgTradeSize;
         }
 
         if (tradePrice >= markPrice) {
@@ -210,7 +216,7 @@ library Derivative {
         }
 
         // 100 is for decimals e.g. 5% => 500. This allows us to capture 0.0X%
-        adjustPerc = deltaPrice * tradeSize * 100 / (optionVega * tradeNorm);
+        adjustPerc = deltaPrice * 100 * tradeSize / (optionVega * avgTradeSize);
 
         // Do nothing if the adjustment percentage is very small
         if (adjustPerc > 0) {
