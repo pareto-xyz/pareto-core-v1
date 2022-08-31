@@ -23,11 +23,16 @@ const ONE_WEEK: number = 604800;
  ****************************************/
 
 let marginMath: Contract;
+let derivative: Contract;
 let alice: SignerWithAddress;
 let bob: SignerWithAddress;
 
 describe("MarginMath Library", () => {
   beforeEach(async () => {
+    // Deploy derivatives
+    const DerivativeFactory = await ethers.getContractFactory("TestDerivative");
+    derivative = await DerivativeFactory.deploy();
+
     const MarginMathFactory =  await ethers.getContractFactory("TestMarginMath");
     marginMath = await MarginMathFactory.deploy();
   });
@@ -365,5 +370,84 @@ describe("MarginMath Library", () => {
       const minMargin = await marginMath.getAlternativeMinimum(ONE_ETH.mul(5), 100);
       expect(fromBn(minMargin, 18)).to.be.equal("0.05");
     });
+  });
+  /****************************************
+   * Get initial margin
+   ****************************************/
+  describe("Computing initial margin", () => {
+    let option: any;
+    let smile: any;
+    beforeEach(async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      option = {
+        optionType: 1,
+        strike: ONE_ETH,
+        expiry: curTime + ONE_WEEK,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18,
+      };
+      await derivative.createSmile(1, 5000);
+      smile = await derivative.fetchSmile(1);
+    });
+    it("can compute initial margin", async () => {
+      await marginMath.getInitialMargin(ONE_ETH, true, option, smile, 0);
+    });
+    it("buyer,spot=1,min=0%", async () => {
+      // Any buyer's margin is just the premium
+      const margin = await marginMath.getInitialMargin(ONE_ETH, true, option, smile, 0);
+      const premium = await derivative.getMarkPrice(option, ONE_ETH, 5000);
+      expect(margin).to.be.equal(premium);
+    });
+    it("seller,spot=1,min=0%", async () => {
+      const margin = await marginMath.getInitialMargin(ONE_ETH, false, option, smile, 0);
+      expect(true).to.be.false;
+    });
+    it("buyer,spot=1.5,min=0%", async () => {
+      const margin = await marginMath.getInitialMargin(ONE_ETH.mul(15).div(10), true, option, smile, 0);
+      const premium = await derivative.getMarkPrice(option, ONE_ETH.mul(15).div(10), 5000);
+      expect(margin).to.be.equal(premium);
+    });
+    it("seller,spot=1.5,min=0%", async () => {
+      const margin = await marginMath.getInitialMargin(ONE_ETH.mul(15).div(10), false, option, smile, 0);
+      expect(true).to.be.false;
+    });
+    it("buyer,spot=1,min=1%", async () => {
+      const marginBn = await marginMath.getInitialMargin(ONE_ETH, true, option, smile, 100);
+      const premiumBn = await derivative.getMarkPrice(option, ONE_ETH, 5000);
+      const minMarginBn = await marginMath.getAlternativeMinimum(ONE_ETH, 100);
+
+      const margin = parseFloat(fromBn(marginBn, 18));
+      const premium = parseFloat(fromBn(premiumBn, 18));
+      const minMargin = parseFloat(fromBn(minMarginBn, 18));
+      const margints = Math.max(premium, minMargin);
+      
+      expect(margin).to.be.equal(margints);
+    });
+    it("seller,spot=1,min=1%", async () => {
+      const margin = await marginMath.getInitialMargin(ONE_ETH, false, option, smile, 100);
+      expect(true).to.be.false;
+    });
+    it("buyer,spot=1,min=5%", async () => {
+      const marginBn = await marginMath.getInitialMargin(ONE_ETH, true, option, smile, 500);
+      const premiumBn = await derivative.getMarkPrice(option, ONE_ETH, 5000);
+      const minMarginBn = await marginMath.getAlternativeMinimum(ONE_ETH, 500);
+
+      const margin = parseFloat(fromBn(marginBn, 18));
+      const premium = parseFloat(fromBn(premiumBn, 18));
+      const minMargin = parseFloat(fromBn(minMarginBn, 18));
+      const margints = Math.max(premium, minMargin);
+      
+      expect(margin).to.be.equal(margints);
+    });
+    it("seller,spot=1,min=5%", async () => {
+      const margin = await marginMath.getInitialMargin(ONE_ETH, false, option, smile, 500);
+      expect(true).to.be.false;
+    });
+  });
+
+  /****************************************
+   * Get maintainence margin
+   ****************************************/
+  describe("Computing maintainence margin", () => {
   });
 });
