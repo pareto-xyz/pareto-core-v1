@@ -374,7 +374,7 @@ describe("MarginMath Library", () => {
   /****************************************
    * Get initial margin
    ****************************************/
-  describe("Computing initial margin", () => {
+  describe("Computing initial margin for puts", () => {
     let option: any;
     let smile: any;
     beforeEach(async () => {
@@ -394,67 +394,103 @@ describe("MarginMath Library", () => {
     });
     it("buyer,spot=1,min=0%", async () => {
       // Any buyer's margin is just the premium
-      const margin = await marginMath.getInitialMargin(ONE_ETH, true, option, smile, 0);
-      const premium = await derivative.getMarkPrice(option, ONE_ETH, 5000);
-      expect(margin).to.be.equal(premium);
+      const marginBn = await marginMath.getInitialMargin(ONE_ETH, true, option, smile, 0);
+      const premiumBn = await derivative.getMarkPrice(option, ONE_ETH, 5000);
+      const margin = parseFloat(fromBn(marginBn, 18));
+      const premium = parseFloat(fromBn(premiumBn, 18));
+      const spot10 = 0.1 * 1;  // 10% spot
+      expect(margin).to.be.equal(Math.min(premium, spot10));
     });
     it("seller,spot=1,min=0%", async () => {
-      const margin = await marginMath.getInitialMargin(ONE_ETH, false, option, smile, 0);
+      const marginBn = await marginMath.getInitialMargin(ONE_ETH, false, option, smile, 0);
+      const margin = parseFloat(fromBn(marginBn, 18));
+
+      const otmAmount = Math.max(1 - 1.1, 0);
+      const spot20 = 0.2 * 1;
+      const spot125 = 0.125 * 1;
+      const margints = Math.max(spot20 - otmAmount, spot125);
+
       // max((20% - OTM Amount/spot)*spot, 12.5% * spot)
       // max(0.2 * 1 - 0.1 * 1, 0.125 * 1) = 0.125
-      expect(fromBn(margin, 18)).to.be.equal("0.125");
+      expect(margin).to.be.equal(margints);
     });
     it("buyer,spot=1.5,min=0%", async () => {
-      const margin = await marginMath.getInitialMargin(ONE_ETH.mul(15).div(10), true, option, smile, 0);
-      const premium = await derivative.getMarkPrice(option, ONE_ETH.mul(15).div(10), 5000);
-      expect(margin).to.be.equal(premium);
+      const marginBn = await marginMath.getInitialMargin(ONE_ETH.mul(15).div(10), true, option, smile, 0);
+      const premiumBn = await derivative.getMarkPrice(option, ONE_ETH.mul(15).div(10), 5000);
+      const margin = parseFloat(fromBn(marginBn, 18));
+      const premium = parseFloat(fromBn(premiumBn, 18));
+      const spot10 = 0.1 * 1.5;  // 10% spot
+      expect(margin).to.be.equal(Math.min(premium, spot10));
     });
     it("seller,spot=1.5,min=0%", async () => {
-      const margin = await marginMath.getInitialMargin(ONE_ETH.mul(15).div(10), false, option, smile, 0);
+      const marginBn = await marginMath.getInitialMargin(ONE_ETH.mul(15).div(10), false, option, smile, 0);
+      const margin = parseFloat(fromBn(marginBn, 18));
+
+      const otmAmount = Math.max(1.5 - 1.1, 0);
+      const spot20 = 0.2 * 1.5;
+      const spot125 = 0.125 * 1.5;
+      const margints = Math.max(spot20 - otmAmount, spot125);
+
       // max((20% - OTM Amount/spot)*spot, 12.5% * spot)
       // max(0.2 * 1.5 - 0.4 * 1.5, 0.125 * 1.5) = 0.1875
-      expect(fromBn(margin, 18)).to.be.equal("0.1875");
+      expect(margin).to.be.equal(margints);
     });
     it("buyer,spot=1,min=1%", async () => {
       const marginBn = await marginMath.getInitialMargin(ONE_ETH, true, option, smile, 100);
       const premiumBn = await derivative.getMarkPrice(option, ONE_ETH, 5000);
       const minMarginBn = await marginMath.getAlternativeMinimum(ONE_ETH, 100);
+      const spot10 = 0.1 * 1;  // 10% spot
 
       const margin = parseFloat(fromBn(marginBn, 18));
       const premium = parseFloat(fromBn(premiumBn, 18));
       const minMargin = parseFloat(fromBn(minMarginBn, 18));
-      const margints = Math.max(premium, minMargin);
+      const margints = Math.max(Math.min(premium, spot10), minMargin);
       
       expect(margin).to.be.equal(margints);
     });
     it("seller,spot=1,min=1%", async () => {
       const marginBn = await marginMath.getInitialMargin(ONE_ETH, false, option, smile, 100);
+      const margin = parseFloat(fromBn(marginBn, 18));
+
+      const otmAmount = Math.max(1- 1.1, 0);
+      const spot20 = 0.2 * 1;
+      const spot125 = 0.125 * 1;
+      var margints = Math.max(spot20 - otmAmount, spot125);
+
       // max((20% - OTM Amount/spot)*spot, 12.5% * spot)
       // max(0.2 * 1 - (0) * 1, 0.125 * 1) = 0.2
       const minMarginBn = await marginMath.getAlternativeMinimum(ONE_ETH, 100);
       const minMargin = parseFloat(fromBn(minMarginBn, 18));
-      const margints = Math.max(0.2, minMargin);
-      const margin = parseFloat(fromBn(marginBn, 18));
+
+      margints = Math.max(margints, minMargin);
       expect(margin).to.be.equal(margints);
     });
     it("buyer,spot=1,min=50%", async () => {
       const marginBn = await marginMath.getInitialMargin(ONE_ETH, true, option, smile, 5000);
       const premiumBn = await derivative.getMarkPrice(option, ONE_ETH, 5000);
       const minMarginBn = await marginMath.getAlternativeMinimum(ONE_ETH, 5000);
+      const spot10 = 0.1 * 1;  // 10% spot
 
       const margin = parseFloat(fromBn(marginBn, 18));
       const premium = parseFloat(fromBn(premiumBn, 18));
       const minMargin = parseFloat(fromBn(minMarginBn, 18));
-      const margints = Math.max(premium, minMargin);
+      const margints = Math.max(Math.min(premium, spot10), minMargin);
       
       expect(margin).to.be.equal(margints);
     });
     it("seller,spot=1,min=50%", async () => {
       const marginBn = await marginMath.getInitialMargin(ONE_ETH, false, option, smile, 5000);
+      const margin = parseFloat(fromBn(marginBn, 18));
+
+      const otmAmount = Math.max(1- 1.1, 0);
+      const spot20 = 0.2 * 1;
+      const spot125 = 0.125 * 1;
+      var margints = Math.max(spot20 - otmAmount, spot125);
+
       const minMarginBn = await marginMath.getAlternativeMinimum(ONE_ETH, 5000);
       const minMargin = parseFloat(fromBn(minMarginBn, 18));
-      const margints = Math.max(0.2, minMargin);
-      const margin = parseFloat(fromBn(marginBn, 18));
+
+      margints = Math.max(margints, minMargin);
       expect(margin).to.be.equal(margints);
     });
   });
