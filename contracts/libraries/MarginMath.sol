@@ -31,17 +31,14 @@ library MarginMath {
         view
         returns (uint256 markPrice)
     {
-        // Compute time to expiry
-        uint256 tau = option.expiry - block.timestamp;
-
         // Compute current moneyness (times by 100 for moneyness decimals)
-        uint256 curMoneyness = (spot * 10**option.decimals * 100) / option.strike;
+        uint256 curMoneyness = (spot * 100) / option.strike;
 
         // Interpolate against existing smiles to get sigma
         uint256 sigma = Derivative.interpolate([50,75,100,125,150], smile.sigmaAtMoneyness, curMoneyness);
 
         // Compute mark price
-        markPrice = Derivative.getMarkPrice(option, spot, sigma, tau);
+        markPrice = Derivative.getMarkPrice(option, spot, sigma);
     }
 
     /**

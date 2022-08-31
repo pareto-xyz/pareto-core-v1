@@ -213,6 +213,43 @@ describe("Derivative Library", () => {
   });
 
   /****************************************
+   * Computing mark price
+   ****************************************/
+  describe("Computing mark price (1 week expiry)", () => {
+    it("Can compute mark price", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const option = {
+        optionType: 0,
+        strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
+        expiry: curTime + ONE_WEEK,
+        underlying: "0x0000000000000000000000000000000000000000",
+        decimals: 18
+      }
+      await derivative.getMarkPrice(option, ONE_ETH, 5000, ONE_WEEK);
+    });
+    // --
+    it("Correct mark price for ITM call,sigma=0.5", async () => {});
+    it("Correct mark price for ATM call,sigma=0.5", async () => {});
+    it("Correct mark price for OTM call,sigma=0.5", async () => {});
+    it("Correct mark price for ITM put,sigma=0.5", async () => {});
+    it("Correct mark price for ATM put,sigma=0.5", async () => {});
+    // --
+    it("Correct mark price for ITM call,sigma=0.9", async () => {});
+    it("Correct mark price for ATM call,sigma=0.9", async () => {});
+    it("Correct mark price for OTM call,sigma=0.9", async () => {});
+    it("Correct mark price for ITM put,sigma=0.9", async () => {});
+    it("Correct mark price for ATM put,sigma=0.9", async () => {});
+    it("Correct mark price for OTM put,sigma=0.9", async () => {});
+    // --
+    it("Correct mark price for ITM call,sigma=1.5", async () => {});
+    it("Correct mark price for ATM call,sigma=1.5", async () => {});
+    it("Correct mark price for OTM call,sigma=1.5", async () => {});
+    it("Correct mark price for ITM put,sigma=1.5", async () => {});
+    it("Correct mark price for ATM put,sigma=1.5", async () => {});
+    it("Correct mark price for OTM put,sigma=1.5", async () => {});
+  });
+
+  /****************************************
    * Order fingerprint
    ****************************************/
   describe("Hashing an order", () => {

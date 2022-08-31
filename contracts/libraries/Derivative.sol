@@ -123,7 +123,7 @@ library Derivative {
         uint256 sigma = interpolate([50,75,100,125,150], smile.sigmaAtMoneyness, curMoneyness);
 
         // Compute mark price using current option
-        uint256 markPrice = getMarkPrice(option, spot, sigma, tau);
+        uint256 markPrice = getMarkPrice(option, spot, sigma);
 
         // Find closest two data points
         (uint256 indexLower, uint256 indexUpper) = findClosestIndices([50,75,100,125,150], curMoneyness);
@@ -245,18 +245,13 @@ library Derivative {
      * @param option Option object containing strike and expiry info
      * @param spot Current spot price
      * @param sigma Standard deviation in returns (volatility)
-     * @param tau Time to expiry
      */
-    function getMarkPrice(
-        Option memory option,
-        uint256 spot,
-        uint256 sigma,
-        uint256 tau
-    ) 
+    function getMarkPrice(Option memory option, uint256 spot, uint256 sigma) 
         internal
-        pure
+        view
         returns (uint256 price) 
     {   
+        uint256 tau = option.expiry - block.timestamp;
         price = BlackScholesMath.getPrice(
             BlackScholesMath.PriceCalculationInput(
                 spot,

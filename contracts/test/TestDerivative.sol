@@ -54,17 +54,12 @@ contract TestDerivative {
         return Derivative.querySmile(spot, strike, smile);
     }
 
-    function getMarkPrice(
-        Derivative.Option memory option,
-        uint256 spot,
-        uint256 sigma,
-        uint256 tau
-    ) 
+    function getMarkPrice(Derivative.Option memory option, uint256 spot, uint256 sigma) 
         external
-        pure
+        view
         returns (uint256 price) 
     {
-        return Derivative.getMarkPrice(option, spot, sigma, tau);
+        return Derivative.getMarkPrice(option, spot, sigma);
     }
 
     function hashOrder(Derivative.Order memory order)
