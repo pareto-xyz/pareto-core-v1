@@ -28,40 +28,7 @@ let bob: SignerWithAddress;
 
 describe("MarginMath Library", () => {
   beforeEach(async () => {
-    const BlackScholesMathLib = await ethers.getContractFactory("BlackScholesMath");
-    const blackScholesMathLib = await BlackScholesMathLib.deploy();
-    await blackScholesMathLib.deployed();
-
-    const DerivativeLib = await ethers.getContractFactory(
-      "Derivative",
-      {
-        libraries: {
-          BlackScholesMath: blackScholesMathLib.address,
-        }
-      }
-    );
-    const derivativeLib = await DerivativeLib.deploy();
-    await derivativeLib.deployed();
-
-    const MarginMathLib = await ethers.getContractFactory(
-      "MarginMath",
-      {
-        libraries: {
-          Derivative: derivativeLib.address,
-        }
-      }
-    );
-    const marginMathLib = await MarginMathLib.deploy();
-    await marginMathLib.deployed();
-
-    const MarginMathFactory =  await ethers.getContractFactory(
-      "TestMarginMath",
-      {
-        libraries: {
-          MarginMath: marginMathLib.address,
-        }
-      }
-    );
+    const MarginMathFactory =  await ethers.getContractFactory("TestMarginMath");
     marginMath = await MarginMathFactory.deploy();
   });
 
@@ -282,7 +249,6 @@ describe("MarginMath Library", () => {
       expect(parseFloat(fromBn(payoff, 18))).to.be.closeTo(Math.abs(payoffts), 1e-5);
       expect(isNegative).to.be.equal(payoffts < 0);
     });
-
     it("Payoff for buying a call: ATM", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order = {
@@ -370,6 +336,34 @@ describe("MarginMath Library", () => {
 
       expect(parseFloat(fromBn(payoff, 18))).to.be.closeTo(Math.abs(payoffts), 1e-5);
       expect(isNegative).to.be.equal(payoffts < 0);
+    });
+  });
+  /****************************************
+   * Alternative minimum calculation
+   ****************************************/
+  describe("Computing alternative minimums", () => {
+    it("can compute alternative minimums", async () => {
+      await marginMath.getAlternativeMinimum(ONE_ETH, 100);
+    });
+    it("correct alternative min with 1%", async () => {
+      const minMargin = await marginMath.getAlternativeMinimum(ONE_ETH, 100);
+      expect(fromBn(minMargin, 18)).to.be.equal("0.01");
+    });
+    it("correct alternative min with 5%", async () => {
+      const minMargin = await marginMath.getAlternativeMinimum(ONE_ETH, 500);
+      expect(fromBn(minMargin, 18)).to.be.equal("0.05");
+    });
+    it("correct alternative min with 0.5%", async () => {
+      const minMargin = await marginMath.getAlternativeMinimum(ONE_ETH, 50);
+      expect(fromBn(minMargin, 18)).to.be.equal("0.005");
+    });
+    it("correct alternative min with spot 2 ETH", async () => {
+      const minMargin = await marginMath.getAlternativeMinimum(ONE_ETH.mul(2), 100);
+      expect(fromBn(minMargin, 18)).to.be.equal("0.02");
+    });
+    it("correct alternative min with spot 5 ETH", async () => {
+      const minMargin = await marginMath.getAlternativeMinimum(ONE_ETH.mul(5), 100);
+      expect(fromBn(minMargin, 18)).to.be.equal("0.05");
     });
   });
 });

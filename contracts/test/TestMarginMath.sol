@@ -22,6 +22,26 @@ contract TestMarginMath {
         return MarginMath.getMaintainenceMargin(spot, isBuyer, option, smile, minMarginPerc);
     }
 
+    function getInitialMargin(
+        uint256 spot,
+        bool isBuyer,
+        Derivative.Option memory option,
+        Derivative.VolatilitySmile memory smile,
+        uint256 minMarginPerc
+    ) 
+        external
+        view
+        returns (uint256 margin) 
+    {
+        return MarginMath.getInitialMargin(spot, isBuyer, option, smile, minMarginPerc);
+    }
+
+    function getAlternativeMinimum(uint256 spot, uint256 percent) 
+        external pure returns (uint256) 
+    {
+        return MarginMath.getAlternativeMinimum(spot, percent);
+    }
+
     function getPayoff(
         address trader,
         uint256 spot,
