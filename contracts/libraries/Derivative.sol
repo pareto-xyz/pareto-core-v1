@@ -81,11 +81,14 @@ library Derivative {
      * to solve for the implied volatility. 
      * @dev Volatility is initialized at 50% for all moneyness values, which is 
      * incorrect but will be updated as orders progress
+     * @param initSigma Value to initialize obtained from a deribit - 4 decimals
      * @return smile A volatility smile
      */
-    function createSmile() internal pure returns (VolatilitySmile memory smile) {
+    function createSmile(uint256 initSigma) internal pure returns (
+        VolatilitySmile memory smile
+    ) {
         for (uint256 i = 0; i < 5; i++) {
-            smile.sigmaAtMoneyness[i] = 5000;  // 4 decimals
+            smile.sigmaAtMoneyness[i] = initSigma;  // 4 decimals
         }
         // Set that the new smile exists
         smile.exists_ = true;

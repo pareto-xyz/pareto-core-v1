@@ -719,7 +719,8 @@ contract ParetoV1Margin is
     function newUnderlying(address underlying, address spotOracle, address volOracle) internal {
         underlyings.push(underlying);
         bytes32 smileHash = Derivative.hashForSmile(underlying, activeExpiry);
-        volSmiles[smileHash] = Derivative.createSmile();
+        (,int256 sigma,,,) = IOracle(volOracle).latestRoundData();
+        volSmiles[smileHash] = Derivative.createSmile(uint256(sigma));
         spotOracles[underlying] = spotOracle;
         volOracles[underlying] = volOracle;
     }
@@ -855,7 +856,8 @@ contract ParetoV1Margin is
             } else {
                 // Either the first time ever or new underlying.
                 // Here, create a new uniform (uninformed) smile 
-                volSmiles[smileHash] = Derivative.createSmile();
+                (,int256 sigma,,,) = IOracle(volOracles[underlyings[i]]).latestRoundData();
+                volSmiles[smileHash] = Derivative.createSmile(uint256(sigma));
             }
 
             // Update strikes using Deribit dVol
