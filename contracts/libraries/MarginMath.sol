@@ -64,7 +64,7 @@ library MarginMath {
     {
         require(
             option.expiry > block.timestamp,
-            "getInitialMargin: option is expired"
+            "getMaintainenceMargin: option is expired"
         );
 
         // Case 1: long position
@@ -86,11 +86,26 @@ library MarginMath {
             // max(0.1 * spot - OTM Amount, 0.08 * spot) * 100 / 100
             // max((0.1 * spot - OTM Amount) * 100, 0.08 * spot * 100) / 100
             // max((10 * spot - 100 * OTM Amount), 8 * spot) / 100
+            /// @dev For a call, OTM Amount = strike - spot
             (uint256 otmAmount, bool isNegative) = option.strike.absdiff(spot);
-            uint256 spot100SubOTM = isNegative ? (10 * spot + 100 * otmAmount) : (10 * spot - 100 * otmAmount);
+
+            // If negative, OTM amount is zero
+            if (isNegative) {
+                otmAmount = 0;
+            }
+
+            // 0.1 * spot - OTM amount
+            (uint256 spot100SubOTM, bool isDiffNegative) = NegativeMath.add(10 * spot, false,  100 * otmAmount, true);
+
+            // 0.08 * spot
             uint256 spot80 = 8 * spot;
 
-            margin = spot100SubOTM.max(spot80) / 100;
+            if (isDiffNegative) {
+                // if spot100SubOTM < 0, then it cannot be max
+                margin = spot80 / 100;
+            } else {
+                margin = spot100SubOTM.max(spot80) / 100;
+            }
 
         // Case 3: short put position
         // min(max((10% - OTM Amount/spot)*spot, 8% * spot), 50% of strike)
@@ -101,12 +116,28 @@ library MarginMath {
             // max(0.1 * spot - OTM Amount, 0.08 * spot) * 100 / 100
             // max((0.1 * spot - OTM Amount) * 100, 0.08 * spot * 100) / 100
             // max((10 * spot - 100 * OTM Amount), 8 * spot) / 100
-            (uint256 otmAmount, bool isNegative) = option.strike.absdiff(spot);
-            uint256 spot100SubOTM = isNegative ? (10 * spot + 100 * otmAmount) : (10 * spot - 100 * otmAmount);
+            /// @dev For a put, OTM Amount = spot - strike
+            (uint256 otmAmount, bool isNegative) = spot.absdiff(option.strike);
+
+            // If negative, OTM amount is zero
+            if (isNegative) {
+                otmAmount = 0;
+            }
+
+            // 0.1 * spot - OTM amount
+            (uint256 spot100SubOTM, bool isDiffNegative) = NegativeMath.add(10 * spot, false, 100 * otmAmount, true);
+
+            // 0.08 * spot
             uint256 spot80 = 8 * spot;
 
             // Compute max but don't divide by 100 yet
-            uint256 maxChoice = spot100SubOTM.max(spot80);
+            uint256 maxChoice;
+            // If 0.1 * spot - OTM amount < 0, it is not the max
+            if (isDiffNegative) {
+                maxChoice = spot80;
+            } else {
+                maxChoice = spot100SubOTM.max(spot80);
+            }
 
             // min(maxChoice, 50% of strike * 100) / 100
             // min(maxChoice, 0.5 * strike * 100) / 100
@@ -140,6 +171,11 @@ library MarginMath {
         view
         returns (uint256 margin) 
     {
+        require(
+            option.expiry > block.timestamp,
+            "getInitialMargin: option is expired"
+        );
+
         // Case 1: long position
         // min(100% of mark price, 10% of spot)
         if (isBuyer) {
@@ -159,11 +195,26 @@ library MarginMath {
             // max((0.2 * spot - OTM Amount), 0.125 * spot) * 1000 / 1000
             // max((0.2 * spot - OTM Amount) * 1000, 0.125 * spot * 1000) / 1000
             // max((200 * spot - 1000 * OTM Amount), 125 * spot) / 1000
+            /// @dev For a call, OTM Amount = strike - spot
             (uint256 otmAmount, bool isNegative) = option.strike.absdiff(spot);
-            uint256 spot200SubOTM = isNegative ? (200 * spot + 1000 * otmAmount) : (200 * spot - 1000 * otmAmount);
+
+            // If negative, OTM amount is zero
+            if (isNegative) {
+                otmAmount = 0;
+            }
+
+            // 0.2 * spot - OTM amount
+            (uint256 spot200SubOTM, bool isDiffNegative) = NegativeMath.add(200 * spot, false, 1000 * otmAmount, true);
+
+            // 0.125 * spot
             uint256 spot125 = 125 * spot;
 
-            margin = spot200SubOTM.max(spot125) / 1000;
+            if (isDiffNegative) {
+                // if spot200SubOTM < 0, then it cannot be the max
+                margin = spot125 / 1000;
+            } else {
+                margin = spot200SubOTM.max(spot125) / 1000;
+            }
 
         // Case 3: short put position
         // min(max((20% - OTM Amount/spot)*spot, 12.5% * spot), 50% of strike)
@@ -174,12 +225,28 @@ library MarginMath {
             // max(0.2 * spot - OTM Amount, 0.125 * spot) * 1000 / 1000
             // max((0.2 * spot - OTM Amount) * 1000, 0.125 * spot * 1000) / 1000
             // max((200 * spot - 1000 * OTM Amount), 125 * spot) / 1000
-            (uint256 otmAmount, bool isNegative) = option.strike.absdiff(spot);
-            uint256 spot200SubOTM = isNegative ? (200 * spot + 1000 * otmAmount) : (200 * spot - 1000 * otmAmount);
+            /// @dev For a put, OTM Amount = spot - strike
+            (uint256 otmAmount, bool isNegative) = spot.absdiff(option.strike);
+
+            // If negative, OTM amount is zero
+            if (isNegative) {
+                otmAmount = 0;
+            }
+
+            // 0.2 * spot - OTM amount
+            (uint256 spot200SubOTM, bool isDiffNegative) = NegativeMath.add(200 * spot, false, 1000 * otmAmount, true);
+
+            // 0.125 * spot
             uint256 spot125 = 125 * spot;
 
-            // Compute max but don't divide by 1000 yet
-            uint256 maxChoice = spot200SubOTM.max(spot125);
+            // This variable stores the max multiplied by 1k
+            uint256 maxChoice;
+            // If 0.2 * spot - OTM amount < 0, it is not the max
+            if (isDiffNegative) {
+                maxChoice = spot125;
+            } else {
+                maxChoice = spot200SubOTM.max(spot125);
+            }
 
             // min(maxChoice, 50% of strike * 1000) / 1000
             // min(maxChoice, 0.5 * strike * 1000) / 1000
