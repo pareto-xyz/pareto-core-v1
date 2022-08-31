@@ -1,8 +1,8 @@
 import hre from "hardhat";
 import { expect } from "chai";
-import { TestBasicMath } from "../../typechain-types";
+import { Contract } from "ethers";
 
-let basicMath: TestBasicMath;
+let basicMath: Contract;
 
 describe("BasicMath Library", () => {
   beforeEach(async () => {
