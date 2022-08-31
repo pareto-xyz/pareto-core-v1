@@ -9,12 +9,20 @@ import "../libraries/Derivative.sol";
 contract TestDerivative {
     mapping(bytes32 => Derivative.VolatilitySmile) public volSmiles;
 
-    function createSmile(uint256 key)
+    function createSmile(uint256 key, uint256 initSigma)
         external
         returns (Derivative.VolatilitySmile memory smile) 
     {
-        smile = Derivative.createSmile();
+        smile = Derivative.createSmile(initSigma);
         volSmiles[keccak256(abi.encodePacked(key))] = smile;
+    }
+
+    function fetchSmile(uint256 key) 
+        external 
+        view 
+        returns (Derivative.VolatilitySmile memory smile) 
+    {
+        return volSmiles[keccak256(abi.encodePacked(key))];
     }
 
     function updateSmile(
