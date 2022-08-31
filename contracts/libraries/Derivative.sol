@@ -5,6 +5,7 @@ import "./BlackScholesMath.sol";
 import "./BasicMath.sol";
 import "./NegativeMath.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
+import "hardhat/console.sol";
 
 /**
  * @notice Contains enums and structs representing Pareto derivatives
@@ -153,15 +154,14 @@ library Derivative {
      * @param spot Spot price
      * @param strike Strike price
      * @param smile Implied volatility smile
-     * @param decimals Decimals for spot/strike price
      */
-    function querySmile(uint256 spot, uint256 strike, VolatilitySmile storage smile, uint8 decimals) 
+    function querySmile(uint256 spot, uint256 strike, VolatilitySmile memory smile) 
         internal
-        view
+        pure
         returns (uint256 sigma)
     {
         // Compute current moneyness (times by 100 for moneyness decimals)
-        uint256 curMoneyness = (spot * 10**decimals * 100) / strike;
+        uint256 curMoneyness = (spot * 100) / strike;
 
         // Interpolate against existing smiles to get sigma
         sigma = interpolate([50,75,100,125,150], smile.sigmaAtMoneyness, curMoneyness);

@@ -36,19 +36,8 @@ let blackScholesMath: Contract;
 
 describe("BlackScholesMath Library", () => {
   beforeEach(async () => {
-    const BlackScholesMathLib = await ethers.getContractFactory("BlackScholesMath");
-    const blackScholesMathLib = await BlackScholesMathLib.deploy();
-    await blackScholesMathLib.deployed();
-
     // Link the lib to the test contract
-    const BlackScholesMathFactory = await hre.ethers.getContractFactory(
-      "TestBlackScholesMath",
-      {
-        libraries: {
-          BlackScholesMath: blackScholesMathLib.address,
-        }
-      }
-    );
+    const BlackScholesMathFactory = await hre.ethers.getContractFactory("TestBlackScholesMath");
     blackScholesMath = await BlackScholesMathFactory.deploy();
   });
 

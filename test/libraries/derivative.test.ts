@@ -24,35 +24,14 @@ let bob: SignerWithAddress;
 
 describe("Derivative Library", () => {
   beforeEach(async () => {
-    const BlackScholesMathLib = await ethers.getContractFactory("BlackScholesMath");
-    const blackScholesMathLib = await BlackScholesMathLib.deploy();
-    await blackScholesMathLib.deployed();
-
-    const DerivativeLib = await ethers.getContractFactory(
-      "Derivative",
-      {
-        libraries: {
-          BlackScholesMath: blackScholesMathLib.address,
-        }
-      }
-    );
-    const derivativeLib = await DerivativeLib.deploy();
-    await derivativeLib.deployed();
-
-    const DerivativeFactory = await ethers.getContractFactory(
-      "TestDerivative",
-      {
-        libraries: {
-          Derivative: derivativeLib.address,
-        }
-      }
-    );
-    derivative = await DerivativeFactory.deploy();
-    await derivative.deployed();
-
     // Create signers
     const wallets = await ethers.getSigners(); 
     [alice, bob] = wallets;
+
+    // Deploy derivatives
+    const DerivativeFactory = await ethers.getContractFactory("TestDerivative");
+    derivative = await DerivativeFactory.deploy();
+    await derivative.deployed();
   });
 
   /****************************************
@@ -60,25 +39,55 @@ describe("Derivative Library", () => {
    ****************************************/
   describe("Creating a smile", () => {
     it("Can create a smile", async () => {
-      const curTime = Math.floor(Date.now() / 1000);
-      // Use black scholes to estimate a reasonable price
-      const tradePrice = checkCallPrice(1, 1.1, 0.5, ONE_WEEK, 0);
-      const order = {
-        buyer: alice.address,
-        seller: bob.address,
-        tradePrice: toBn(tradePrice.toString(), 18),
-        quantity: 5,
-        option: {
-          optionType: 0,
-          strike: ONE_ETH.mul(11).div(10),
-          expiry: curTime + ONE_WEEK,
-          underlying: "0x0000000000000000000000000000000000000000",
-          decimals: 18,
-        }
-      };
-      var smile = await derivative.createSmile(order);
-      console.log(smile);
+      await derivative.createSmile();
     });
+    it("Smile marked as existing", async () => {
+      const smile = await derivative.createSmile();
+      expect(smile.exists_).to.be.true;
+    });
+    it("Smile initalized to 50% everywhere", async () => {
+      const smile = await derivative.createSmile();
+      for (var i = 0; i < 5; i++) {
+        expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.be.equal("0.5");
+      }
+    });
+  });
+
+  /****************************************
+   * Smile querying
+   ****************************************/
+  describe("Querying a smile", () => {
+    it("Can query smile at spot/strike=1, not updated", async () => {
+      const smile = await derivative.createSmile();
+      const sigma = await derivative.querySmile(ONE_ETH, ONE_ETH, smile);
+      expect(fromBn(sigma, 4)).to.be.equal("0.5");
+    });
+    it("Can query smile at spot/strike=1/10, not updated", async () => {
+      const smile = await derivative.createSmile();
+      const sigma = await derivative.querySmile(ONE_ETH.div(10), ONE_ETH, smile);
+      expect(fromBn(sigma, 4)).to.be.equal("0.5");
+    });
+    it("Can query smile at spot/strike=10, not updated", async () => {
+      const smile = await derivative.createSmile();
+      const sigma = await derivative.querySmile(ONE_ETH.mul(10), ONE_ETH, smile);
+      expect(fromBn(sigma, 4)).to.be.equal("0.5");
+    });
+    it("Can query smile at spot/strike=1.3, not updated", async () => {
+      const smile = await derivative.createSmile();
+      const sigma = await derivative.querySmile(ONE_ETH.mul(13).div(10), ONE_ETH, smile);
+      expect(fromBn(sigma, 4)).to.be.equal("0.5");
+    });
+    it("Can query smile at spot/strike=0.8, not updated", async () => {
+      const smile = await derivative.createSmile();
+      const sigma = await derivative.querySmile(ONE_ETH.mul(8).div(10), ONE_ETH, smile);
+      expect(fromBn(sigma, 4)).to.be.equal("0.5");
+    });
+  });
+
+  /****************************************
+   * Smile updating
+   ****************************************/
+  describe("Updating a smile", () => {
   });
 
   /****************************************

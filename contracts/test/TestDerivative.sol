@@ -15,6 +15,18 @@ contract TestDerivative {
         return Derivative.createSmile();
     }
 
+    function querySmile(
+        uint256 spot,
+        uint256 strike,
+        Derivative.VolatilitySmile memory smile
+    ) 
+        external
+        pure
+        returns (uint256 sigma)
+    {
+        return Derivative.querySmile(spot, strike, smile);
+    }
+
     function getMarkPrice(
         Derivative.Option memory option,
         uint256 spot,
