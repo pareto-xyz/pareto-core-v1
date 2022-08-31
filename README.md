@@ -1,3 +1,7 @@
+[![](https://img.shields.io/github/stars/pareto-xyz/pareto-core-v1?style=social)](https://img.shields.io/github/stars/pareto-xyz/pareto-core-v1?style=social)
+![Twitter Follow](https://img.shields.io/twitter/follow/Paretoxyz?style=social)
+[![Tests](https://github.com/pareto-xyz/pareto-core-v1/actions/workflows/ci.yaml/badge.svg)](https://github.com/pareto-xyz/pareto-core-v1/actions/workflows/ci.yaml)
+
 # Pareto V1
 
 Core smart contracts of Pareto's Options Platform V1. 

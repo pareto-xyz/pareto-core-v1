@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    tags-ignore:
+      - '**'
+    branches:
+      - 'main'
+  pull_request:
+
+jobs:
+  lint-test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check Out Git Repository
+        uses: actions/checkout@v2
+
+      - name: Set Up Node
+        uses: actions/setup-node@v2-beta
+        with:
+          node-version: '16.x'
+
+      - run: npm install --ignore-scripts
+
+      - name: Test
+        run: npx hardhat test
