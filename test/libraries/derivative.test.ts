@@ -105,6 +105,7 @@ describe("Derivative Library", () => {
         quantity: 5,
         option: {
           optionType: 0,
+          // Note moneyness is computed as spot/strike so spot/1.1
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
           underlying: "0x0000000000000000000000000000000000000000",
@@ -115,13 +116,99 @@ describe("Derivative Library", () => {
     it("Can update smile", async () => {
       await derivative.updateSmile(ONE_ETH.mul(11).div(10), order, 1, 10);
     });
-    it("Correct value after updating middle value", async () => {
+    it("Changes after updating 3rd value", async () => {
       await derivative.updateSmile(ONE_ETH.mul(11).div(10), order, 1, 10);
-      const sigma3 = fromBn(await derivative.querySmile(ONE_ETH, ONE_ETH, 1), 4);
-      // We expect sigma to have changed after updating
-      expect(sigma3).to.not.be.equal("5000");
-      const sigma1 = fromBn(await derivative.querySmile(ONE_ETH.div(0.5), ONE_ETH, 1), 4);
-      expect(sigma1).to.be.equal("5000");
+      const smile = await derivative.fetchSmile(1);
+      for (var i = 0; i < 5; i++) {
+        if (i == 2) {
+          expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.not.be.equal("0.5");
+        } else {
+          expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.be.equal("0.5");
+        }
+      }
+    });
+    it("No change if spot = mark", async () => {
+      await derivative.updateSmile(ONE_ETH, order, 1, 10);
+      const smile = await derivative.fetchSmile(1);
+      for (var i = 0; i < 5; i++) {
+        expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.be.equal("0.5");
+      }
+    });
+    it("Changes after updating 1st value", async () => {
+      await derivative.updateSmile(ONE_ETH.div(2), order, 1, 10);
+      const smile = await derivative.fetchSmile(1);
+      for (var i = 0; i < 5; i++) {
+        if (i == 0) {
+          expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.not.be.equal("0.5");
+        } else {
+          expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.be.equal("0.5");
+        }
+      }
+    });
+    it("Changes after updating 5th value", async () => {
+      await derivative.updateSmile(ONE_ETH.mul(2), order, 1, 10);
+      const smile = await derivative.fetchSmile(1);
+      for (var i = 0; i < 5; i++) {
+        if (i == 4) {
+          expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.not.be.equal("0.5");
+        } else {
+          expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.be.equal("0.5");
+        }
+      }
+    });
+    it("Changes after updating 2nd value", async () => {
+      await derivative.updateSmile(ONE_ETH.mul(75).div(100), order, 1, 10);
+      const smile = await derivative.fetchSmile(1);
+      expect(fromBn(smile.sigmaAtMoneyness[1], 4)).to.not.be.equal("0.5");
+    });
+    it("Changes after updating 4nd value", async () => {
+      await derivative.updateSmile(ONE_ETH.mul(125).div(100), order, 1, 10);
+      const smile = await derivative.fetchSmile(1);
+      expect(fromBn(smile.sigmaAtMoneyness[3], 4)).to.not.be.equal("0.5");
+    });
+    it("Changes after updating 1st and 2nd value", async () => {
+      await derivative.updateSmile(ONE_ETH.mul(65).div(100), order, 1, 10);
+      const smile = await derivative.fetchSmile(1);
+      for (var i = 0; i < 5; i++) {
+        if ((i == 0) || (i == 1)) {
+          expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.not.be.equal("0.5");
+        } else {
+          expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.be.equal("0.5");
+        }
+      }
+    });
+    it("Changes after updating 2nd and 3rd value", async () => {
+      await derivative.updateSmile(ONE_ETH.mul(85).div(100), order, 1, 10);
+      const smile = await derivative.fetchSmile(1);
+      for (var i = 0; i < 5; i++) {
+        if ((i == 1) || (i == 2)) {
+          expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.not.be.equal("0.5");
+        } else {
+          expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.be.equal("0.5");
+        }
+      }
+    });
+    it("Changes after updating 3rd and 4th value", async () => {
+      await derivative.updateSmile(ONE_ETH.mul(120).div(100), order, 1, 10);
+      const smile = await derivative.fetchSmile(1);
+      for (var i = 0; i < 5; i++) {
+        if ((i == 2) || (i == 3)) {
+          expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.not.be.equal("0.5");
+        } else {
+          expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.be.equal("0.5");
+        }
+      }
+    });
+    it("Changes after updating 4th and 5th value", async () => {
+      await derivative.updateSmile(ONE_ETH.mul(145).div(100), order, 1, 10);
+      const smile = await derivative.fetchSmile(1);
+      for (var i = 0; i < 5; i++) {
+        if ((i == 3) || (i == 4)) {
+          expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.not.be.equal("0.5");
+        } else {
+          expect(fromBn(smile.sigmaAtMoneyness[i], 4)).to.be.equal("0.5");
+        }
+      }
     });
   });
 
