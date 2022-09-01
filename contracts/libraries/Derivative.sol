@@ -4,8 +4,6 @@ pragma solidity ^0.8.9;
 import "./BlackScholesMath.sol";
 import "./BasicMath.sol";
 import "./NegativeMath.sol";
-import {IERC20} from "../interfaces/IERC20.sol";
-import "hardhat/console.sol";
 
 /**
  * @notice Contains enums and structs representing Pareto derivatives

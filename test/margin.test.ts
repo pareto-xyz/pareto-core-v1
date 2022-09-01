@@ -1,5 +1,4 @@
-import { ethers } from "hardhat";
-import { BigNumber } from "ethers";
+import { ethers, upgrades } from "hardhat";
 import { fromBn, toBn } from "evm-bn";
 import { expect } from "chai";
 import { Contract } from "ethers";
@@ -55,19 +54,19 @@ describe("ParetoMargin Contract", () => {
     const txReceiptVol = await txReceiptUnresolvedVol.wait();
     const volOracleAddress = txReceiptVol.events![2].args![0];
 
-    // Deploy Pareto margin contract
+    // Deploy upgradeable Pareto margin contract
     const ParetoMargin = await ethers.getContractFactory("ParetoV1Margin", deployer);
-    paretoMargin = await ParetoMargin.deploy();
-    await paretoMargin.deployed();
-
-    // Initialize Pareto margin account
-    paretoMargin.initialize(
-      usdc.address,
-      insurance.address,
-      weth.address,
-      spotOracleAddress,
-      volOracleAddress
+    paretoMargin = await upgrades.deployProxy(
+      ParetoMargin,
+      [
+        usdc.address,
+        insurance.address,
+        weth.address,
+        spotOracleAddress,
+        volOracleAddress
+      ]
     );
+    await paretoMargin.deployed();
   });
 
   describe("Test construction", () => {
@@ -89,5 +88,14 @@ describe("ParetoMargin Contract", () => {
     it("Correct default min % for margin", async () => {
       expect(fromBn(await paretoMargin.minMarginPerc(), 4)).to.be.equal("0.01");
     });
+  });
+
+  describe("Depositing USDC", () => {
+    it("Owner can deposit", async () => {});
+    it("Keeper can deposit", async () => {});
+    it("User can deposit", async () => {});
+    it("Emits an event", async () => {});
+    it("USDC is properly transferred", async () => {});
+    it("Cannot deposit 0 USDC", async () => {});
   });
 })

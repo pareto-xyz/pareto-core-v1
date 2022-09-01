@@ -6,9 +6,9 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
-import "./interfaces/IERC20.sol";
+import "./interfaces/IERC20Upgradeable.sol";
 import "./interfaces/IOracle.sol";
-import "./libraries/SafeERC20.sol";
+import "./utils/SafeERC20Upgradeable.sol";
 import "./libraries/Derivative.sol";
 import "./libraries/MarginMath.sol";
 import "./libraries/DateMath.sol";
@@ -33,7 +33,7 @@ contract ParetoV1Margin is
     ReentrancyGuardUpgradeable,
     OwnableUpgradeable
 {
-    using SafeERC20 for IERC20;
+    using SafeERC20Upgradeable for IERC20Upgradeable;
 
     /************************************************
      * Enum variables
@@ -276,7 +276,7 @@ contract ParetoV1Margin is
         balances[msg.sender] += amount;
 
         // Pull resources from sender to this contract
-        IERC20(usdc).transferFrom(msg.sender, address(this), amount);
+        IERC20Upgradeable(usdc).transferFrom(msg.sender, address(this), amount);
 
         // Emit `DepositEvent`
         emit DepositEvent(msg.sender, amount);
@@ -297,7 +297,7 @@ contract ParetoV1Margin is
         require(satisfied, "withdraw: margin check failed");
 
         // Transfer USDC to sender
-        IERC20(usdc).safeTransfer(msg.sender, amount);
+        IERC20Upgradeable(usdc).safeTransfer(msg.sender, amount);
 
         // Emit event
         emit WithdrawEvent(msg.sender, amount);
@@ -316,7 +316,7 @@ contract ParetoV1Margin is
         require(satisfied, "withdraw: margin check failed");
 
         // Transfer USDC to sender
-        IERC20(usdc).safeTransfer(msg.sender, balance);
+        IERC20Upgradeable(usdc).safeTransfer(msg.sender, balance);
 
         // Emit event
         emit WithdrawEvent(msg.sender, balance);
@@ -542,7 +542,7 @@ contract ParetoV1Margin is
         returns (uint256[11] memory strikes)
     {
         require(activeExpiry > block.timestamp, "getStrikesAtDelta: expiry in the past");
-        uint8 decimals = IERC20(underlying).decimals();
+        uint8 decimals = IERC20Upgradeable(underlying).decimals();
 
         // Hardcoded deltas for the 11 strikes (decimals 4)
         uint16[11] memory deltas = [250,500,1000,2250,3500,5000,6500,7750,9000,9500,9750];
@@ -902,7 +902,7 @@ contract ParetoV1Margin is
         require(underlying != address(0), "addPosition: underlying is empty");
         require(spotOracles[underlying] != address(0), "addPosition: no oracle for underlying");
 
-        uint8 decimals = IERC20(underlying).decimals();
+        uint8 decimals = IERC20Upgradeable(underlying).decimals();
 
         // Get strike at chosen level from current round strikes
         uint256 strike = roundStrikes[underlying][uint8(strikeLevel)];
