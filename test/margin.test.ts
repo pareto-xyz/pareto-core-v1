@@ -4,6 +4,7 @@ import { fromBn, toBn } from "evm-bn";
 import { expect } from "chai";
 import { Contract } from "ethers";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
+import { deploy } from "@openzeppelin/hardhat-upgrades/dist/utils";
 
 let usdc: Contract;
 let weth: Contract;
@@ -70,6 +71,9 @@ describe("ParetoMargin Contract", () => {
     await paretoMargin.connect(insurance).deposit(100000);
   });
 
+  /****************************************
+   * Contract construction
+   ****************************************/  
   describe("Test construction", () => {
     it("Can construct construct", async () => {
       expect(paretoMargin.address).to.not.be.equal("");
@@ -91,6 +95,9 @@ describe("ParetoMargin Contract", () => {
     });
   });
 
+  /****************************************
+   * Upgradeability
+   ****************************************/  
   describe("Upgradeability", () => {
     it("Can upgrade", async () => {
       const ParetoMarginV2 = await ethers.getContractFactory("ParetoV1Margin", deployer);
@@ -103,6 +110,9 @@ describe("ParetoMargin Contract", () => {
     });
   });
 
+  /****************************************
+   * Depositing
+   ****************************************/  
   describe("Depositing USDC", () => {
     it("Owner can deposit", async () => {
       await usdc.connect(deployer).approve(paretoMargin.address, 1);
@@ -139,6 +149,9 @@ describe("ParetoMargin Contract", () => {
     });
   });
 
+  /****************************************
+   * Checking balance
+   ****************************************/  
   describe("Checking balance", () => {
     it("Default balance for user is 0", async () => {
       expect(await paretoMargin.connect(buyer).getBalance()).to.be.equal("0");
@@ -153,6 +166,15 @@ describe("ParetoMargin Contract", () => {
     });
   });
 
+  /****************************************
+   * Adding a new position
+   ****************************************/  
+  describe("Adding a position", () => {
+  });
+
+  /****************************************
+   * Withdrawal
+   ****************************************/  
   describe("Withdrawing USDC", () => {
     beforeEach(async () => {
       // Depositor
@@ -217,5 +239,61 @@ describe("ParetoMargin Contract", () => {
       // TODO
       expect(true).to.be.false;
     });
+  });
+
+  /****************************************
+   * Rollover
+   ****************************************/  
+  describe("Rollover", () => {
+  });
+
+  /****************************************
+   * Keeper management
+   ****************************************/  
+  describe("Managing keepers", () => {
+    it("Owner can add keeper", async () => {
+      await paretoMargin.connect(deployer).addKeepers([buyer.address]);
+    });
+    it("Owner can add multiple keepers at once", async () => {
+      await paretoMargin.connect(deployer).addKeepers([buyer.address, seller.address]);
+    });
+    it("Owner can remove keeper", async () => {
+      await paretoMargin.connect(deployer).addKeepers([keeper.address]);
+      await paretoMargin.connect(deployer).removeKeepers([keeper.address]);
+    });
+    it("Keeper cannot add keeper", async () => {
+      await expect(
+        paretoMargin.connect(keeper).addKeepers([buyer.address])
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("Keeper cannot remove keeper", async () => {
+      await paretoMargin.connect(deployer).addKeepers([keeper.address]);
+      await expect(
+        paretoMargin.connect(keeper).removeKeepers([keeper.address])
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("User cannot add keeper", async () => {
+      await expect(
+        paretoMargin.connect(buyer).addKeepers([seller.address])
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("User cannot remove keeper", async () => {
+      await paretoMargin.connect(deployer).addKeepers([keeper.address]);
+      await expect(
+        paretoMargin.connect(buyer).removeKeepers([keeper.address])
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+  });
+
+  /****************************************
+   * Oracle management
+   ****************************************/  
+  describe("Managing oracles", () => {
+  });
+
+  /****************************************
+   * Other keeper functions
+   ****************************************/  
+  describe("Other keeper jobs", () => {
   });
 })
