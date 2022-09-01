@@ -3,9 +3,10 @@ import { fromBn, toBn } from "evm-bn";
 import { expect } from "chai";
 import { Contract } from "ethers";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { getFixedGasSigners } from "./utils/helpers";
+import { getFixedGasSigners, toBytes32 } from "./utils/helpers";
 
 let usdc: Contract;
+let derivative: Contract;
 let paretoMargin: Contract;
 let deployer: SignerWithAddress;
 let keeper: SignerWithAddress;
@@ -62,9 +63,17 @@ describe("ParetoMargin Contract", () => {
     );
     await paretoMargin.deployed();
 
+    // Add keeper as a keeper
+    await paretoMargin.connect(deployer).addKeepers([keeper.address]);
+
     // Insurance will deposit all their USDC into contract
     await usdc.connect(insurance).approve(paretoMargin.address, ONEUSDC.mul(1e6));
     await paretoMargin.connect(insurance).deposit(ONEUSDC.mul(1e6));
+
+    // Useful for functions & objects
+    const DerivativeFactory = await ethers.getContractFactory("TestDerivative");
+    derivative = await DerivativeFactory.deploy();
+    await derivative.deployed();
   });
 
   /****************************************
@@ -163,24 +172,119 @@ describe("ParetoMargin Contract", () => {
   });
 
   /****************************************
+   * Fetching a smile
+   ****************************************/  
+  describe("Getting a smile", () => {
+    it("Can fetch smile", async () => {
+      const expiry = await paretoMargin.activeExpiry();
+      const smile = await paretoMargin.getVolatilitySmile("ETH", expiry);
+      expect(smile.exists_).to.be.true;
+    });
+    it("Empty smile does not exist", async () => {
+      const expiry = await paretoMargin.activeExpiry();
+      const smile = await paretoMargin.getVolatilitySmile("TEST", expiry);
+      expect(smile.exists_).to.be.false;
+    });
+  });
+
+  /****************************************
    * Adding a new position
    ****************************************/  
   describe("Adding a position", () => {
+    let expiry: Number; 
+    beforeEach(async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      expiry = await paretoMargin.activeExpiry();
+    });
     it("Owner can add a new position", async () => {
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
       await paretoMargin.connect(deployer).addPosition(
         buyer.address,
         seller.address,
-        1,
+        ONEUSDC,
         1,
         0,
         5,
         "ETH"
       );
     });
-    it("Keeper can add a new position", async () => {});
-    it("User cannot add a new position", async () => {});
-    it("Emits event when adding a position", async () => {});
-    it("Smile is updated on adding a new position", async () => {});
+    it("Keeper can add a new position", async () => {
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(keeper).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        5,
+        "ETH"
+      );
+    });
+    it("User cannot add a new position", async () => {
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await expect(
+        paretoMargin.connect(buyer).addPosition(
+          buyer.address,
+          seller.address,
+          ONEUSDC,
+          1,
+          0,
+          5,
+          "ETH"
+        )
+      ).to.be.revertedWith("onlyKeeper: caller is not a keeper");
+    });
+    it("Emits event when adding a position", async () => {
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await expect(
+        paretoMargin.connect(keeper).addPosition(
+          buyer.address,
+          seller.address,
+          ONEUSDC,
+          1,
+          0,
+          5,
+          "ETH"
+        )
+      )
+        .to.emit(paretoMargin, "RecordPositionEvent")
+        .withArgs(ONEUSDC, 1, 0, "ETH", 5, expiry);
+    });
+    it("Smile is updated on adding a new position", async () => {
+      // Fetch smile before position
+      const smilePre = await paretoMargin.getVolatilitySmile("ETH", expiry);
+
+      // Add a position
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(keeper).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        5,
+        "ETH"
+      );
+
+      // Fetch smile after position
+      const smilePost = await paretoMargin.getVolatilitySmile("ETH", expiry);
+
+      // Check the two smiles are not the same
+      var isSame = true;
+      for (var i = 0; i < 5; i++) {
+        if (smilePre[i] != smilePost[i]) {
+          isSame = false;
+        }
+      }
+
+      expect(isSame).to.be.false;
+    });
     it("Buyer passes margin check after position added", async () => {});
     it("Seller passes margin check after position added", async () => {});
     it("Can add position for brand new underlying", async () => {});
@@ -189,18 +293,34 @@ describe("ParetoMargin Contract", () => {
     it("Cannot add position with empty underlying name", async () => {});
     it("Cannot add position if buyer below margin", async () => {
       // seller puts in 1k usdc into margin account but buyer does not
-      await paretoMargin.connect(seller).deposit(1000);
-      await paretoMargin.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        1,
-        1,
-        0,
-        5,
-        "ETH"
-      );
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await expect(
+        paretoMargin.connect(deployer).addPosition(
+          buyer.address,
+          seller.address,
+          ONEUSDC,
+          1,
+          0,
+          5,
+          "ETH"
+        )
+      ).to.be.revertedWith("addPosition: buyer failed margin check");
     });
-    it("Cannot add position if seller below margin", async () => {});
+    it("Cannot add position if seller below margin", async () => {
+      // buyer puts in 1k usdc into margin account but seller does not
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await expect(
+        paretoMargin.connect(deployer).addPosition(
+          buyer.address,
+          seller.address,
+          ONEUSDC,
+          1,
+          0,
+          5,
+          "ETH"
+        )
+      ).to.be.revertedWith("addPosition: seller failed margin check");
+    });
   });
 
   /****************************************
@@ -215,11 +335,11 @@ describe("ParetoMargin Contract", () => {
   describe("Withdrawing USDC", () => {
     beforeEach(async () => {
       // Depositor
-      await usdc.connect(buyer).approve(paretoMargin.address, 1);
-      await paretoMargin.connect(buyer).deposit(1);
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC);
+      await paretoMargin.connect(buyer).deposit(ONEUSDC);
     });
     it("Depositor can withdraw", async () => {
-      await paretoMargin.connect(buyer).withdraw(1);
+      await paretoMargin.connect(buyer).withdraw(ONEUSDC);
     });
     it("Depositor can withdraw all", async () => {
       await paretoMargin.connect(buyer).withdrawAll();
@@ -227,20 +347,20 @@ describe("ParetoMargin Contract", () => {
     it("USDC is properly transferred", async () => {
       const marginPre = await usdc.balanceOf(paretoMargin.address);
       const userPre = await usdc.balanceOf(buyer.address);
-      await paretoMargin.connect(buyer).withdraw(1);
+      await paretoMargin.connect(buyer).withdraw(ONEUSDC);
       const marginPost = await usdc.balanceOf(paretoMargin.address);
       const userPost = await usdc.balanceOf(buyer.address);
-      expect(marginPre.sub(marginPost)).to.be.equal("1");
-      expect(userPost.sub(userPre)).to.be.equal("1");
+      expect(marginPre.sub(marginPost)).to.be.equal(ONEUSDC);
+      expect(userPost.sub(userPre)).to.be.equal(ONEUSDC);
     });
     it("Emits an event on withdrawal", async () => {
-      await expect(paretoMargin.connect(buyer).withdraw(1))
+      await expect(paretoMargin.connect(buyer).withdraw(ONEUSDC))
         .to.emit(paretoMargin, "WithdrawEvent")
-        .withArgs(buyer.address, 1);
+        .withArgs(buyer.address, ONEUSDC);
     });
     it("Can withdraw all after two deposits", async () => {
-      await usdc.connect(buyer).approve(paretoMargin.address, 1);
-      await paretoMargin.connect(buyer).deposit(1);
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC);
+      await paretoMargin.connect(buyer).deposit(ONEUSDC);
 
       const marginPre = await usdc.balanceOf(paretoMargin.address);
       const userPre = await usdc.balanceOf(buyer.address);
@@ -248,15 +368,15 @@ describe("ParetoMargin Contract", () => {
       const marginPost = await usdc.balanceOf(paretoMargin.address);
       const userPost = await usdc.balanceOf(buyer.address);
 
-      expect(marginPre.sub(marginPost)).to.be.equal("2");
-      expect(userPost.sub(userPre)).to.be.equal("2");
+      expect(marginPre.sub(marginPost)).to.be.equal(ONEUSDC.mul(2));
+      expect(userPost.sub(userPre)).to.be.equal(ONEUSDC.mul(2));
     });
     it("Emits an event on withdrawal all", async () => {
-      await usdc.connect(buyer).approve(paretoMargin.address, 1);
-      await paretoMargin.connect(buyer).deposit(1);
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC);
+      await paretoMargin.connect(buyer).deposit(ONEUSDC);
       await expect(paretoMargin.connect(buyer).withdrawAll())
         .to.emit(paretoMargin, "WithdrawEvent")
-        .withArgs(buyer.address, 2);
+        .withArgs(buyer.address, ONEUSDC.mul(2));
     });
     it("Cannot withdraw 0 amount", async () => {
       await expect(
@@ -265,7 +385,7 @@ describe("ParetoMargin Contract", () => {
     });
     it("Cannot withdraw more than balance", async () => {
       await expect(
-        paretoMargin.connect(buyer).withdraw(2)
+        paretoMargin.connect(buyer).withdraw(ONEUSDC.mul(2))
       ).to.be.revertedWith("withdraw: amount > balance");
     });
     it("Cannot withdraw if failing margin check", async () => {

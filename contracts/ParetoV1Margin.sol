@@ -66,7 +66,7 @@ contract ParetoV1Margin is
 
     /// @notice The current active expiry
     /// @dev This assumes all underlying has only one expiry.
-    uint256 private activeExpiry;
+    uint256 public activeExpiry;
 
     /// @notice If the contract is paused or not
     bool private isPaused;
@@ -96,7 +96,7 @@ contract ParetoV1Margin is
     mapping(bytes32 => uint256[11]) public roundStrikes;
 
     /// @notice Store volatility smiles per hash(expiry,underlying)
-    mapping(bytes32 => Derivative.VolatilitySmile) public volSmiles;
+    mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
 
     /// @notice Store average trade sizes for each expiry/underlying
     mapping(bytes32 => uint256) private avgTradeSizes;
@@ -503,6 +503,21 @@ contract ParetoV1Margin is
      */
     function getBalance() external view returns (uint256) {
         return balances[msg.sender];
+    }
+
+    /**
+     * @notice Return a volatility smile
+     * @param underlyingName Name of the underlying token
+     * @param expiry The expiry date
+     */
+    function getVolatilitySmile(string memory underlyingName, uint256 expiry)
+      external
+      view
+      returns (Derivative.VolatilitySmile memory smile) 
+    {
+        bytes32 underlying = keccak256(abi.encodePacked(underlyingName));
+        bytes32 smileHash = Derivative.hashForSmile(underlying, expiry);
+        return volSmiles[smileHash];
     }
 
     /************************************************
