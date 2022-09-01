@@ -71,14 +71,14 @@ contract ParetoV1Margin is
     /// @notice If the contract is paused or not
     bool private isPaused;
 
-    /// @notice Store a list of underlyings
-    address[] public underlyings;
+    /// @notice Store a list of names for underlying tokens
+    bytes32[] public underlyings;
 
     /// @notice Stores addresses for spot oracles of each underlying
-    mapping(address => address) private spotOracles;
+    mapping(bytes32 => address) private spotOracles;
 
     /// @notice Stores addresses for historical volatility oracles of each underlying
-    mapping(address => address) private volOracles;
+    mapping(bytes32 => address) private volOracles;
 
     /// @notice List of keepers who can add positions
     mapping(address => bool) private keepers;
@@ -93,7 +93,7 @@ contract ParetoV1Margin is
     mapping(address => uint16[]) private userRoundIxs;
 
     /// @notice Stores strike prices for the current round per underlying
-    mapping(address => uint256[11]) public roundStrikes;
+    mapping(bytes32 => uint256[11]) public roundStrikes;
 
     /// @notice Store volatility smiles per hash(expiry,underlying)
     mapping(bytes32 => Derivative.VolatilitySmile) public volSmiles;
@@ -111,14 +111,14 @@ contract ParetoV1Margin is
     /**
      * @param usdc_ Address for the USDC token (e.g. cash)
      * @param insurance_ Address for the insurance fund
-     * @param underlying_ Address of underlying token to support at deployment
+     * @param underlyingName_ Name of underlying token to support at deployment
      * @param spotOracle_ Address of spot oracle for the underlying
      * @param volOracle_ Address of historical vol oracle for the underlying
      */
     function initialize(
         address usdc_,
         address insurance_,
-        address underlying_,
+        string memory underlyingName_,
         address spotOracle_,
         address volOracle_
     )
@@ -148,6 +148,9 @@ contract ParetoV1Margin is
     
         // Set the expiry to the next friday
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
+
+        // The hash for the underlying name is what we use as the key for state objects
+        bytes32 underlying_ = keccak256(abi.encodePacked(underlyingName_));
 
         // Create a new underlying 
         newUnderlying(underlying_, spotOracle_, volOracle_);
@@ -194,7 +197,7 @@ contract ParetoV1Margin is
         uint256 tradePrice,
         uint256 quantity,
         Derivative.OptionType optionType,
-        address underlying,
+        string underlyingName,
         StrikeLevel strikeLevel,
         uint256 expiry
     );
@@ -508,10 +511,10 @@ contract ParetoV1Margin is
 
     /**
      * @notice Read latest oracle price data
-     * @param underlying Address for the underlying token
+     * @param underlying Hash of the underlying token
      * @return answer Latest price for underlying
      */
-    function getSpot(address underlying) internal view returns (uint256) {
+    function getSpot(bytes32 underlying) internal view returns (uint256) {
         require(spotOracles[underlying] != address(0), "getSpot: missing oracle");
         (,int256 answer,,,) = IOracle(spotOracles[underlying]).latestRoundData();
         // TODO: check that this conversion is okay
@@ -520,10 +523,10 @@ contract ParetoV1Margin is
 
     /**
      * @notice Read latest oracle vol data
-     * @param underlying Address for the underlying token
+     * @param underlying Hash of the underlying token
      * @return answer Latest historical vol for underlying
      */
-    function getHistoricalVol(address underlying) internal view returns (uint256) {
+    function getHistoricalVol(bytes32 underlying) internal view returns (uint256) {
         require(volOracles[underlying] != address(0), "getHistoricalVol: missing oracle");
         (,int256 answer,,,) = IOracle(volOracles[underlying]).latestRoundData();
         // TODO: check that this conversion is okay
@@ -533,18 +536,20 @@ contract ParetoV1Margin is
     /**
      * @notice Given spot, compute 11 strikes. Intended for use at a new round
      * @dev Hardcodes 11 deltas
-     * @param underlying Address of the underlying token
+     * @param underlying Hash of the underlying token name
      * @param sigma Volatility - likely this is historical volatility as we cannot 
      * use the smile without knowing the strike
      * @return strikes Eleven strikes
      */
-    function getStrikesAtDelta(address underlying, uint256 sigma)
+    function getStrikesAtDelta(bytes32 underlying, uint256 sigma)
         internal
         view
         returns (uint256[11] memory strikes)
     {
         require(activeExpiry > block.timestamp, "getStrikesAtDelta: expiry in the past");
-        uint8 decimals = IERC20Upgradeable(underlying).decimals();
+
+        // The spot of the underlying will be in terms of decimals
+        uint8 decimals = IERC20Upgradeable(usdc).decimals();
 
         // Hardcoded deltas for the 11 strikes (decimals 4)
         uint16[11] memory deltas = [250,500,1000,2250,3500,5000,6500,7750,9000,9500,9750];
@@ -718,11 +723,15 @@ contract ParetoV1Margin is
     /**
      * @notice Add a new underlying
      * @dev For code reuse
-     * @param underlying Address for an underlying token
+     * @param underlying Hash of an underlying token
      * @param spotOracle Address for an oracle price feed contract
      * @param volOracle Address for an oracle volatility feed contract
      */
-    function newUnderlying(address underlying, address spotOracle, address volOracle) internal {
+    function newUnderlying(
+        bytes32 underlying,
+        address spotOracle,
+        address volOracle
+    ) internal {
         underlyings.push(underlying);
         bytes32 smileHash = Derivative.hashForSmile(underlying, activeExpiry);
         (,int256 sigma,,,) = IOracle(volOracle).latestRoundData();
@@ -782,14 +791,17 @@ contract ParetoV1Margin is
     /**
      * @notice Set the oracle for an underlying token
      * @dev This function can also be used to replace or delete spotOracles
-     * @param underlying Address for an underlying token
+     * @param underlyingName Underlying token name
      * @param spotOracle Address for an oracle price feed contract
      * @param volOracle Address for an oracle volatility feed contract
      */
-    function setOracle(address underlying, address spotOracle, address volOracle) 
+    function setOracle(string memory underlyingName, address spotOracle, address volOracle) 
         external
         onlyOwner 
     {
+        require(bytes(underlyingName).length > 0, "setOracle: underlying is empty");
+        bytes32 underlying = keccak256(abi.encodePacked(underlyingName));
+
         if (spotOracles[underlying] == address(0)) {
             // Brand new oracle
             newUnderlying(underlying, spotOracle, volOracle);
@@ -896,7 +908,7 @@ contract ParetoV1Margin is
         uint256 quantity,
         Derivative.OptionType optionType,
         StrikeLevel strikeLevel,
-        address underlying
+        string memory underlyingName
     ) 
         external
         nonReentrant
@@ -904,10 +916,13 @@ contract ParetoV1Margin is
     {
         require(tradePrice > 0, "addPosition: tradePrice must be > 0");
         require(quantity > 0, "addPosition: quantity must be > 0");
-        require(underlying != address(0), "addPosition: underlying is empty");
+        require(bytes(underlyingName).length > 0, "addPosition: underlying is empty");
+        bytes32 underlying = keccak256(abi.encodePacked(underlyingName));
+
         require(spotOracles[underlying] != address(0), "addPosition: no oracle for underlying");
 
-        uint8 decimals = IERC20Upgradeable(underlying).decimals();
+        // USDC decimals will be used for spot/strike calculations
+        uint8 decimals = IERC20Upgradeable(usdc).decimals();
 
         // Get strike at chosen level from current round strikes
         uint256 strike = roundStrikes[underlying][uint8(strikeLevel)];
@@ -957,7 +972,7 @@ contract ParetoV1Margin is
             tradePrice,
             quantity,
             optionType,
-            underlying,
+            underlyingName,
             strikeLevel,
             activeExpiry
         );

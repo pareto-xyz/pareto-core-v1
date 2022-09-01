@@ -14,22 +14,25 @@ async function main() {
   const priceFeedFactory = await PriceFeedFactory.deploy();
   await priceFeedFactory.deployed();
 
-  // Deploy spot and vol
+  // Deploy ETH spot oracle
   const txReceiptUnresolved1 = await priceFeedFactory.create("ETH spot", []);
   const txReceipt1 = await txReceiptUnresolved1.wait();
   const feedAddress1 = txReceipt1.events![2].args![0];
   console.log("ETH spot feed: ", feedAddress1);
 
+  // Deploy BTC spot oracle
   const txReceiptUnresolved2 = await priceFeedFactory.create("BTC spot", []);
   const txReceipt2 = await txReceiptUnresolved2.wait();
   const feedAddress2 = txReceipt2.events![2].args![0];
   console.log("BTC spot feed: ", feedAddress2);
 
+  // Deploy ETH vol oracle
   const txReceiptUnresolved3 = await priceFeedFactory.create("ETH vol", []);
   const txReceipt3 = await txReceiptUnresolved3.wait();
   const feedAddress3 = txReceipt3.events![2].args![0];
   console.log("ETH vol feed: ", feedAddress3);
 
+  // Deploy BTC vol oracle
   const txReceiptUnresolved4 = await priceFeedFactory.create("BTC vol", []);
   const txReceipt4 = await txReceiptUnresolved4.wait();
   const feedAddress4 = txReceipt4.events![2].args![0];

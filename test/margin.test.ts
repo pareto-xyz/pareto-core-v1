@@ -291,14 +291,10 @@ describe("ParetoMargin Contract", () => {
    * Oracle management
    ****************************************/  
   describe("Managing oracles", () => {
-    let newToken: Contract;
     let newSpotOracle: string;
     let newVolOracle: string;
 
     beforeEach(async () => {
-      const MockERC20 = await ethers.getContractFactory("MockERC20", deployer);
-      newToken = await MockERC20.deploy();
-
       const txReceiptUnresolvedSpot = await priceFeedFactory.create("newToken spot oracle", [keeper.address]);
       const txReceiptSpot = await txReceiptUnresolvedSpot.wait();
       newSpotOracle = txReceiptSpot.events![2].args![0];
@@ -308,17 +304,17 @@ describe("ParetoMargin Contract", () => {
       newVolOracle = txReceiptVol.events![2].args![0];
     });
     it("Owner can set oracle for new underlying", async () => {
-      await paretoMargin.connect(deployer).setOracle(newToken.address, newVolOracle, newVolOracle);
+      await paretoMargin.connect(deployer).setOracle("NEW", newVolOracle, newVolOracle);
       expect(await paretoMargin.underlyings(0)).to.be.not.equal(await paretoMargin.underlyings(1));
     });
     it("Keeper cannot set oracle for new underlying", async () => {
       await expect(
-        paretoMargin.connect(keeper).setOracle(newToken.address, newVolOracle, newVolOracle)
+        paretoMargin.connect(keeper).setOracle("NEW", newVolOracle, newVolOracle)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
     it("User cannot set oracle for new underlying", async () => {
       await expect(
-        paretoMargin.connect(buyer).setOracle(newToken.address, newVolOracle, newVolOracle)
+        paretoMargin.connect(buyer).setOracle("NEW", newVolOracle, newVolOracle)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
   });
