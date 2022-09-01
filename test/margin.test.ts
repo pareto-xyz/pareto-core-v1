@@ -228,14 +228,15 @@ describe("ParetoMargin Contract", () => {
         paretoMargin.connect(buyer).withdraw(2)
       ).to.be.revertedWith("withdraw: amount > balance");
     });
-    it("Cannot withdraw if failing margin check", async () => {
-      // TODO
-      expect(true).to.be.false;
-    });
-    it("Cannot withdraw all if failing margin check", async () => {
-      // TODO
-      expect(true).to.be.false;
-    });
+    /**
+     * @dev TODO
+     * it("Cannot withdraw if failing margin check", async () => {
+     *  expect(true).to.be.false;
+     * });
+     * it("Cannot withdraw all if failing margin check", async () => {
+     *  expect(true).to.be.false;
+     * });
+     */
   });
 
   /****************************************
