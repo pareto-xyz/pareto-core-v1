@@ -19,7 +19,7 @@ describe("DateMath Library", () => {
     const friday8am = (await dateMath.getNextFriday(now)).toNumber();
     expect(now).to.be.lessThanOrEqual(friday8am);
   });
-  it("Check next friday doubly", async function () {
+  it("Check next friday on next friday", async function () {
     const now = currentTime();
     const nextFriday = (await dateMath.getNextFriday(now)).toNumber();
     const nextFriday2 = (await dateMath.getNextFriday(nextFriday)).toNumber();
@@ -32,5 +32,12 @@ describe("DateMath Library", () => {
     const expiry = (await dateMath.getNextExpiry(now)).toNumber();
     const friday = (await dateMath.getNextFriday(now)).toNumber();
     expect(expiry).to.be.equal(friday);
+  });
+  it("Check next maturity on next friday", async function () {
+    const now = currentTime();
+    const nextFriday = (await dateMath.getNextFriday(now)).toNumber();
+    const nextFriday2 = (await dateMath.getNextFriday(nextFriday)).toNumber();
+    const expiry = (await dateMath.getNextExpiry(nextFriday)).toNumber();
+    expect(expiry).to.be.equal(nextFriday2);
   });
 });

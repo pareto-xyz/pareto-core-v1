@@ -78,6 +78,14 @@ contract TestDerivative {
         return Derivative.hashOption(option);
     }
 
+    function hashForSmile(bytes32 underlying, uint256 expiry)
+        external
+        pure
+        returns (bytes32 hash_)
+    {
+        return Derivative.hashForSmile(underlying, expiry);
+    }
+
     function interpolate(
         uint8[5] memory sortedKeys,
         uint256[5] memory values,
