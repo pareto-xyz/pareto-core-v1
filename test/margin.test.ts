@@ -379,7 +379,7 @@ describe("ParetoMargin Contract", () => {
     });
     it("Cannot set max insured percent to be > 10**4", async () => {
       await expect(paretoMargin.connect(deployer).setMaxInsuredPerc(10001))
-        .to.be.revertedWith("setMaxInsuredPerc: must be < 10**4");
+        .to.be.revertedWith("setMaxInsuredPerc: must be <= 10**4");
     });
     it("Keeper cannot set max insured percent", async () => {
       await expect(paretoMargin.connect(keeper).setMaxInsuredPerc(8000))
@@ -401,7 +401,7 @@ describe("ParetoMargin Contract", () => {
     });
     it("Cannot set min margin percent to be > 10**4", async () => {
       await expect(paretoMargin.connect(deployer).setMinMarginPerc(10001))
-        .to.be.revertedWith("setMinMarginPerc: must be < 10**4");
+        .to.be.revertedWith("setMinMarginPerc: must be <= 10**4");
     });
     it("Keeper cannot set min margin percent", async () => {
       await expect(paretoMargin.connect(keeper).setMinMarginPerc(500))
