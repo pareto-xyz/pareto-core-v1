@@ -237,25 +237,37 @@ describe("ParetoMargin Contract", () => {
         paretoMargin.connect(buyer).withdraw(2)
       ).to.be.revertedWith("withdraw: amount > balance");
     });
-    /**
-     * @dev TODO
-     * it("Cannot withdraw if failing margin check", async () => {
-     *  expect(true).to.be.false;
-     * });
-     * it("Cannot withdraw all if failing margin check", async () => {
-     *  expect(true).to.be.false;
-     * });
-     */
+    it("Cannot withdraw if failing margin check", async () => {
+      expect(true).to.be.false;
+    });
+    it("Cannot withdraw all if failing margin check", async () => {
+      expect(true).to.be.false;
+    });
   });
 
   /****************************************
    * Rollover
    ****************************************/  
   describe("Rollover", () => {
+    it("Owner can rollover", async () => {
+      expect(true).to.be.false;
+    });
+    it("Keeper can rollover", async () => {
+      expect(true).to.be.false;
+    });
+    it("User cannot rollover", async () => {
+      expect(true).to.be.false;
+    });
     it("Cannot rollover if paused", async () => {
       await paretoMargin.connect(deployer).togglePause();
       await expect(paretoMargin.rollover([buyer.address]))
         .to.be.revertedWith("rollover: contract paused");
+    });
+    it("Cannot rollover before expiry", async () => {
+      expect(true).to.be.false;
+    });
+    it("Smiles are updated after rollover to last round", async () => {
+      expect(true).to.be.false;
     });
   }); 
 

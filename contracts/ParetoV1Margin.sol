@@ -863,20 +863,14 @@ contract ParetoV1Margin is
             // Update smiles for each underlying token
             bytes32 smileHash = Derivative.hashForSmile(underlyings[i], activeExpiry);
 
-            if (activeExpiry > 0) {
-                // New round and options are being overwritten. In these cases, 
-                // we initialize the smile from last round's smile
-                bytes32 lastSmileHash = Derivative.hashForSmile(underlyings[i], lastExpiry);
-                volSmiles[smileHash] = volSmiles[lastSmileHash];
+            // Overwrite smile from last round's smile
+            // Smile must exist since they are created on construction and new underlying
+            bytes32 lastSmileHash = Derivative.hashForSmile(underlyings[i], lastExpiry);
+            require(volSmiles[lastSmileHash].exists_, "rollover: found non-existent smile");
+            volSmiles[smileHash] = volSmiles[lastSmileHash];
 
-                // No longer need last round's smile
-                delete volSmiles[lastSmileHash];
-            } else {
-                // Either the first time ever or new underlying.
-                // Here, create a new uniform (uninformed) smile 
-                (,int256 sigma,,,) = IOracle(volOracles[underlyings[i]]).latestRoundData();
-                volSmiles[smileHash] = Derivative.createSmile(uint256(sigma));
-            }
+            // No longer need last round's smile
+            delete volSmiles[lastSmileHash];
 
             // Update strikes using Deribit dVol
             (,int256 dvol,,,) = IOracle(volOracles[underlyings[i]]).latestRoundData();
