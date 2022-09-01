@@ -8,6 +8,7 @@ import { deploy } from "@openzeppelin/hardhat-upgrades/dist/utils";
 
 let usdc: Contract;
 let weth: Contract;
+let priceFeedFactory: Contract;
 let paretoMargin: Contract;
 let deployer: SignerWithAddress;
 let keeper: SignerWithAddress;
@@ -39,7 +40,7 @@ describe("ParetoMargin Contract", () => {
 
     // Deploy a price feed factory and create a spot and vol oracle
     const PriceFeedFactory = await ethers.getContractFactory("PriceFeedFactory", deployer);
-    const priceFeedFactory = await PriceFeedFactory.deploy();
+    priceFeedFactory = await PriceFeedFactory.deploy();
     await priceFeedFactory.deployed();
 
     // Create spot oracle, assign keeper as admin
@@ -245,7 +246,12 @@ describe("ParetoMargin Contract", () => {
    * Rollover
    ****************************************/  
   describe("Rollover", () => {
-  });
+    it("Cannot rollover if paused", async () => {
+      await paretoMargin.connect(deployer).togglePause();
+      await expect(paretoMargin.rollover([buyer.address]))
+        .to.be.revertedWith("rollover: contract paused");
+    });
+  }); 
 
   /****************************************
    * Keeper management
@@ -289,11 +295,67 @@ describe("ParetoMargin Contract", () => {
    * Oracle management
    ****************************************/  
   describe("Managing oracles", () => {
+    let newToken: Contract;
+    let newSpotOracle: string;
+    let newVolOracle: string;
+
+    beforeEach(async () => {
+      const MockERC20 = await ethers.getContractFactory("MockERC20", deployer);
+      newToken = await MockERC20.deploy();
+
+      const txReceiptUnresolvedSpot = await priceFeedFactory.create("newToken spot oracle", [keeper.address]);
+      const txReceiptSpot = await txReceiptUnresolvedSpot.wait();
+      newSpotOracle = txReceiptSpot.events![2].args![0];
+
+      const txReceiptUnresolvedVol = await priceFeedFactory.create("newToken vol oracle", [keeper.address]);
+      const txReceiptVol = await txReceiptUnresolvedVol.wait();
+      newVolOracle = txReceiptVol.events![2].args![0];
+    });
+    it("Owner can set oracle for new underlying", async () => {
+      await paretoMargin.connect(deployer).setOracle(newToken.address, newVolOracle, newVolOracle);
+      expect(await paretoMargin.underlyings(0)).to.be.not.equal(await paretoMargin.underlyings(1));
+    });
+    it("Keeper cannot set oracle for new underlying", async () => {
+      await expect(
+        paretoMargin.connect(keeper).setOracle(newToken.address, newVolOracle, newVolOracle)
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("User cannot set oracle for new underlying", async () => {
+      await expect(
+        paretoMargin.connect(buyer).setOracle(newToken.address, newVolOracle, newVolOracle)
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
   });
 
   /****************************************
    * Other keeper functions
    ****************************************/  
   describe("Other keeper jobs", () => {
+    it("Owner can pause contract", async () => {
+      await paretoMargin.connect(deployer).togglePause();
+    });
+    it("Pausing emits an event", async () => {
+      expect(await paretoMargin.connect(deployer).togglePause())
+        .to.emit(paretoMargin, "TogglePauseEvent")
+        .withArgs(deployer.address, true);
+    });
+    it("Owner can unpause contract", async () => {
+      await paretoMargin.connect(deployer).togglePause();
+      await paretoMargin.connect(deployer).togglePause();
+    });
+    it("Unpausing emits an event", async () => {
+      await paretoMargin.connect(deployer).togglePause();
+      expect(await paretoMargin.connect(deployer).togglePause())
+        .to.emit(paretoMargin, "TogglePauseEvent")
+        .withArgs(deployer.address, false);
+    });
+    it("Keeper cannot pause contract", async () => {});
+    it("User cannot unpause contract", async () => {});
+    it("Owner can set max insured percent", async () => {});
+    it("Owner can set min margin percent", async () => {});
+    it("Keeper cannot set max insured percent", async () => {});
+    it("Keeper cannot set min margin percent", async () => {});
+    it("User cannot set max insured percent", async () => {});
+    it("User cannot set min margin percent", async () => {});
   });
 })

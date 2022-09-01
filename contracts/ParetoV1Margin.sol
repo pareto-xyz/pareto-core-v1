@@ -72,7 +72,7 @@ contract ParetoV1Margin is
     bool private isPaused;
 
     /// @notice Store a list of underlyings
-    address[] private underlyings;
+    address[] public underlyings;
 
     /// @notice Stores addresses for spot oracles of each underlying
     mapping(address => address) private spotOracles;
@@ -93,10 +93,10 @@ contract ParetoV1Margin is
     mapping(address => uint16[]) private userRoundIxs;
 
     /// @notice Stores strike prices for the current round per underlying
-    mapping(address => uint256[11]) private roundStrikes;
+    mapping(address => uint256[11]) public roundStrikes;
 
     /// @notice Store volatility smiles per hash(expiry,underlying)
-    mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
+    mapping(bytes32 => Derivative.VolatilitySmile) public volSmiles;
 
     /// @notice Store average trade sizes for each expiry/underlying
     mapping(bytes32 => uint256) private avgTradeSizes;
