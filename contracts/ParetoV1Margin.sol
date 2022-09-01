@@ -134,12 +134,14 @@ contract ParetoV1Margin is
         keepers[owner()] = true;
 
         // Set insurance fund to cover max 50%
-        maxInsuredPerc = 50;
+        // Decimals are 4 so 5000 => 0.5
+        maxInsuredPerc = 5000;
 
         // Begin first round
         curRound = 1;
 
         // Default alternative minimum % to 1%
+        // Decimals are 4, so 100 => 0.01
         minMarginPerc = 100;
     
         // Set the expiry to the next friday
@@ -379,7 +381,7 @@ contract ParetoV1Margin is
                 // Make up the difference in the insurance fund
                 uint256 partialAmount = balances[ower];
                 uint256 insuredAmount = netPayoff - partialAmount;
-                uint256 maxInsuredAmount = netPayoff * maxInsuredPerc / 100;
+                uint256 maxInsuredAmount = netPayoff * maxInsuredPerc / 10**4;
 
                 // We cannot payback for more than the max insured amount
                 if (insuredAmount > maxInsuredAmount) {
@@ -797,7 +799,7 @@ contract ParetoV1Margin is
      * @notice Set the maximum amount to be insured
      */
     function setMaxInsuredPerc(uint256 perc) external onlyOwner {
-        require(perc <= 100, "setMaxInsuredPerc: must be < 100");
+        require(perc <= 10**4, "setMaxInsuredPerc: must be < 10**4");
         maxInsuredPerc = perc;
         emit MaxInsuredPercEvent(msg.sender, perc);
     }
@@ -805,8 +807,8 @@ contract ParetoV1Margin is
     /**
      * @notice Set the alternative minimum percent to be insured
      */
-    function setminMarginPerc(uint256 perc) external onlyOwner {
-        require(perc <= 100, "setminMarginPerc: must be < 100");
+    function setMinMarginPerc(uint256 perc) external onlyOwner {
+        require(perc <= 10**4, "setMinMarginPerc: must be < 10**4");
         minMarginPerc = perc;
         emit MinMarginPercEvent(msg.sender, perc);
     }

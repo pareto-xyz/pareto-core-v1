@@ -1,5 +1,6 @@
 import { ethers } from "hardhat";
 import { BigNumber } from "ethers";
+import { fromBn, toBn } from "evm-bn";
 import { expect } from "chai";
 import { Contract } from "ethers";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
@@ -67,5 +68,26 @@ describe("ParetoMargin Contract", () => {
       spotOracleAddress,
       volOracleAddress
     );
+  });
+
+  describe("Test construction", () => {
+    it("Can construct construct", async () => {
+      expect(paretoMargin.address).to.not.be.equal("");
+    });
+    it("Correct usdc address", async () => {
+      expect(await paretoMargin.usdc()).to.be.equal(usdc.address);
+    });
+    it("Correct insurance address", async () => {
+      expect(await paretoMargin.insurance()).to.be.equal(insurance.address);
+    });
+    it("Correct default round counter", async () => {
+      expect(await paretoMargin.curRound()).to.be.equal(1);
+    });
+    it("Correct default max % for insurance", async () => {
+      expect(fromBn(await paretoMargin.maxInsuredPerc(), 4)).to.be.equal("0.5");
+    });
+    it("Correct default min % for margin", async () => {
+      expect(fromBn(await paretoMargin.minMarginPerc(), 4)).to.be.equal("0.01");
+    });
   });
 })
