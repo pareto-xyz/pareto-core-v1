@@ -349,13 +349,67 @@ describe("ParetoMargin Contract", () => {
         .to.emit(paretoMargin, "TogglePauseEvent")
         .withArgs(deployer.address, false);
     });
-    it("Keeper cannot pause contract", async () => {});
-    it("User cannot unpause contract", async () => {});
-    it("Owner can set max insured percent", async () => {});
-    it("Owner can set min margin percent", async () => {});
-    it("Keeper cannot set max insured percent", async () => {});
-    it("Keeper cannot set min margin percent", async () => {});
-    it("User cannot set max insured percent", async () => {});
-    it("User cannot set min margin percent", async () => {});
+    it("Keeper cannot pause contract", async () => {
+      await expect(paretoMargin.connect(keeper).togglePause())
+        .to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("Keeper cannot unpause contract", async () => {
+      await paretoMargin.connect(deployer).togglePause();
+      await expect(paretoMargin.connect(keeper).togglePause())
+        .to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("User cannot pause contract", async () => {
+      await expect(paretoMargin.connect(buyer).togglePause())
+        .to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("User cannot unpause contract", async () => {
+      await paretoMargin.connect(deployer).togglePause();
+      await expect(paretoMargin.connect(buyer).togglePause())
+        .to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("Owner can set max insured percent", async () => {
+      expect(await paretoMargin.maxInsuredPerc()).to.be.equal("5000");
+      await paretoMargin.connect(deployer).setMaxInsuredPerc(8000);
+      expect(await paretoMargin.maxInsuredPerc()).to.be.equal("8000");
+    });
+    it("Setting max insured % emits event", async () => {
+      await expect(paretoMargin.connect(deployer).setMaxInsuredPerc(8000))
+        .to.emit(paretoMargin, "MaxInsuredPercEvent")
+        .withArgs(deployer.address, 8000);
+    });
+    it("Cannot set max insured percent to be > 10**4", async () => {
+      await expect(paretoMargin.connect(deployer).setMaxInsuredPerc(10001))
+        .to.be.revertedWith("setMaxInsuredPerc: must be < 10**4");
+    });
+    it("Keeper cannot set max insured percent", async () => {
+      await expect(paretoMargin.connect(keeper).setMaxInsuredPerc(8000))
+        .to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("User cannot set max insured percent", async () => {
+      await expect(paretoMargin.connect(buyer).setMaxInsuredPerc(8000))
+        .to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("Owner can set min margin percent", async () => {
+      expect(await paretoMargin.minMarginPerc()).to.be.equal("100");
+      await paretoMargin.connect(deployer).setMinMarginPerc(500);
+      expect(await paretoMargin.minMarginPerc()).to.be.equal("500");
+    });
+    it("Setting min margin % emits event", async () => {
+      await expect(paretoMargin.connect(deployer).setMinMarginPerc(500))
+        .to.emit(paretoMargin, "MinMarginPercEvent")
+        .withArgs(deployer.address, 500);
+    });
+    it("Cannot set min margin percent to be > 10**4", async () => {
+      await expect(paretoMargin.connect(deployer).setMinMarginPerc(10001))
+        .to.be.revertedWith("setMinMarginPerc: must be < 10**4");
+    });
+    it("Keeper cannot set min margin percent", async () => {
+      await expect(paretoMargin.connect(keeper).setMinMarginPerc(500))
+        .to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("User cannot set min margin percent", async () => {
+      await expect(paretoMargin.connect(buyer).setMinMarginPerc(500))
+        .to.be.revertedWith("Ownable: caller is not the owner");
+    });
   });
 })

@@ -700,7 +700,7 @@ contract ParetoV1Margin is
         returns (uint256, bool) 
     {
         require(amount > 0, "checkMarginOnWithdrawal: amount must be > 0");
-        require(amount <= balances[user], "checkMarginOnWithdrawal: amount must be < balance");
+        require(amount <= balances[user], "checkMarginOnWithdrawal: amount must be <= balance");
 
         // Perform standard margin check
         (uint256 margin, bool satisfied) = checkMargin(user, false);
@@ -804,7 +804,7 @@ contract ParetoV1Margin is
      * @notice Set the maximum amount to be insured
      */
     function setMaxInsuredPerc(uint256 perc) external onlyOwner {
-        require(perc <= 10**4, "setMaxInsuredPerc: must be < 10**4");
+        require(perc <= 10**4, "setMaxInsuredPerc: must be <= 10**4");
         maxInsuredPerc = perc;
         emit MaxInsuredPercEvent(msg.sender, perc);
     }
@@ -813,7 +813,7 @@ contract ParetoV1Margin is
      * @notice Set the alternative minimum percent to be insured
      */
     function setMinMarginPerc(uint256 perc) external onlyOwner {
-        require(perc <= 10**4, "setMinMarginPerc: must be < 10**4");
+        require(perc <= 10**4, "setMinMarginPerc: must be <= 10**4");
         minMarginPerc = perc;
         emit MinMarginPercEvent(msg.sender, perc);
     }
