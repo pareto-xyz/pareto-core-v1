@@ -41,8 +41,8 @@ describe("DateMath Library", () => {
     expect(expiry).to.be.equal(nextFriday2);
   });
   it("Check next maturity on an old input", async function () {
-    const now = currentTime() - 604800; // one week ago
-    const expiry = (await dateMath.getNextExpiry(now)).toNumber();
+    const now = currentTime();
+    const expiry = (await dateMath.getNextExpiry(0)).toNumber();
     const friday = (await dateMath.getNextFriday(now)).toNumber();
     expect(expiry).to.be.equal(friday);
   });

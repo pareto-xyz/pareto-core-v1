@@ -163,6 +163,19 @@ describe("ParetoMargin Contract", () => {
    * Adding a new position
    ****************************************/  
   describe("Adding a position", () => {
+    it("Owner can add a new position", async () => {});
+    it("Keeper can add a new position", async () => {});
+    it("User cannot add a new position", async () => {});
+    it("Emits event when adding a position", async () => {});
+    it("Smile is updated on adding a new position", async () => {});
+    it("Buyer passes margin check after position added", async () => {});
+    it("Seller passes margin check after position added", async () => {});
+    it("Can add position for brand new underlying", async () => {});
+    it("Cannot add position with trade price 0", async () => {});
+    it("Cannot add position with quantity 0", async () => {});
+    it("Cannot add position with empty underlying name", async () => {});
+    it("Cannot add position if buyer below margin", async () => {});
+    it("Cannot add position if seller below margin", async () => {});
   });
 
   /****************************************

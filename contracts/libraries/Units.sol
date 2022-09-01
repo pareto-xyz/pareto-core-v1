@@ -51,14 +51,6 @@ library Units {
     }
 
     /**
-     * @notice Converts signed fixed point 64.64 number into denormalized percentage integer
-     * @param value Signed fixed point 64.64 number to convert
-     */
-    function percentageFromX64(int128 value) internal pure returns (uint256) {
-        return value.mulu(PERCENTAGE);
-    }
-
-    /**
      * @notice Converts unsigned seconds integer into years as a signed 64.64 fixed point number
      * @dev Convert unsigned 256-bit integer number into signed 64.64 fixed point number
      * @param s Unsigned 256-bit integer amount of seconds to convert into year units
