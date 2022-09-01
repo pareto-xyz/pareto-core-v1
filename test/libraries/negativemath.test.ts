@@ -25,6 +25,11 @@ describe("NegativeMath Library", () => {
       expect(result).to.be.equal(0);
       expect(isNeg).to.be.false;
     });
+    it("Correct output when a < 0 and b > 0 but |b| < |a|", async () => {
+      const [result, isNeg] = await negativeMath.add(2, true, 1, false);
+      expect(result).to.be.equal(1);
+      expect(isNeg).to.be.true;
+    });
     it("Correct output when a < 0 and b < 0", async () => {
       const [result, isNeg] = await negativeMath.add(2, true, 2, true);
       expect(result).to.be.equal(4);

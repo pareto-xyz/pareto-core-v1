@@ -371,7 +371,7 @@ library Derivative {
     function findClosestIndices(uint8[5] memory sortedData, uint256 query) 
         internal
         pure
-        returns (uint256, uint256) 
+        returns (uint256 indexLower, uint256 indexUpper) 
     {
         // If the query is below the smallest number, return 0 for both indices
         if (query < sortedData[0]) {
@@ -381,8 +381,6 @@ library Derivative {
             return (4, 4);
         }
 
-        uint256 indexLower;
-        uint256 indexUpper;
         for (uint256 i = 0; i < 5; i++) {
             // If the query is exactly one of the points, return point
             if (query == sortedData[i]) {
@@ -395,7 +393,5 @@ library Derivative {
                 indexLower = i;
             }
         }
-        // Should not reach here
-        return (indexLower, indexUpper);
     }
 }
