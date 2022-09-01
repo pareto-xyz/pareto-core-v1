@@ -15,6 +15,8 @@ import "./libraries/DateMath.sol";
 import "./libraries/NegativeMath.sol";
 import "./libraries/BlackScholesMath.sol";
 
+import "hardhat/console.sol";
+
 /**
  * @notice Contract acting as the margin account for a Pareto trader.
  * Users will send collateral in USDC to this contract to satisfy 
@@ -276,7 +278,7 @@ contract ParetoV1Margin is
         balances[msg.sender] += amount;
 
         // Pull resources from sender to this contract
-        IERC20Upgradeable(usdc).transferFrom(msg.sender, address(this), amount);
+        IERC20Upgradeable(usdc).safeTransferFrom(msg.sender, address(this), amount);
 
         // Emit `DepositEvent`
         emit DepositEvent(msg.sender, amount);

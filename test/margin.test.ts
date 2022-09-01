@@ -1,4 +1,5 @@
 import { ethers, upgrades } from "hardhat";
+import { BigNumber } from "ethers";
 import { fromBn, toBn } from "evm-bn";
 import { expect } from "chai";
 import { Contract } from "ethers";
@@ -12,6 +13,9 @@ let keeper: SignerWithAddress;
 let buyer: SignerWithAddress;
 let seller: SignerWithAddress;
 let insurance: SignerWithAddress;
+
+const ONE_ETH: BigNumber = ethers.utils.parseEther("1");
+const ONE_WEEK: number = 604800;
 
 describe("ParetoMargin Contract", () => {
   beforeEach(async () => {
@@ -90,12 +94,67 @@ describe("ParetoMargin Contract", () => {
     });
   });
 
+  describe("Upgradeability", () => {
+    it("Can upgrade", async () => {
+      const ParetoMarginV2 = await ethers.getContractFactory("ParetoV1Margin", deployer);
+      await upgrades.upgradeProxy(paretoMargin.address, ParetoMarginV2);
+    });
+    it("Non-owner cannot upgrade", async () => {
+      const ParetoMarginV2 = await ethers.getContractFactory("ParetoV1Margin", keeper);
+      await expect(upgrades.upgradeProxy(paretoMargin.address, ParetoMarginV2))
+        .to.be.revertedWith("Ownable: caller is not the owner");
+    });
+  });
+
   describe("Depositing USDC", () => {
-    it("Owner can deposit", async () => {});
-    it("Keeper can deposit", async () => {});
-    it("User can deposit", async () => {});
-    it("Emits an event", async () => {});
+    it("Owner can deposit", async () => {
+      await usdc.connect(deployer).approve(paretoMargin.address, 1);
+      await paretoMargin.connect(deployer).deposit(1);
+    });
+    it("Keeper can deposit", async () => {
+      await usdc.connect(keeper).approve(paretoMargin.address, 1);
+      await paretoMargin.connect(keeper).deposit(1);
+    });
+    it("User can deposit", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, 1);
+      await paretoMargin.connect(buyer).deposit(1);
+    });
+    it("Emits an event", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, 1);
+      await expect(paretoMargin.connect(buyer).deposit(1))
+        .to.emit(paretoMargin, "DepositEvent")
+        .withArgs(buyer.address, 1);
+    });
+    it("USDC is properly transferred", async () => {
+      const marginPre = await usdc.balanceOf(paretoMargin.address);
+      const userPre = await usdc.balanceOf(buyer.address);
+      await usdc.connect(buyer).approve(paretoMargin.address, 1);
+      await paretoMargin.connect(buyer).deposit(1);
+      const marginPost = await usdc.balanceOf(paretoMargin.address);
+      const userPost = await usdc.balanceOf(buyer.address);
+      expect(marginPost.sub(marginPre)).to.be.equal("1");
+      expect(userPre.sub(userPost)).to.be.equal("1");
+    });
+    it("Deposit reflected in balance", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, 1);
+      await paretoMargin.connect(buyer).deposit(1);
+      expect(await paretoMargin.connect(buyer).getBalance()).to.be.equal("1");
+    });
+    it("Cannot deposit 0 USDC", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, 1);
+      await expect(paretoMargin.connect(buyer).deposit(0))
+        .to.be.revertedWith("deposit: `amount` must be > 0");
+    });
+  });
+
+  describe("Withdrawing USDC", () => {
+    it("Depositor can withdraw", async () => {});
+    it("Depositor can withdraw all", async () => {});
     it("USDC is properly transferred", async () => {});
-    it("Cannot deposit 0 USDC", async () => {});
+    it("Emits an event", async () => {});
+    it("Cannot withdraw 0 amount", async () => {});
+    it("Cannot withdraw more than balance", async () => {});
+    it("Cannot withdraw if failing margin check", async () => {});
+    it("Cannot withdraw all if failing margin check", async () => {});
   });
 })
