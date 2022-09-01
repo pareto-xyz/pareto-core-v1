@@ -10,6 +10,7 @@ import {
   getPayoffLongPut,
   getPayoffShortPut,
 } from "../utils/payoff";
+import { toBytes32, getFixedGasSigners } from "../utils/helpers";
 
 /****************************************
  * Constants
@@ -47,7 +48,7 @@ describe("MarginMath Library", () => {
         optionType: 0,
         strike: ONE_ETH,
         expiry: curTime + ONE_WEEK,
-        underlying: "0x0000000000000000000000000000000000000000",
+        underlying: toBytes32("ETH"),
         decimals: 18,
       };
       let answer = await marginMath.isCall(call);
@@ -59,7 +60,7 @@ describe("MarginMath Library", () => {
         optionType: 1,
         strike: ONE_ETH,
         expiry: curTime + ONE_WEEK,
-        underlying: "0x0000000000000000000000000000000000000000",
+        underlying: toBytes32("ETH"),
         decimals: 18,
       };
       let answer = await marginMath.isCall(put);
@@ -73,7 +74,7 @@ describe("MarginMath Library", () => {
   describe("Computing payoff", () => {
     beforeEach(async () => {
       // Create signers
-      const wallets = await ethers.getSigners(); 
+      const wallets = await getFixedGasSigners(10000000);
       [alice, bob] = wallets;
     });
 
@@ -89,7 +90,7 @@ describe("MarginMath Library", () => {
           optionType: 0,
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
-          underlying: "0x0000000000000000000000000000000000000000",
+          underlying: toBytes32("ETH"),
           decimals: 18,
         }
       };
@@ -111,7 +112,7 @@ describe("MarginMath Library", () => {
           optionType: 0,
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
-          underlying: "0x0000000000000000000000000000000000000000",
+          underlying: toBytes32("ETH"),
           decimals: 18,
         }
       };
@@ -133,7 +134,7 @@ describe("MarginMath Library", () => {
           optionType: 1,
           strike: ONE_ETH.mul(9).div(10),
           expiry: curTime + ONE_WEEK,
-          underlying: "0x0000000000000000000000000000000000000000",
+          underlying: toBytes32("ETH"),
           decimals: 18,
         }
       };
@@ -155,7 +156,7 @@ describe("MarginMath Library", () => {
           optionType: 1,
           strike: ONE_ETH.mul(9).div(10),
           expiry: curTime + ONE_WEEK,
-          underlying: "0x0000000000000000000000000000000000000000",
+          underlying: toBytes32("ETH"),
           decimals: 18,
         }
       };
@@ -178,7 +179,7 @@ describe("MarginMath Library", () => {
           optionType: 0,
           strike: ONE_ETH.mul(9).div(10),
           expiry: curTime + ONE_WEEK,
-          underlying: "0x0000000000000000000000000000000000000000",
+          underlying: toBytes32("ETH"),
           decimals: 18,
         }
       };
@@ -200,7 +201,7 @@ describe("MarginMath Library", () => {
           optionType: 0,
           strike: ONE_ETH.mul(9).div(10),
           expiry: curTime + ONE_WEEK,
-          underlying: "0x0000000000000000000000000000000000000000",
+          underlying: toBytes32("ETH"),
           decimals: 18,
         }
       };
@@ -222,7 +223,7 @@ describe("MarginMath Library", () => {
           optionType: 1,
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
-          underlying: "0x0000000000000000000000000000000000000000",
+          underlying: toBytes32("ETH"),
           decimals: 18,
         }
       };
@@ -244,7 +245,7 @@ describe("MarginMath Library", () => {
           optionType: 1,
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
-          underlying: "0x0000000000000000000000000000000000000000",
+          underlying: toBytes32("ETH"),
           decimals: 18,
         }
       };
@@ -266,7 +267,7 @@ describe("MarginMath Library", () => {
           optionType: 0,
           strike: ONE_ETH,
           expiry: curTime + ONE_WEEK,
-          underlying: "0x0000000000000000000000000000000000000000",
+          underlying: toBytes32("ETH"),
           decimals: 18,
         }
       };
@@ -288,7 +289,7 @@ describe("MarginMath Library", () => {
           optionType: 0,
           strike: ONE_ETH,
           expiry: curTime + ONE_WEEK,
-          underlying: "0x0000000000000000000000000000000000000000",
+          underlying: toBytes32("ETH"),
           decimals: 18,
         }
       };
@@ -310,7 +311,7 @@ describe("MarginMath Library", () => {
           optionType: 1,
           strike: ONE_ETH,
           expiry: curTime + ONE_WEEK,
-          underlying: "0x0000000000000000000000000000000000000000",
+          underlying: toBytes32("ETH"),
           decimals: 18,
         }
       };
@@ -332,7 +333,7 @@ describe("MarginMath Library", () => {
           optionType: 1,
           strike: ONE_ETH,
           expiry: curTime + ONE_WEEK,
-          underlying: "0x0000000000000000000000000000000000000000",
+          underlying: toBytes32("ETH"),
           decimals: 18,
         }
       };
@@ -383,7 +384,7 @@ describe("MarginMath Library", () => {
         optionType: 1,  // put option
         strike: ONE_ETH.mul(11).div(10),
         expiry: curTime + ONE_WEEK,
-        underlying: "0x0000000000000000000000000000000000000000",
+        underlying: toBytes32("ETH"),
         decimals: 18,
       };
       await derivative.createSmile(1, 5000);
@@ -528,7 +529,7 @@ describe("MarginMath Library", () => {
         optionType: 0,  // call option
         strike: ONE_ETH.mul(9).div(10),
         expiry: curTime + ONE_WEEK,
-        underlying: "0x0000000000000000000000000000000000000000",
+        underlying: toBytes32("ETH"),
         decimals: 18,
       };
       await derivative.createSmile(1, 5000);
@@ -609,7 +610,7 @@ describe("MarginMath Library", () => {
         optionType: 1,  // put option
         strike: ONE_ETH.mul(11).div(10),
         expiry: curTime + ONE_WEEK,
-        underlying: "0x0000000000000000000000000000000000000000",
+        underlying: toBytes32("ETH"),
         decimals: 18,
       };
       await derivative.createSmile(1, 5000);
@@ -748,7 +749,7 @@ describe("MarginMath Library", () => {
         optionType: 0,  // call option
         strike: ONE_ETH.mul(9).div(10),
         expiry: curTime + ONE_WEEK,
-        underlying: "0x0000000000000000000000000000000000000000",
+        underlying: toBytes32("ETH"),
         decimals: 18,
       };
       await derivative.createSmile(1, 5000);

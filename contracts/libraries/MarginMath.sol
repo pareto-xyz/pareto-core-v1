@@ -4,7 +4,6 @@ pragma solidity ^0.8.9;
 import "./BasicMath.sol";
 import "./Derivative.sol";
 import "./BlackScholesMath.sol";
-import "hardhat/console.sol";
 
 /**
  * @notice Library for RegT style margin heuristics

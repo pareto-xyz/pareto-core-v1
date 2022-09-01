@@ -4,7 +4,6 @@ pragma solidity ^0.8.9;
 import "../libraries/GaussianMath.sol";
 import "../libraries/Units.sol";
 import "../libraries/ABDKMath64x64.sol";
-import "hardhat/console.sol";
 
 /**
  * @notice Test contract to wrap around `GaussianMath.sol`

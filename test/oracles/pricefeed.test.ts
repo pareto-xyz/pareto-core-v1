@@ -3,6 +3,7 @@ import { BigNumber } from "ethers";
 import { expect } from "chai";
 import { Contract } from "ethers";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
+import { getFixedGasSigners } from "../utils/helpers";
 
 let priceFeed: Contract;
 let owner: SignerWithAddress;
@@ -14,12 +15,12 @@ const ONE_ETH: BigNumber = ethers.utils.parseEther("1");
 describe("PriceFeed Library", () => {
   beforeEach(async () => {
     // Create signers
-    const wallets = await ethers.getSigners(); 
+    const wallets = await getFixedGasSigners(10000000);
     [owner, admin, user] = wallets;
 
     // Deploy price feed contract 
     const PriceFeedFactory =  await ethers.getContractFactory("PriceFeed")
-    priceFeed = await PriceFeedFactory.deploy(owner.address, "test", [admin.address]);
+    priceFeed = await PriceFeedFactory.deploy("test", [admin.address]);
   });
   it("can construct", async () => {
     // If it reaches here then we can construct

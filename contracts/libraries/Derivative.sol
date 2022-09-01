@@ -4,8 +4,6 @@ pragma solidity ^0.8.9;
 import "./BlackScholesMath.sol";
 import "./BasicMath.sol";
 import "./NegativeMath.sol";
-import {IERC20} from "../interfaces/IERC20.sol";
-import "hardhat/console.sol";
 
 /**
  * @notice Contains enums and structs representing Pareto derivatives
@@ -50,14 +48,14 @@ library Derivative {
      * @param optionType Is this a call or put option?
      * @param strike Strike price of the option
      * @param expiry Expiry in epoch time of the option
-     * @param underlying Address of the underlying token e.g. WETH
+     * @param underlying Hash of the underlying token name e.g. WETH
      * @param decimals Decimals for underlying
      */
     struct Option {
         OptionType optionType;
         uint256 strike;
         uint256 expiry;
-        address underlying;
+        bytes32 underlying;
         uint8 decimals;
     }
 
@@ -309,11 +307,11 @@ library Derivative {
     /**
      * @notice Calls and puts of the same expiry and underlying but different 
      * strikes share the same smile
-     * @param underlying Address for underlying token
+     * @param underlying Hash of the name for an underlying token
      * @param expiry Expiry timestamp
      * @param hash_ SHA-3 hash of the Option object
      */
-    function hashForSmile(address underlying, uint256 expiry)
+    function hashForSmile(bytes32 underlying, uint256 expiry)
         internal
         pure
         returns (bytes32 hash_)

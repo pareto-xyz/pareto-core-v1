@@ -5,7 +5,7 @@ pragma solidity ^0.8.9;
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
  */
-interface IERC20 {
+interface IERC20Upgradeable {
     /**
      * @dev Emitted when `value` tokens are moved from one account (`from`) to
      * another (`to`).
