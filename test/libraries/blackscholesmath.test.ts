@@ -9,6 +9,7 @@ import {
   checkProbabilityFactors,
   getSigmaByNewton,
   checkVega,
+  getStrikeFromDelta,
 } from "../utils/blackscholes";
 
 /****************************************
@@ -563,6 +564,75 @@ describe("BlackScholesMath Library", () => {
       const vega = parseFloat(fromBn(vegaBn, 18));
       const vegats = checkVega(1.1, 1.1, 0.5, ONE_WEEK, 0);
       expect(vega).to.be.closeTo(vegats, 1e-5);
+    });
+  });
+  /****************************************
+   * Solving strike from delta
+   ****************************************/
+  describe("Computing strike from delta", () => {
+    it("delta=0.5,spot=1,sigma=0.5,tau=1 week,rate=0", async () => {
+      const strikeBn = await blackScholesMath.getStrikeFromDelta(
+        5000, ONE_ETH, 5000, ONE_WEEK, 0, 1);
+      const strike = parseFloat(fromBn(strikeBn, 18));
+      const strikets = getStrikeFromDelta(0.5, 1, 0.5, ONE_WEEK, 0);
+      expect(strike).to.be.closeTo(strikets, 1e-4);
+    });
+    it("delta=0.1,spot=1,sigma=0.5,tau=1 week,rate=0", async () => {
+      const strikeBn = await blackScholesMath.getStrikeFromDelta(
+        1000, ONE_ETH, 5000, ONE_WEEK, 0, 1);
+      const strike = parseFloat(fromBn(strikeBn, 18));
+      const strikets = getStrikeFromDelta(0.1, 1, 0.5, ONE_WEEK, 0);
+      expect(strike).to.be.closeTo(strikets, 1e-4);
+    });
+    it("delta=0.9,spot=1,sigma=0.5,tau=1 week,rate=0", async () => {
+      const strikeBn = await blackScholesMath.getStrikeFromDelta(
+        9000, ONE_ETH, 5000, ONE_WEEK, 0, 1);
+      const strike = parseFloat(fromBn(strikeBn, 18));
+      const strikets = getStrikeFromDelta(0.9, 1, 0.5, ONE_WEEK, 0);
+      expect(strike).to.be.closeTo(strikets, 1e-4);
+    });
+    it("delta=0.5,spot=1,sigma=0.9,tau=1 week,rate=0", async () => {
+      const strikeBn = await blackScholesMath.getStrikeFromDelta(
+        5000, ONE_ETH, 9000, ONE_WEEK, 0, 1);
+      const strike = parseFloat(fromBn(strikeBn, 18));
+      const strikets = getStrikeFromDelta(0.5, 1, 0.9, ONE_WEEK, 0);
+      expect(strike).to.be.closeTo(strikets, 1e-4);
+    });
+    it("delta=0.1,spot=1,sigma=0.9,tau=1 week,rate=0", async () => {
+      const strikeBn = await blackScholesMath.getStrikeFromDelta(
+        1000, ONE_ETH, 9000, ONE_WEEK, 0, 1);
+      const strike = parseFloat(fromBn(strikeBn, 18));
+      const strikets = getStrikeFromDelta(0.1, 1, 0.9, ONE_WEEK, 0);
+      expect(strike).to.be.closeTo(strikets, 1e-4);
+    });
+    it("delta=0.9,spot=1,sigma=0.9,tau=1 week,rate=0", async () => {
+      const strikeBn = await blackScholesMath.getStrikeFromDelta(
+        9000, ONE_ETH, 9000, ONE_WEEK, 0, 1);
+      const strike = parseFloat(fromBn(strikeBn, 18));
+      const strikets = getStrikeFromDelta(0.9, 1, 0.9, ONE_WEEK, 0);
+      expect(strike).to.be.closeTo(strikets, 1e-4);
+    });
+
+    it("delta=0.5,spot=1,sigma=0.9,tau=1 week,rate=0.01", async () => {
+      const strikeBn = await blackScholesMath.getStrikeFromDelta(
+        5000, ONE_ETH, 9000, ONE_WEEK, ONE_ETH.div(100), 1);
+      const strike = parseFloat(fromBn(strikeBn, 18));
+      const strikets = getStrikeFromDelta(0.5, 1, 0.9, ONE_WEEK, 0.01);
+      expect(strike).to.be.closeTo(strikets, 1e-4);
+    });
+    it("delta=0.1,spot=1,sigma=0.9,tau=1 week,rate=0.01", async () => {
+      const strikeBn = await blackScholesMath.getStrikeFromDelta(
+        1000, ONE_ETH, 9000, ONE_WEEK, ONE_ETH.div(100), 1);
+      const strike = parseFloat(fromBn(strikeBn, 18));
+      const strikets = getStrikeFromDelta(0.1, 1, 0.9, ONE_WEEK, 0.01);
+      expect(strike).to.be.closeTo(strikets, 1e-4);
+    });
+    it("delta=0.9,spot=1,sigma=0.9,tau=1 week,rate=0.01", async () => {
+      const strikeBn = await blackScholesMath.getStrikeFromDelta(
+        9000, ONE_ETH, 9000, ONE_WEEK, ONE_ETH.div(100), 1);
+      const strike = parseFloat(fromBn(strikeBn, 18));
+      const strikets = getStrikeFromDelta(0.9, 1, 0.9, ONE_WEEK, 0.01);
+      expect(strike).to.be.closeTo(strikets, 1e-4);
     });
   });
 });

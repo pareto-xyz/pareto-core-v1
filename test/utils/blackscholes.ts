@@ -141,3 +141,19 @@ export function checkVega(
   let vega = spotSqrtTau * normalPDF(d1);
   return vega;
 }
+
+export function getStrikeFromDelta(
+  delta: number,
+  spot: number,
+  sigma: number,
+  tau: number,
+  rate: number,
+): number {
+  let score = normalInverseCDF(delta);
+  let tauInYears = tau / 31556952;
+  let vol = sigma * Math.sqrt(tauInYears);
+  let rtsigsqr = rate + tauInYears * Math.pow(sigma, 2);
+  let logit = rtsigsqr / 2 - vol * score;
+  let strike = spot * Math.exp(logit);
+  return strike;
+}
