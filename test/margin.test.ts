@@ -35,19 +35,15 @@ describe("ParetoMargin Contract", () => {
     weth = await MockERC20.deploy();
 
     // Deploy a price feed factory and create a spot and vol oracle
-    const PriceFeedFactory = await ethers.getContractFactory("PriceFeedFactory", deployer);
-    priceFeedFactory = await PriceFeedFactory.deploy();
-    await priceFeedFactory.deployed();
+    const PriceFeedFactory = await ethers.getContractFactory("PriceFeed");
 
     // Create spot oracle, assign keeper as admin
-    const txReceiptUnresolvedSpot = await priceFeedFactory.create("weth spot oracle", [keeper.address]);
-    const txReceiptSpot = await txReceiptUnresolvedSpot.wait();
-    const spotOracleAddress = txReceiptSpot.events![2].args![0];
+    const priceFeed = await PriceFeedFactory.deploy("ETH spot", [keeper.address]);
+    await priceFeed.deployed();
 
     // Create vol oracle, assign keeper as admin
-    const txReceiptUnresolvedVol = await priceFeedFactory.create("weth vol oracle", [keeper.address]);
-    const txReceiptVol = await txReceiptUnresolvedVol.wait();
-    const volOracleAddress = txReceiptVol.events![2].args![0];
+    const volFeed = await PriceFeedFactory.deploy("ETH vol", [keeper.address]);
+    await volFeed.deployed();
 
     // Deploy upgradeable Pareto margin contract
     const ParetoMargin = await ethers.getContractFactory("ParetoV1Margin", deployer);
@@ -56,9 +52,9 @@ describe("ParetoMargin Contract", () => {
       [
         usdc.address,
         insurance.address,
-        weth.address,
-        spotOracleAddress,
-        volOracleAddress
+        "ETH",
+        priceFeed.address,
+        volFeed.address
       ]
     );
     await paretoMargin.deployed();
@@ -72,7 +68,7 @@ describe("ParetoMargin Contract", () => {
    * Contract construction
    ****************************************/  
   describe("Test construction", () => {
-    it("Can construct construct", async () => {
+    it("Can construct", async () => {
       expect(paretoMargin.address).to.not.be.equal("");
     });
     it("Correct usdc address", async () => {
@@ -292,30 +288,28 @@ describe("ParetoMargin Contract", () => {
    * Oracle management
    ****************************************/  
   describe("Managing oracles", () => {
-    let newSpotOracle: string;
-    let newVolOracle: string;
+    let newPriceFeed: Contract;
+    let newVolFeed: Contract;
 
     beforeEach(async () => {
-      const txReceiptUnresolvedSpot = await priceFeedFactory.create("newToken spot oracle", [keeper.address]);
-      const txReceiptSpot = await txReceiptUnresolvedSpot.wait();
-      newSpotOracle = txReceiptSpot.events![2].args![0];
-
-      const txReceiptUnresolvedVol = await priceFeedFactory.create("newToken vol oracle", [keeper.address]);
-      const txReceiptVol = await txReceiptUnresolvedVol.wait();
-      newVolOracle = txReceiptVol.events![2].args![0];
+      const PriceFeedFactory = await ethers.getContractFactory("PriceFeed");
+      newPriceFeed = await PriceFeedFactory.deploy("BTC spot", [keeper.address]);
+      newPriceFeed.deployed();
+      newVolFeed = await PriceFeedFactory.deploy("BTC vol", [keeper.address]);
+      newVolFeed.deployed();
     });
     it("Owner can set oracle for new underlying", async () => {
-      await paretoMargin.connect(deployer).setOracle("NEW", newVolOracle, newVolOracle);
+      await paretoMargin.connect(deployer).setOracle("BTC", newPriceFeed.address, newVolFeed.address);
       expect(await paretoMargin.underlyings(0)).to.be.not.equal(await paretoMargin.underlyings(1));
     });
     it("Keeper cannot set oracle for new underlying", async () => {
       await expect(
-        paretoMargin.connect(keeper).setOracle("NEW", newVolOracle, newVolOracle)
+        paretoMargin.connect(keeper).setOracle("BTC", newPriceFeed.address, newVolFeed.address)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
     it("User cannot set oracle for new underlying", async () => {
       await expect(
-        paretoMargin.connect(buyer).setOracle("NEW", newVolOracle, newVolOracle)
+        paretoMargin.connect(buyer).setOracle("BTC", newPriceFeed.address, newVolFeed.address)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
   });
