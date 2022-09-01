@@ -1,19 +1,19 @@
 import { ethers, upgrades } from "hardhat";
-import { fromBn } from "evm-bn";
+import { fromBn, toBn } from "evm-bn";
 import { expect } from "chai";
 import { Contract } from "ethers";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { getFixedGasSigners } from "./utils/helpers";
 
 let usdc: Contract;
-let weth: Contract;
-let priceFeedFactory: Contract;
 let paretoMargin: Contract;
 let deployer: SignerWithAddress;
 let keeper: SignerWithAddress;
 let buyer: SignerWithAddress;
 let seller: SignerWithAddress;
 let insurance: SignerWithAddress;
+
+const ONEUSDC = toBn("1", 18);
 
 describe("ParetoMargin Contract", () => {
   beforeEach(async () => {
@@ -24,15 +24,12 @@ describe("ParetoMargin Contract", () => {
     const MockERC20 = await ethers.getContractFactory("MockERC20", deployer);
     usdc = await MockERC20.deploy();
 
-    // Mint 100k USDC for deployer, keeper, buyer and seller
-    await usdc.mint(deployer.address, 100000);
-    await usdc.mint(keeper.address, 100000);
-    await usdc.mint(buyer.address, 100000);
-    await usdc.mint(seller.address, 100000);
-    await usdc.mint(insurance.address, 100000);
-
-    // Deploy a MockERC20 contract to mimic WETH
-    weth = await MockERC20.deploy();
+    // Mint 1M USDC for deployer, keeper, buyer and seller
+    await usdc.mint(deployer.address, ONEUSDC.mul(1e6));
+    await usdc.mint(keeper.address, ONEUSDC.mul(1e6));
+    await usdc.mint(buyer.address, ONEUSDC.mul(1e6));
+    await usdc.mint(seller.address, ONEUSDC.mul(1e6));
+    await usdc.mint(insurance.address, ONEUSDC.mul(1e6));
 
     // Deploy a price feed factory and create a spot and vol oracle
     const PriceFeedFactory = await ethers.getContractFactory("PriceFeed");
@@ -41,9 +38,15 @@ describe("ParetoMargin Contract", () => {
     const priceFeed = await PriceFeedFactory.deploy("ETH spot", [keeper.address]);
     await priceFeed.deployed();
 
+    // Set spot price to 1500 USDC, with 18 decimals
+    await priceFeed.connect(deployer).setLatestAnswer(ONEUSDC.mul(1500));
+
     // Create vol oracle, assign keeper as admin
     const volFeed = await PriceFeedFactory.deploy("ETH vol", [keeper.address]);
     await volFeed.deployed();
+
+    // Set vol to 0.9 with 4 decimals
+    await volFeed.connect(deployer).setLatestAnswer(toBn("0.9", 4));
 
     // Deploy upgradeable Pareto margin contract
     const ParetoMargin = await ethers.getContractFactory("ParetoV1Margin", deployer);
@@ -60,8 +63,8 @@ describe("ParetoMargin Contract", () => {
     await paretoMargin.deployed();
 
     // Insurance will deposit all their USDC into contract
-    await usdc.connect(insurance).approve(paretoMargin.address, 100000);
-    await paretoMargin.connect(insurance).deposit(100000);
+    await usdc.connect(insurance).approve(paretoMargin.address, ONEUSDC.mul(1e6));
+    await paretoMargin.connect(insurance).deposit(ONEUSDC.mul(1e6));
   });
 
   /****************************************
@@ -108,35 +111,35 @@ describe("ParetoMargin Contract", () => {
    ****************************************/  
   describe("Depositing USDC", () => {
     it("Owner can deposit", async () => {
-      await usdc.connect(deployer).approve(paretoMargin.address, 1);
-      await paretoMargin.connect(deployer).deposit(1);
+      await usdc.connect(deployer).approve(paretoMargin.address, ONEUSDC);
+      await paretoMargin.connect(deployer).deposit(ONEUSDC);
     });
     it("Keeper can deposit", async () => {
-      await usdc.connect(keeper).approve(paretoMargin.address, 1);
-      await paretoMargin.connect(keeper).deposit(1);
+      await usdc.connect(keeper).approve(paretoMargin.address, ONEUSDC);
+      await paretoMargin.connect(keeper).deposit(ONEUSDC);
     });
     it("User can deposit", async () => {
-      await usdc.connect(buyer).approve(paretoMargin.address, 1);
-      await paretoMargin.connect(buyer).deposit(1);
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC);
+      await paretoMargin.connect(buyer).deposit(ONEUSDC);
     });
     it("Emits an event", async () => {
-      await usdc.connect(buyer).approve(paretoMargin.address, 1);
-      await expect(paretoMargin.connect(buyer).deposit(1))
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC);
+      await expect(paretoMargin.connect(buyer).deposit(ONEUSDC))
         .to.emit(paretoMargin, "DepositEvent")
-        .withArgs(buyer.address, 1);
+        .withArgs(buyer.address, ONEUSDC);
     });
     it("USDC is properly transferred", async () => {
       const marginPre = await usdc.balanceOf(paretoMargin.address);
       const userPre = await usdc.balanceOf(buyer.address);
-      await usdc.connect(buyer).approve(paretoMargin.address, 1);
-      await paretoMargin.connect(buyer).deposit(1);
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC);
+      await paretoMargin.connect(buyer).deposit(ONEUSDC);
       const marginPost = await usdc.balanceOf(paretoMargin.address);
       const userPost = await usdc.balanceOf(buyer.address);
-      expect(marginPost.sub(marginPre)).to.be.equal("1");
-      expect(userPre.sub(userPost)).to.be.equal("1");
+      expect(marginPost.sub(marginPre)).to.be.equal(ONEUSDC);
+      expect(userPre.sub(userPost)).to.be.equal(ONEUSDC);
     });
     it("Cannot deposit 0 USDC", async () => {
-      await usdc.connect(buyer).approve(paretoMargin.address, 1);
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC);
       await expect(paretoMargin.connect(buyer).deposit(0))
         .to.be.revertedWith("deposit: `amount` must be > 0");
     });
@@ -163,7 +166,17 @@ describe("ParetoMargin Contract", () => {
    * Adding a new position
    ****************************************/  
   describe("Adding a position", () => {
-    it("Owner can add a new position", async () => {});
+    it("Owner can add a new position", async () => {
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        1,
+        1,
+        0,
+        5,
+        "ETH"
+      );
+    });
     it("Keeper can add a new position", async () => {});
     it("User cannot add a new position", async () => {});
     it("Emits event when adding a position", async () => {});
@@ -174,8 +187,26 @@ describe("ParetoMargin Contract", () => {
     it("Cannot add position with trade price 0", async () => {});
     it("Cannot add position with quantity 0", async () => {});
     it("Cannot add position with empty underlying name", async () => {});
-    it("Cannot add position if buyer below margin", async () => {});
+    it("Cannot add position if buyer below margin", async () => {
+      // seller puts in 1k usdc into margin account but buyer does not
+      await paretoMargin.connect(seller).deposit(1000);
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        1,
+        1,
+        0,
+        5,
+        "ETH"
+      );
+    });
     it("Cannot add position if seller below margin", async () => {});
+  });
+
+  /****************************************
+   * Margin check
+   ****************************************/  
+  describe("Performing a margin check", () => {
   });
 
   /****************************************
@@ -270,6 +301,18 @@ describe("ParetoMargin Contract", () => {
       expect(true).to.be.false;
     });
   }); 
+
+  /****************************************
+   * Settlement
+   ****************************************/  
+  describe("Settlement", () => {
+  });
+
+  /****************************************
+   * Liquidation
+   ****************************************/  
+  describe("Liquidation", () => {
+  });
 
   /****************************************
    * Keeper management

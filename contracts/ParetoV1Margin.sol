@@ -522,18 +522,6 @@ contract ParetoV1Margin is
     }
 
     /**
-     * @notice Read latest oracle vol data
-     * @param underlying Hash of the underlying token
-     * @return answer Latest historical vol for underlying
-     */
-    function getHistoricalVol(bytes32 underlying) internal view returns (uint256) {
-        require(volOracles[underlying] != address(0), "getHistoricalVol: missing oracle");
-        (,int256 answer,,,) = IOracle(volOracles[underlying]).latestRoundData();
-        // TODO: check that this conversion is okay
-        return uint256(answer);
-    }
-
-    /**
      * @notice Given spot, compute 11 strikes. Intended for use at a new round
      * @dev Hardcodes 11 deltas
      * @param underlying Hash of the underlying token name
