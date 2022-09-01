@@ -65,8 +65,7 @@ describe("ParetoMargin Contract", () => {
       insurance.address,
       weth.address,
       spotOracleAddress,
-      volOracleAddress,
-      []
+      volOracleAddress
     );
   });
 })

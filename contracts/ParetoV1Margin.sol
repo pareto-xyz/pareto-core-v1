@@ -112,15 +112,13 @@ contract ParetoV1Margin is
      * @param underlying_ Address of underlying token to support at deployment
      * @param spotOracle_ Address of spot oracle for the underlying
      * @param volOracle_ Address of historical vol oracle for the underlying
-     * @param strikes_ Strike prices for the first round for the underlying
      */
     function initialize(
         address usdc_,
         address insurance_,
         address underlying_,
         address spotOracle_,
-        address volOracle_,
-        uint256[11] calldata strikes_
+        address volOracle_
     )
         public
         initializer 
@@ -151,7 +149,8 @@ contract ParetoV1Margin is
         newUnderlying(underlying_, spotOracle_, volOracle_);
 
         // Compute strikes for the underlying
-        roundStrikes[underlying_] = strikes_;
+        (,int256 dvol,,,) = IOracle(volOracles[underlying_]).latestRoundData();
+        roundStrikes[underlying_] = getStrikesAtDelta(underlying_, uint256(dvol));
     }
 
     /**
