@@ -23,9 +23,15 @@ const config: HardhatUserConfig = {
         accountsBalance: "1000000000000000000000000",
       },
       blockGasLimit: 1000000000000000,
-      allowUnlimitedContractSize: true
+      allowUnlimitedContractSize: true,
+      gas: 2100000
     },
   },
+  gasReporter: {
+    currency: "USD",
+    gasPrice: 100,
+    enabled: true
+  }
 };
 
 export default config;

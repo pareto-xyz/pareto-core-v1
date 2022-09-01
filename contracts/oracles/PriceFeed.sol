@@ -19,15 +19,14 @@ contract PriceFeed is IOracle, Ownable {
     mapping(address => bool) public isAdmin;
 
     constructor(
-        address owner_,
         string memory description_,
         address[] memory admins_
     ) {
         description = description_;
-        _transferOwnership(owner_);
+        _transferOwnership(msg.sender);
 
         // Set admins
-        isAdmin[owner_] = true;
+        isAdmin[msg.sender] = true;
         for (uint256 i = 0; i < admins_.length; i++) {
             isAdmin[admins_[i]] = true;
         }

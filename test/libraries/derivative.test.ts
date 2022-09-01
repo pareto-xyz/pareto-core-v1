@@ -6,6 +6,7 @@ import { expect } from "chai";
 import { Contract } from "ethers";
 import { checkInterpolate, checkClosestIndices } from "../utils/interpolate";
 import { checkCallPrice, checkPutPrice } from "../utils/blackscholes";
+import { getFixedGasSigners, toBytes32 } from "../utils/helpers";
 
 /****************************************
  * Constants
@@ -26,7 +27,7 @@ let bob: SignerWithAddress;
 describe("Derivative Library", () => {
   beforeEach(async () => {
     // Create signers
-    const wallets = await ethers.getSigners(); 
+    const wallets = await getFixedGasSigners(10000000);
     [alice, bob] = wallets;
 
     // Deploy derivatives
@@ -109,7 +110,7 @@ describe("Derivative Library", () => {
           // Note moneyness is computed as spot/strike so spot/1.1
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
-          underlying: "ETH",
+          underlying: toBytes32("ETH"),
           decimals: 18
         }
       };
@@ -223,7 +224,7 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       await derivative.getMarkPrice(option, ONE_ETH, 5000);
@@ -235,7 +236,7 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.2 spot is ITM for a 1.1 call
@@ -250,7 +251,7 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.1 spot is ATM for a 1.1 call
@@ -265,7 +266,7 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 0.9 spot is OTM for a 1.1 call
@@ -280,7 +281,7 @@ describe("Derivative Library", () => {
         optionType: 1,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 0.9 spot is ITM for a 1.1 put
@@ -295,7 +296,7 @@ describe("Derivative Library", () => {
         optionType: 1,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.1 spot is ITM for a 1.1 put
@@ -310,7 +311,7 @@ describe("Derivative Library", () => {
         optionType: 1,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.2 spot is OTM for a 1.1 put
@@ -326,7 +327,7 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.2 spot is ITM for a 1.1 call
@@ -341,7 +342,7 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.1 spot is ATM for a 1.1 call
@@ -356,7 +357,7 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 0.9 spot is OTM for a 1.1 call
@@ -371,7 +372,7 @@ describe("Derivative Library", () => {
         optionType: 1,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 0.9 spot is ITM for a 1.1 put
@@ -386,7 +387,7 @@ describe("Derivative Library", () => {
         optionType: 1,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.1 spot is ITM for a 1.1 put
@@ -401,7 +402,7 @@ describe("Derivative Library", () => {
         optionType: 1,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.2 spot is OTM for a 1.1 put
@@ -419,7 +420,7 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       await derivative.getMarkPrice(option, ONE_ETH, 5000);
@@ -431,7 +432,7 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.2 spot is ITM for a 1.1 call
@@ -446,7 +447,7 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.1 spot is ATM for a 1.1 call
@@ -461,7 +462,7 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 0.9 spot is OTM for a 1.1 call
@@ -476,7 +477,7 @@ describe("Derivative Library", () => {
         optionType: 1,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 0.9 spot is ITM for a 1.1 put
@@ -491,7 +492,7 @@ describe("Derivative Library", () => {
         optionType: 1,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.1 spot is ITM for a 1.1 put
@@ -506,7 +507,7 @@ describe("Derivative Library", () => {
         optionType: 1,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.2 spot is OTM for a 1.1 put
@@ -522,7 +523,7 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.2 spot is ITM for a 1.1 call
@@ -537,7 +538,7 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.1 spot is ATM for a 1.1 call
@@ -552,7 +553,7 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 0.9 spot is OTM for a 1.1 call
@@ -567,7 +568,7 @@ describe("Derivative Library", () => {
         optionType: 1,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 0.9 spot is ITM for a 1.1 put
@@ -582,7 +583,7 @@ describe("Derivative Library", () => {
         optionType: 1,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.1 spot is ITM for a 1.1 put
@@ -597,7 +598,7 @@ describe("Derivative Library", () => {
         optionType: 1,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18
       }
       // 1.2 spot is OTM for a 1.1 put
@@ -623,7 +624,7 @@ describe("Derivative Library", () => {
           optionType: 0,
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
-          underlying: "ETH",
+          underlying: toBytes32("ETH"),
           decimals: 18,
         }
       };
@@ -640,7 +641,7 @@ describe("Derivative Library", () => {
           optionType: 0,
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
-          underlying: "ETH",
+          underlying: toBytes32("ETH"),
           decimals: 18,
         }
       };
@@ -653,7 +654,7 @@ describe("Derivative Library", () => {
           optionType: 0,
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
-          underlying: "ETH",
+          underlying: toBytes32("ETH"),
           decimals: 18,
         }
       };
@@ -673,7 +674,7 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH,
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18,
       };
       await derivative.hashOption(option);
@@ -684,14 +685,14 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH,
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18,
       };
       const option2 =  {
         optionType: 0,
         strike: ONE_ETH,
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18,
       };
       const hash1 = await derivative.hashOption(option1);
@@ -704,14 +705,14 @@ describe("Derivative Library", () => {
         optionType: 0,
         strike: ONE_ETH,
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18,
       };
       const option2 =  {
         optionType: 1,
         strike: ONE_ETH,
         expiry: curTime + ONE_WEEK,
-        underlying: "ETH",
+        underlying: toBytes32("ETH"),
         decimals: 18,
       };
       const hash1 = await derivative.hashOption(option1);
