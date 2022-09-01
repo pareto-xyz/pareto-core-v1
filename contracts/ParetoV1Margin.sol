@@ -152,12 +152,8 @@ contract ParetoV1Margin is
         // The hash for the underlying name is what we use as the key for state objects
         bytes32 underlying_ = keccak256(abi.encodePacked(underlyingName_));
 
-        // Create a new underlying 
+        // Create a new underlying (handles strike and smile creation)
         newUnderlying(underlying_, spotOracle_, volOracle_);
-
-        // Compute strikes for the underlying
-        (,int256 dvol,,,) = IOracle(volOracles[underlying_]).latestRoundData();
-        roundStrikes[underlying_] = getStrikesAtDelta(underlying_, uint256(dvol));
     }
 
     /**
@@ -736,11 +732,19 @@ contract ParetoV1Margin is
         address volOracle
     ) internal {
         underlyings.push(underlying);
+
+        // Set smile for underlying
         bytes32 smileHash = Derivative.hashForSmile(underlying, activeExpiry);
         (,int256 sigma,,,) = IOracle(volOracle).latestRoundData();
         volSmiles[smileHash] = Derivative.createSmile(uint256(sigma));
+
+        // Set oracles for underlying
         spotOracles[underlying] = spotOracle;
         volOracles[underlying] = volOracle;
+
+        // Compute strikes for underlying
+        (,int256 dvol,,,) = IOracle(volOracles[underlying]).latestRoundData();
+        roundStrikes[underlying] = getStrikesAtDelta(underlying, uint256(dvol));
     }
 
     /**
@@ -923,7 +927,7 @@ contract ParetoV1Margin is
 
         // Get strike at chosen level from current round strikes
         uint256 strike = roundStrikes[underlying][uint8(strikeLevel)];
-        require(strike > 0, "addPosition: underlying not found");
+        require(strike > 0, "addPosition: no strike for underlying");
 
         // Build an order object
         Derivative.Order memory order = Derivative.Order(

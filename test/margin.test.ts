@@ -285,12 +285,109 @@ describe("ParetoMargin Contract", () => {
 
       expect(isSame).to.be.false;
     });
-    it("Buyer passes margin check after position added", async () => {});
-    it("Seller passes margin check after position added", async () => {});
-    it("Can add position for brand new underlying", async () => {});
-    it("Cannot add position with trade price 0", async () => {});
-    it("Cannot add position with quantity 0", async () => {});
-    it("Cannot add position with empty underlying name", async () => {});
+    it("Buyer passes margin check after position added", async () => {
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        5,
+        "ETH"
+      );
+      const [, satisfied] = await paretoMargin.checkMargin(buyer.address, false);
+      expect(satisfied).to.be.true;
+    });
+    it("Seller passes margin check after position added", async () => {
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        5,
+        "ETH"
+      );
+      const [, satisfied] = await paretoMargin.checkMargin(seller.address, false);
+      expect(satisfied).to.be.true;
+    });
+    it("Can add position for brand new underlying", async () => {
+      // Deploy new oracle contracts
+      const PriceFeedFactory = await ethers.getContractFactory("PriceFeed");
+      const newPriceFeed = await PriceFeedFactory.deploy("BTC spot", [keeper.address]);
+      await newPriceFeed.deployed();
+      const newVolFeed = await PriceFeedFactory.deploy("BTC vol", [keeper.address]);
+      newVolFeed.deployed();
+
+      // Set prices
+      await newPriceFeed.connect(deployer).setLatestAnswer(ONEUSDC.mul(1500));
+      await newVolFeed.connect(deployer).setLatestAnswer(toBn("0.9", 4));
+      
+      // Add oracles to Pareto, making a new underlying
+      await paretoMargin.connect(deployer).setOracle("BTC", newPriceFeed.address, newVolFeed.address);
+
+      // Now make a new position for said underlying
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        5,
+        "BTC"
+      );
+    });
+    it("Cannot add position with trade price 0", async () => {
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await expect(
+        paretoMargin.connect(deployer).addPosition(
+          buyer.address,
+          seller.address,
+          0,
+          1,
+          0,
+          5,
+          "ETH"
+        )
+      ).to.be.revertedWith("addPosition: tradePrice must be > 0");
+    });
+    it("Cannot add position with quantity 0", async () => {
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await expect(
+        paretoMargin.connect(deployer).addPosition(
+          buyer.address,
+          seller.address,
+          ONEUSDC,
+          0,
+          0,
+          5,
+          "ETH"
+        )
+      ).to.be.revertedWith("addPosition: quantity must be > 0");
+    });
+    it("Cannot add position with empty underlying name", async () => {
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await expect(
+        paretoMargin.connect(deployer).addPosition(
+          buyer.address,
+          seller.address,
+          ONEUSDC,
+          1,
+          0,
+          5,
+          ""
+        )
+      ).to.be.revertedWith("addPosition: underlying is empty");
+    });
     it("Cannot add position if buyer below margin", async () => {
       // seller puts in 1k usdc into margin account but buyer does not
       await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
@@ -482,9 +579,9 @@ describe("ParetoMargin Contract", () => {
     beforeEach(async () => {
       const PriceFeedFactory = await ethers.getContractFactory("PriceFeed");
       newPriceFeed = await PriceFeedFactory.deploy("BTC spot", [keeper.address]);
-      newPriceFeed.deployed();
+      await newPriceFeed.deployed();
       newVolFeed = await PriceFeedFactory.deploy("BTC vol", [keeper.address]);
-      newVolFeed.deployed();
+      await newVolFeed.deployed();
     });
     it("Owner can set oracle for new underlying", async () => {
       await paretoMargin.connect(deployer).setOracle("BTC", newPriceFeed.address, newVolFeed.address);
