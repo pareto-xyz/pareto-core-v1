@@ -2,6 +2,7 @@ import * as dotenv from "dotenv";
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import "@openzeppelin/hardhat-upgrades";
+import "hardhat-gas-reporter";
 
 dotenv.config();
 
@@ -22,7 +23,6 @@ const config: HardhatUserConfig = {
         accountsBalance: "1000000000000000000000000",
       },
       blockGasLimit: 1000000000000000,
-      gas: "auto",
       allowUnlimitedContractSize: true
     },
   },

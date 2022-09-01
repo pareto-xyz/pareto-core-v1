@@ -1,10 +1,9 @@
 import { ethers, upgrades } from "hardhat";
-import { BigNumber } from "ethers";
-import { fromBn, toBn } from "evm-bn";
+import { fromBn } from "evm-bn";
 import { expect } from "chai";
 import { Contract } from "ethers";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { deploy } from "@openzeppelin/hardhat-upgrades/dist/utils";
+import { getFixedGasSigners } from "./utils/helpers";
 
 let usdc: Contract;
 let weth: Contract;
@@ -16,12 +15,9 @@ let buyer: SignerWithAddress;
 let seller: SignerWithAddress;
 let insurance: SignerWithAddress;
 
-const ONE_ETH: BigNumber = ethers.utils.parseEther("1");
-const ONE_WEEK: number = 604800;
-
 describe("ParetoMargin Contract", () => {
   beforeEach(async () => {
-    const wallets = await ethers.getSigners(); 
+    const wallets = await getFixedGasSigners(10000000);
     [deployer, keeper, buyer, seller, insurance] = wallets;
   
     // Deploy a MockERC20 contract to mimic USDC
