@@ -700,7 +700,7 @@ contract ParetoV1Margin is
         returns (uint256, bool) 
     {
         require(amount > 0, "checkMarginOnWithdrawal: amount must be > 0");
-        require(amount < balances[user], "checkMarginOnWithdrawal: amount must be < balance");
+        require(amount <= balances[user], "checkMarginOnWithdrawal: amount must be < balance");
 
         // Perform standard margin check
         (uint256 margin, bool satisfied) = checkMargin(user, false);
@@ -709,7 +709,10 @@ contract ParetoV1Margin is
         bool isMarginNeg = !satisfied;
 
         // Subtract the withdraw
-        return NegativeMath.add(margin, isMarginNeg, amount, true);
+        (uint256 total, bool isNeg) = NegativeMath.add(margin, isMarginNeg, amount, true);
+
+        // Satisfied if not negative
+        return (total, !isNeg);
     }
 
     /**

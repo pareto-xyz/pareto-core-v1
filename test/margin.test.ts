@@ -31,17 +31,10 @@ describe("ParetoMargin Contract", () => {
     await usdc.mint(keeper.address, 100000);
     await usdc.mint(buyer.address, 100000);
     await usdc.mint(seller.address, 100000);
+    await usdc.mint(insurance.address, 100000);
 
     // Deploy a MockERC20 contract to mimic WETH
     weth = await MockERC20.deploy();
-
-    // Mint 100k WETH for deployer, keeper, buyer and seller
-    await usdc.mint(insurance.address, 100000);
-    await weth.mint(deployer.address, 100000);
-    await weth.mint(keeper.address, 100000);
-    await weth.mint(buyer.address, 100000);
-    await weth.mint(seller.address, 100000);
-    await weth.mint(insurance.address, 100000);
 
     // Deploy a price feed factory and create a spot and vol oracle
     const PriceFeedFactory = await ethers.getContractFactory("PriceFeedFactory", deployer);
@@ -71,6 +64,10 @@ describe("ParetoMargin Contract", () => {
       ]
     );
     await paretoMargin.deployed();
+
+    // Insurance will deposit all their USDC into contract
+    await usdc.connect(insurance).approve(paretoMargin.address, 100000);
+    await paretoMargin.connect(insurance).deposit(100000);
   });
 
   describe("Test construction", () => {
@@ -135,11 +132,6 @@ describe("ParetoMargin Contract", () => {
       expect(marginPost.sub(marginPre)).to.be.equal("1");
       expect(userPre.sub(userPost)).to.be.equal("1");
     });
-    it("Deposit reflected in balance", async () => {
-      await usdc.connect(buyer).approve(paretoMargin.address, 1);
-      await paretoMargin.connect(buyer).deposit(1);
-      expect(await paretoMargin.connect(buyer).getBalance()).to.be.equal("1");
-    });
     it("Cannot deposit 0 USDC", async () => {
       await usdc.connect(buyer).approve(paretoMargin.address, 1);
       await expect(paretoMargin.connect(buyer).deposit(0))
@@ -147,14 +139,83 @@ describe("ParetoMargin Contract", () => {
     });
   });
 
+  describe("Checking balance", () => {
+    it("Default balance for user is 0", async () => {
+      expect(await paretoMargin.connect(buyer).getBalance()).to.be.equal("0");
+    });
+    it("Default balance for insurance is 10k", async () => {
+      expect(await paretoMargin.connect(insurance).getBalance()).to.be.equal("100000");
+    });
+    it("Deposit reflected in balance", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, 1);
+      await paretoMargin.connect(buyer).deposit(1);
+      expect(await paretoMargin.connect(buyer).getBalance()).to.be.equal("1");
+    });
+  });
+
   describe("Withdrawing USDC", () => {
-    it("Depositor can withdraw", async () => {});
-    it("Depositor can withdraw all", async () => {});
-    it("USDC is properly transferred", async () => {});
-    it("Emits an event", async () => {});
-    it("Cannot withdraw 0 amount", async () => {});
-    it("Cannot withdraw more than balance", async () => {});
-    it("Cannot withdraw if failing margin check", async () => {});
-    it("Cannot withdraw all if failing margin check", async () => {});
+    beforeEach(async () => {
+      // Depositor
+      await usdc.connect(buyer).approve(paretoMargin.address, 1);
+      await paretoMargin.connect(buyer).deposit(1);
+    });
+    it("Depositor can withdraw", async () => {
+      await paretoMargin.connect(buyer).withdraw(1);
+    });
+    it("Depositor can withdraw all", async () => {
+      await paretoMargin.connect(buyer).withdrawAll();
+    });
+    it("USDC is properly transferred", async () => {
+      const marginPre = await usdc.balanceOf(paretoMargin.address);
+      const userPre = await usdc.balanceOf(buyer.address);
+      await paretoMargin.connect(buyer).withdraw(1);
+      const marginPost = await usdc.balanceOf(paretoMargin.address);
+      const userPost = await usdc.balanceOf(buyer.address);
+      expect(marginPre.sub(marginPost)).to.be.equal("1");
+      expect(userPost.sub(userPre)).to.be.equal("1");
+    });
+    it("Emits an event on withdrawal", async () => {
+      await expect(paretoMargin.connect(buyer).withdraw(1))
+        .to.emit(paretoMargin, "WithdrawEvent")
+        .withArgs(buyer.address, 1);
+    });
+    it("Can withdraw all after two deposits", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, 1);
+      await paretoMargin.connect(buyer).deposit(1);
+
+      const marginPre = await usdc.balanceOf(paretoMargin.address);
+      const userPre = await usdc.balanceOf(buyer.address);
+      await paretoMargin.connect(buyer).withdrawAll();
+      const marginPost = await usdc.balanceOf(paretoMargin.address);
+      const userPost = await usdc.balanceOf(buyer.address);
+
+      expect(marginPre.sub(marginPost)).to.be.equal("2");
+      expect(userPost.sub(userPre)).to.be.equal("2");
+    });
+    it("Emits an event on withdrawal all", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, 1);
+      await paretoMargin.connect(buyer).deposit(1);
+      await expect(paretoMargin.connect(buyer).withdrawAll())
+        .to.emit(paretoMargin, "WithdrawEvent")
+        .withArgs(buyer.address, 2);
+    });
+    it("Cannot withdraw 0 amount", async () => {
+      await expect(
+        paretoMargin.connect(buyer).withdraw(0)
+      ).to.be.revertedWith("withdraw: amount must be > 0");
+    });
+    it("Cannot withdraw more than balance", async () => {
+      await expect(
+        paretoMargin.connect(buyer).withdraw(2)
+      ).to.be.revertedWith("withdraw: amount > balance");
+    });
+    it("Cannot withdraw if failing margin check", async () => {
+      // TODO
+      expect(true).to.be.false;
+    });
+    it("Cannot withdraw all if failing margin check", async () => {
+      // TODO
+      expect(true).to.be.false;
+    });
   });
 })
