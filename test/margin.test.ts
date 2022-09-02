@@ -424,6 +424,37 @@ describe("ParetoMargin Contract", () => {
    * Margin check
    ****************************************/  
   describe("Performing a margin check", () => {
+    it("Can check margin of yourself", async () => {
+      await paretoMargin.connect(buyer).checkMargin(buyer.address, false);
+    });
+    it("Can check margin of someone else", async () => {
+      await paretoMargin.connect(buyer).checkMargin(seller.address, false);
+    });
+    it("Person with no balance and no positions passes margin check", async () => {
+      const [, satisfied] = await paretoMargin.connect(buyer).checkMargin(buyer.address, false);
+      expect(satisfied).to.be.true;
+    });
+    it("Person with lots of liquidity and no positions passes margin check", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      const [, satisfied] = await paretoMargin.connect(buyer).checkMargin(buyer.address, false);
+      expect(satisfied).to.be.true;
+    });
+    it("Person can fail margin check after entering a position", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC);
+      await paretoMargin.connect(buyer).deposit(ONEUSDC);
+      await expect(
+        paretoMargin.connect(deployer).addPosition(
+          buyer.address,
+          seller.address,
+          ONEUSDC,
+          1,
+          0,
+          5,
+          "ETH"
+        )
+      ).to.be.revertedWith("addPosition: buyer failed margin check");
+    });
   });
 
   /****************************************
