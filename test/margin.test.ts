@@ -449,8 +449,8 @@ describe("ParetoMargin Contract", () => {
       const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
 
       // Get balance for the two individuals
-      const buyerBalance = await paretoMargin.getBalance(buyer.address);
-      const sellerBalance = await paretoMargin.getBalance(seller.address);
+      const buyerBalance = await paretoMargin.connect(buyer).getBalance();
+      const sellerBalance = await paretoMargin.connect(seller).getBalance();
 
       // Both should be netted to be zero since orders cancel
       expect(marginA).to.be.equal(buyerBalance);

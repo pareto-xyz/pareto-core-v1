@@ -344,11 +344,6 @@ contract ParetoV1Margin is
         // Compute the unrealized PnL (actually this is only unrealized losses)
         (uint256 pnl, bool pnlIsNeg) = getPayoff(user, true);
 
-        console.log("maintainence");
-        console.logUint(maintainence);
-        console.log("pnl");
-        console.logUint(pnl);
-
         // Compute `balance + PnL`
         (uint256 bpnl, bool bpnlIsNeg) = NegativeMath.add(balance, false, pnl, pnlIsNeg);
 
@@ -581,8 +576,8 @@ contract ParetoV1Margin is
     }
 
     /**
-     * @notice Compute the initial margin for all positions owned by user
-     * @dev The initial margin is equal to the sum of initial margins for all positions
+     * @notice Compute the payofff function for all positions owned by user
+     * @dev We net payoffs per strike (and expiry but there is only one expiry)
      * @param user Address to compute IM for
      * @param onlyLoss Do not count unrealized profits from open positions
      * @return payoff The payoff summed for all positions
@@ -597,12 +592,16 @@ contract ParetoV1Margin is
             return (0, false);
         }
 
-        uint256 payoff;
-        bool isNegative;
+        // Store the netted payoffs here (there are 11 strike levels)
+        uint256[11] memory payoffPerStrike;
+        bool[11] memory isNegativePerStrike;
 
         for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
             // Fetch the order in the position
             Derivative.Order memory order = roundPositions[userRoundIxs[user][i]];
+
+            // Get strike level
+            uint8 strikeLevel = order.option.strikeLevel;
 
             // Fetch the underlying token for the option
             uint256 spot = getSpot(order.option.underlying);
@@ -610,13 +609,26 @@ contract ParetoV1Margin is
             // Compute the payoff at this price
             (uint256 curPayoff, bool curIsNegative) = MarginMath.getPayoff(user, spot, order);
 
-            // If payoff is positive but we don't want to count positive open positions
-            if (onlyLoss && !curIsNegative) {
-                curPayoff = 0;
-            }
-
-            (payoff, isNegative) = NegativeMath.add(payoff, isNegative, curPayoff, curIsNegative);
+            // Net the payoff at this strike level
+            (payoffPerStrike[strikeLevel], isNegativePerStrike[strikeLevel]) = NegativeMath.add(
+                payoffPerStrike[strikeLevel], 
+                isNegativePerStrike[strikeLevel],
+                curPayoff,
+                curIsNegative
+            );
         }
+
+        uint256 payoff;
+        bool isNegative;
+        // Loop through strike levels and sum them, ignoring positive ones if `onlyLoss` is true
+        for (uint256 i = 0; i < 11; i++) {
+            // Ignore if positive payoff at strike and `onlyLoss` is on
+            if (!isNegativePerStrike[i] && onlyLoss) {
+                continue;
+            }
+            (payoff, isNegative) = NegativeMath.add(payoff, isNegative, payoffPerStrike[i], isNegativePerStrike[i]);
+        }
+
         return (payoff, isNegative);
     }
 
@@ -955,7 +967,7 @@ contract ParetoV1Margin is
             seller,
             tradePrice,
             quantity,
-            Derivative.Option(optionType, strike, activeExpiry, underlying, decimals)
+            Derivative.Option(optionType, uint8(strikeLevel), strike, activeExpiry, underlying, decimals)
         );
 
         // Hash together the underlying and expiry

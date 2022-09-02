@@ -46,6 +46,7 @@ library Derivative {
     /**
      * @notice Option parameters
      * @param optionType Is this a call or put option?
+     * @param strikeLevel Integer from 0 to 7 for level of strike
      * @param strike Strike price of the option
      * @param expiry Expiry in epoch time of the option
      * @param underlying Hash of the underlying token name e.g. WETH
@@ -53,6 +54,7 @@ library Derivative {
      */
     struct Option {
         OptionType optionType;
+        uint8 strikeLevel;
         uint256 strike;
         uint256 expiry;
         bytes32 underlying;
