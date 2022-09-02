@@ -344,6 +344,11 @@ contract ParetoV1Margin is
         // Compute the unrealized PnL (actually this is only unrealized losses)
         (uint256 pnl, bool pnlIsNeg) = getPayoff(user, true);
 
+        console.log("maintainence");
+        console.logUint(maintainence);
+        console.log("pnl");
+        console.logUint(pnl);
+
         // Compute `balance + PnL`
         (uint256 bpnl, bool bpnlIsNeg) = NegativeMath.add(balance, false, pnl, pnlIsNeg);
 
@@ -656,7 +661,11 @@ contract ParetoV1Margin is
 
             // Nested loop to find the total quantity of this option.
             // Consider case with multiple positions with same order
-            for (uint256 j = i + 1; j < userRoundIxs[user].length; j++) {
+            for (uint256 j = 0; j < userRoundIxs[user].length; j++) {
+                // Do not double count
+                if (i == j) {
+                    continue;
+                }
                 Derivative.Order memory order2 = roundPositions[userRoundIxs[user][j]];
                 bytes32 optionHash2 = Derivative.hashOption(order2.option);
 

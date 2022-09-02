@@ -421,8 +421,49 @@ describe("ParetoMargin Contract", () => {
         )
       ).to.be.revertedWith("addPosition: seller failed margin check");
     });
-    it("Check opposite orders can cancelled", async () => {
-      expect(true).to.be.false;  // TODO
+    it("Check opposite orders cancel", async () => {
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));      
+
+      // Buy a call position
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        7,
+        "ETH"
+      );
+      // Sell the call position
+      await paretoMargin.connect(deployer).addPosition(
+        seller.address,
+        buyer.address,
+        ONEUSDC,
+        1,
+        0,
+        7,
+        "ETH"
+      );
+      const [marginA,] = await paretoMargin.checkMargin(buyer.address, false);
+      const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
+
+      // Get balance for the two individuals
+      const buyerBalance = await paretoMargin.getBalance(buyer.address);
+      const sellerBalance = await paretoMargin.getBalance(seller.address);
+
+      // Both should be netted to be zero since orders cancel
+      expect(marginA).to.be.equal(buyerBalance);
+      expect(marginB).to.be.equal(sellerBalance);
+    });
+    it("Check opposite orders of different strikes do not cancel", async () => {
+      expect(true).to.be.false;
+    });
+    it("Check opposite orders of put & call do not cancel", async () => {
+      expect(true).to.be.false;
+    });
+    it("Check opposite orders different quantities partially cancel", async () => {
+      expect(true).to.be.false;
     });
   });
 
@@ -1136,4 +1177,4 @@ describe("ParetoMargin Contract", () => {
         .to.be.revertedWith("Ownable: caller is not the owner");
     });
   });
-})
+});
