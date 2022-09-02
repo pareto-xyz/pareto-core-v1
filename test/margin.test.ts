@@ -161,8 +161,8 @@ describe("ParetoMargin Contract", () => {
     it("Default balance for user is 0", async () => {
       expect(await paretoMargin.connect(buyer).getBalance()).to.be.equal("0");
     });
-    it("Default balance for insurance is 10k", async () => {
-      expect(await paretoMargin.connect(insurance).getBalance()).to.be.equal("100000");
+    it("Default balance for insurance is 1M", async () => {
+      expect(await paretoMargin.connect(insurance).getBalance()).to.be.equal(toBn("1000000", 18));
     });
     it("Deposit reflected in balance", async () => {
       await usdc.connect(buyer).approve(paretoMargin.address, 1);
@@ -640,11 +640,16 @@ describe("ParetoMargin Contract", () => {
     it("Owner can add keeper", async () => {
       await paretoMargin.connect(deployer).addKeepers([buyer.address]);
     });
+    it("Cannot add keeper twice", async () => {
+      await paretoMargin.connect(deployer).addKeepers([buyer.address]);
+      await expect(
+        paretoMargin.connect(deployer).addKeepers([buyer.address])
+      ).to.be.revertedWith("addKeeper: already a keeper");
+    });
     it("Owner can add multiple keepers at once", async () => {
       await paretoMargin.connect(deployer).addKeepers([buyer.address, seller.address]);
     });
     it("Owner can remove keeper", async () => {
-      await paretoMargin.connect(deployer).addKeepers([keeper.address]);
       await paretoMargin.connect(deployer).removeKeepers([keeper.address]);
     });
     it("Keeper cannot add keeper", async () => {
@@ -653,7 +658,6 @@ describe("ParetoMargin Contract", () => {
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
     it("Keeper cannot remove keeper", async () => {
-      await paretoMargin.connect(deployer).addKeepers([keeper.address]);
       await expect(
         paretoMargin.connect(keeper).removeKeepers([keeper.address])
       ).to.be.revertedWith("Ownable: caller is not the owner");
@@ -664,7 +668,6 @@ describe("ParetoMargin Contract", () => {
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
     it("User cannot remove keeper", async () => {
-      await paretoMargin.connect(deployer).addKeepers([keeper.address]);
       await expect(
         paretoMargin.connect(buyer).removeKeepers([keeper.address])
       ).to.be.revertedWith("Ownable: caller is not the owner");
