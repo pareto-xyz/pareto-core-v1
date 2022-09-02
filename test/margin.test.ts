@@ -206,7 +206,7 @@ describe("ParetoMargin Contract", () => {
         ONEUSDC,
         1,
         0,
-        5,
+        7,
         "ETH"
       );
     });
@@ -219,7 +219,7 @@ describe("ParetoMargin Contract", () => {
         ONEUSDC,
         1,
         0,
-        5,
+        7,
         "ETH"
       );
     });
@@ -233,7 +233,7 @@ describe("ParetoMargin Contract", () => {
           ONEUSDC,
           1,
           0,
-          5,
+          7,
           "ETH"
         )
       ).to.be.revertedWith("onlyKeeper: caller is not a keeper");
@@ -248,12 +248,12 @@ describe("ParetoMargin Contract", () => {
           ONEUSDC,
           1,
           0,
-          5,
+          7,
           "ETH"
         )
       )
         .to.emit(paretoMargin, "RecordPositionEvent")
-        .withArgs(ONEUSDC, 1, 0, "ETH", 5, expiry);
+        .withArgs(ONEUSDC, 1, 0, "ETH", 7, expiry);
     });
     it("Smile is updated on adding a new position", async () => {
       // Fetch smile before position
@@ -268,7 +268,7 @@ describe("ParetoMargin Contract", () => {
         ONEUSDC,
         1,
         0,
-        5,
+        7,
         "ETH"
       );
 
@@ -294,7 +294,7 @@ describe("ParetoMargin Contract", () => {
         ONEUSDC,
         1,
         0,
-        5,
+        7,
         "ETH"
       );
       const [, satisfied] = await paretoMargin.checkMargin(buyer.address, false);
@@ -309,7 +309,7 @@ describe("ParetoMargin Contract", () => {
         ONEUSDC,
         1,
         0,
-        5,
+        7,
         "ETH"
       );
       const [, satisfied] = await paretoMargin.checkMargin(seller.address, false);
@@ -339,7 +339,7 @@ describe("ParetoMargin Contract", () => {
         ONEUSDC,
         1,
         0,
-        5,
+        7,
         "BTC"
       );
     });
@@ -353,7 +353,7 @@ describe("ParetoMargin Contract", () => {
           0,
           1,
           0,
-          5,
+          7,
           "ETH"
         )
       ).to.be.revertedWith("addPosition: tradePrice must be > 0");
@@ -368,7 +368,7 @@ describe("ParetoMargin Contract", () => {
           ONEUSDC,
           0,
           0,
-          5,
+          7,
           "ETH"
         )
       ).to.be.revertedWith("addPosition: quantity must be > 0");
@@ -383,7 +383,7 @@ describe("ParetoMargin Contract", () => {
           ONEUSDC,
           1,
           0,
-          5,
+          7,
           ""
         )
       ).to.be.revertedWith("addPosition: underlying is empty");
@@ -398,7 +398,7 @@ describe("ParetoMargin Contract", () => {
           ONEUSDC,
           1,
           0,
-          5,
+          7,
           "ETH"
         )
       ).to.be.revertedWith("addPosition: buyer failed margin check");
@@ -413,7 +413,7 @@ describe("ParetoMargin Contract", () => {
           ONEUSDC,
           1,
           0,
-          5,
+          7,
           "ETH"
         )
       ).to.be.revertedWith("addPosition: seller failed margin check");
@@ -441,8 +441,8 @@ describe("ParetoMargin Contract", () => {
       expect(satisfied).to.be.true;
     });
     it("Person can fail margin check after entering a position", async () => {
-      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC);
-      await paretoMargin.connect(buyer).deposit(ONEUSDC);
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(10));
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(10));
       await expect(
         paretoMargin.connect(deployer).addPosition(
           buyer.address,
@@ -450,7 +450,7 @@ describe("ParetoMargin Contract", () => {
           ONEUSDC,
           1,
           0,
-          5,
+          7,
           "ETH"
         )
       ).to.be.revertedWith("addPosition: buyer failed margin check");
@@ -517,10 +517,40 @@ describe("ParetoMargin Contract", () => {
       ).to.be.revertedWith("withdraw: amount > balance");
     });
     it("Cannot withdraw if failing margin check", async () => {
-      expect(true).to.be.false;
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        5,
+        "ETH"
+      );
+      await expect(
+        paretoMargin.connect(buyer).withdraw(ONEUSDC.mul(1000))
+      ).to.be.revertedWith("withdraw: margin check failed");
     });
     it("Cannot withdraw all if failing margin check", async () => {
-      expect(true).to.be.false;
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        5,
+        "ETH"
+      );
+      await expect(
+        paretoMargin.connect(buyer).withdrawAll()
+      ).to.be.revertedWith("withdraw: margin check failed");
     });
   });
 
@@ -554,12 +584,14 @@ describe("ParetoMargin Contract", () => {
    * Settlement
    ****************************************/  
   describe("Settlement", () => {
+    // TODO
   });
 
   /****************************************
    * Liquidation
    ****************************************/  
   describe("Liquidation", () => {
+    // TODO
   });
 
   /****************************************
