@@ -71,6 +71,9 @@ contract ParetoV1Margin is
     /// @notice If the contract is paused or not
     bool private isPaused;
 
+    /// @notice Tracks if the last round has been settled
+    bool private roundSettled;
+
     /// @notice Store a list of names for underlying tokens
     bytes32[] public underlyings;
 
@@ -359,6 +362,7 @@ contract ParetoV1Margin is
      */
     function settle() external nonReentrant {
         require(activeExpiry <= block.timestamp, "settle: expiry must be in the past");
+        require(!roundSettled, "settle: already settled this round");
 
         for (uint256 j = 0; j < roundPositions.length; j++) {
             Derivative.Order memory order = roundPositions[j];
@@ -401,11 +405,14 @@ contract ParetoV1Margin is
             }
         }
 
-        // Free up memory for the round
-        delete roundPositions;
+        // Track we settled last round
+        roundSettled = true;
 
         // Emit event
         emit SettlementEvent(msg.sender, curRound, roundPositions.length);
+
+        // Free up memory for the round
+        delete roundPositions;
     }
 
     /**
@@ -857,6 +864,7 @@ contract ParetoV1Margin is
     function rollover(address[] calldata roundUsers) external nonReentrant onlyKeeper {
         require(!isPaused, "rollover: contract paused");
         require(activeExpiry < block.timestamp, "rollover: too early");
+        require(roundSettled, "rollover: please settle last round first");
 
         // Update the active expiry
         uint256 lastExpiry = activeExpiry;
@@ -864,6 +872,9 @@ contract ParetoV1Margin is
 
         // Update round
         curRound += 1;
+
+        // Update settled tracker
+        roundSettled = false;
 
         // Loop through underlying tokens
         for (uint256 i = 0; i < underlyings.length; i++) {

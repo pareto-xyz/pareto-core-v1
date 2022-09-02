@@ -3,7 +3,7 @@ import { fromBn, toBn } from "evm-bn";
 import { expect } from "chai";
 import { Contract } from "ethers";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { getFixedGasSigners, timeTravel, timeTravelTo, toBytes32 } from "./utils/helpers";
+import { getFixedGasSigners, timeTravelTo } from "./utils/helpers";
 
 let usdc: Contract;
 let derivative: Contract;
@@ -560,22 +560,28 @@ describe("ParetoMargin Contract", () => {
   describe("Rollover", () => {
     it("Owner can rollover", async () => {
       const expiry = (await paretoMargin.activeExpiry()).toNumber();
-      timeTravelTo(expiry+1);
+      await ethers.provider.send("evm_mine", [expiry+1]);
+      await paretoMargin.settle();
       await paretoMargin.connect(deployer).rollover([]);
     });
     it("Keeper can rollover", async () => {
       const expiry = (await paretoMargin.activeExpiry()).toNumber();
-      timeTravelTo(expiry+1);
+      await ethers.provider.send("evm_mine", [expiry+1]);
+      await paretoMargin.settle();
       await paretoMargin.connect(keeper).rollover([]);
     });
     it("User cannot rollover", async () => {
       const expiry = (await paretoMargin.activeExpiry()).toNumber();
-      timeTravelTo(expiry+1);
+      await ethers.provider.send("evm_mine", [expiry+1]);
+      await paretoMargin.settle();
       await expect(
         paretoMargin.connect(buyer).rollover([])
       ).to.be.revertedWith("onlyKeeper: caller is not a keeper");
     });
     it("Cannot rollover if paused", async () => {
+      const expiry = (await paretoMargin.activeExpiry()).toNumber();
+      await ethers.provider.send("evm_mine", [expiry+1]);
+      await paretoMargin.settle();
       await paretoMargin.connect(deployer).togglePause();
       await expect(paretoMargin.rollover([buyer.address]))
         .to.be.revertedWith("rollover: contract paused");
@@ -584,6 +590,13 @@ describe("ParetoMargin Contract", () => {
       await expect(
         paretoMargin.connect(deployer).rollover([])
       ).to.be.revertedWith("rollover: too early");
+    });
+    it("Cannot rollover without settling", async () => {
+      const expiry = (await paretoMargin.activeExpiry()).toNumber();
+      await ethers.provider.send("evm_mine", [expiry+1]);
+      await expect(
+        paretoMargin.connect(deployer).rollover([])
+      ).to.be.revertedWith("rollover: please settle last round first");
     });
     it("Can delete users in rollover", async () => {
       await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(1000));
@@ -600,14 +613,16 @@ describe("ParetoMargin Contract", () => {
         "ETH"
       );
       const expiry = (await paretoMargin.activeExpiry()).toNumber();
-      timeTravelTo(expiry+1);
+      await ethers.provider.send("evm_mine", [expiry+1]);
+      await paretoMargin.settle();
       await paretoMargin.connect(keeper).rollover([buyer.address, seller.address]);
     });
     it("Smiles are updated after rollover to last round", async () => {
       const lastExpiry = (await paretoMargin.activeExpiry()).toNumber();
       const lastSmile = paretoMargin.getVolatilitySmile("ETH", lastExpiry);
       const expiry = (await paretoMargin.activeExpiry()).toNumber();
-      timeTravelTo(expiry+1);
+      await ethers.provider.send("evm_mine", [expiry+1]);
+      await paretoMargin.settle();
       await paretoMargin.connect(keeper).rollover([]);
       const currExpiry = (await paretoMargin.activeExpiry()).toNumber();
       const currSmile = paretoMargin.getVolatilitySmile("ETH", currExpiry);
@@ -623,7 +638,13 @@ describe("ParetoMargin Contract", () => {
    * Settlement
    ****************************************/  
   describe("Settlement", () => {
-    // TODO
+    it("owner can settle", async () => {});
+    it("user can settle", async () => {});
+    it("cannot settle before expiry", async () => {});
+    it("emits event on settlement", async () => {});
+    it("balances change as expected", async () => {});
+    it("insurance fund kicks in if not enough liq", async () => {});
+    it("can settle even if paused", async () => {});
   });
 
   /****************************************
