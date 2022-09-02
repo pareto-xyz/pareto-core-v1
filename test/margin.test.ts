@@ -457,13 +457,202 @@ describe("ParetoMargin Contract", () => {
       expect(marginB).to.be.equal(sellerBalance);
     });
     it("Check opposite orders of different strikes do not cancel", async () => {
-      expect(true).to.be.false;
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));      
+
+      // Buy a call position
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        7,
+        "ETH"
+      );
+      // Sell the call position
+      await paretoMargin.connect(deployer).addPosition(
+        seller.address,
+        buyer.address,
+        ONEUSDC,
+        1,
+        0,
+        6,
+        "ETH"
+      );
+      const [marginA,] = await paretoMargin.checkMargin(buyer.address, false);
+      const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
+      
+      // Get balance for the two individuals
+      const buyerBalance = await paretoMargin.connect(buyer).getBalance();
+      const sellerBalance = await paretoMargin.connect(seller).getBalance();
+
+      // Margin should be less for both
+      expect(marginA).to.be.lessThan(buyerBalance);
+      expect(marginB).to.be.lessThan(sellerBalance);
     });
     it("Check opposite orders of put & call do not cancel", async () => {
-      expect(true).to.be.false;
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));      
+
+      // Buy a call position
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        7,
+        "ETH"
+      );
+      // Sell the put position
+      await paretoMargin.connect(deployer).addPosition(
+        seller.address,
+        buyer.address,
+        ONEUSDC,
+        1,
+        1,
+        7,
+        "ETH"
+      );
+      const [marginA,] = await paretoMargin.checkMargin(buyer.address, false);
+      const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
+      
+      // Get balance for the two individuals
+      const buyerBalance = await paretoMargin.connect(buyer).getBalance();
+      const sellerBalance = await paretoMargin.connect(seller).getBalance();
+
+      // Margin should be less for both
+      expect(marginA).to.be.lessThan(buyerBalance);
+      expect(marginB).to.be.lessThan(sellerBalance);
     });
-    it("Check opposite orders different quantities partially cancel", async () => {
-      expect(true).to.be.false;
+    it("Check opposite orders of different quantities partially cancel", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(5000));
+      await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(5000));
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(5000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(5000));
+
+      // Use deployer and keeper as two other actors
+      await usdc.connect(deployer).approve(paretoMargin.address, ONEUSDC.mul(5000));
+      await usdc.connect(keeper).approve(paretoMargin.address, ONEUSDC.mul(5000));
+      await paretoMargin.connect(deployer).deposit(ONEUSDC.mul(5000));
+      await paretoMargin.connect(keeper).deposit(ONEUSDC.mul(5000));
+
+      // Buy five call positions
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        5,
+        0,
+        7,
+        "ETH"
+      );
+      // Sell two call positions
+      await paretoMargin.connect(deployer).addPosition(
+        seller.address,
+        buyer.address,
+        ONEUSDC,
+        2,
+        0,
+        7,
+        "ETH"
+      );
+      
+      // Separately deployer buys 3 call positions
+      await paretoMargin.connect(deployer).addPosition(
+        deployer.address,
+        keeper.address,
+        ONEUSDC,
+        3,
+        0,
+        7,
+        "ETH"
+      );
+
+      const [marginA,] = await paretoMargin.checkMargin(buyer.address, false);
+      const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
+      const [marginC,] = await paretoMargin.checkMargin(deployer.address, false);
+      const [marginD,] = await paretoMargin.checkMargin(keeper.address, false);
+
+      expect(marginA).to.be.equal(marginC);
+      expect(marginB).to.be.equal(marginD);
+    });
+    it("Check opposite orders of lots of quantities partially cancel", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(5000));
+      await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(5000));
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(5000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(5000));
+
+      // Use deployer and keeper as two other actors
+      await usdc.connect(deployer).approve(paretoMargin.address, ONEUSDC.mul(5000));
+      await usdc.connect(keeper).approve(paretoMargin.address, ONEUSDC.mul(5000));
+      await paretoMargin.connect(deployer).deposit(ONEUSDC.mul(5000));
+      await paretoMargin.connect(keeper).deposit(ONEUSDC.mul(5000));
+
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        3,
+        0,
+        7,
+        "ETH"
+      );
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        2,
+        0,
+        7,
+        "ETH"
+      );
+      await paretoMargin.connect(deployer).addPosition(
+        seller.address,
+        buyer.address,
+        ONEUSDC,
+        1,
+        0,
+        7,
+        "ETH"
+      );
+      await paretoMargin.connect(deployer).addPosition(
+        seller.address,
+        buyer.address,
+        ONEUSDC,
+        1,
+        0,
+        7,
+        "ETH"
+      );
+
+      await paretoMargin.connect(deployer).addPosition(
+        deployer.address,
+        keeper.address,
+        ONEUSDC,
+        2,
+        0,
+        7,
+        "ETH"
+      );
+      await paretoMargin.connect(deployer).addPosition(
+        deployer.address,
+        keeper.address,
+        ONEUSDC,
+        1,
+        0,
+        7,
+        "ETH"
+      );
+
+      const [marginA,] = await paretoMargin.checkMargin(buyer.address, false);
+      const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
+      const [marginC,] = await paretoMargin.checkMargin(deployer.address, false);
+      const [marginD,] = await paretoMargin.checkMargin(keeper.address, false);
+
+      expect(marginA).to.be.equal(marginC);
+      expect(marginB).to.be.equal(marginD);
     });
   });
 

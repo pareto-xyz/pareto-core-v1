@@ -652,7 +652,6 @@ contract ParetoV1Margin is
             Derivative.Order memory order = roundPositions[userRoundIxs[user][i]];
             Derivative.Option memory option = order.option;
             bytes32 optionHash = Derivative.hashOption(option);
-            bytes32 smileHash = Derivative.hashForSmile(option.underlying, option.expiry);
 
             // In the case of multiple positions for the same option, 
             // compute the total amount the user wishes to buy and sell
@@ -671,6 +670,9 @@ contract ParetoV1Margin is
                 nettedSell += order.quantity;
             }
 
+            // Count the number of orders involved in netting (min 1)
+            uint256 numNetted = 1;
+
             // Nested loop to find the total quantity of this option.
             // Consider case with multiple positions with same order
             for (uint256 j = 0; j < userRoundIxs[user].length; j++) {
@@ -687,6 +689,7 @@ contract ParetoV1Margin is
                     } else {
                         nettedSell += order2.quantity;
                     }
+                    numNetted++;
                 }
             }
 
@@ -695,6 +698,7 @@ contract ParetoV1Margin is
 
             if (nettedQuantity > 0) {
                 // Fetch smile and check it is valid
+                bytes32 smileHash = Derivative.hashForSmile(option.underlying, option.expiry);
                 Derivative.VolatilitySmile memory smile = volSmiles[smileHash];
                 require(smile.exists_, "getMargin: found unknown option");
 
@@ -710,7 +714,10 @@ contract ParetoV1Margin is
                 }
 
                 // Build margin using `nettedQuantity`
-                margin += (nettedQuantity * curMargin);
+                /// @dev Divide by num netting to factor in double counting:
+                /// Suppose i and j are matched, then the code above will net at both index i and j
+                /// Suppose i, j, k are matched, then we will net at both i, j, and k
+                margin += (nettedQuantity * curMargin / numNetted);
             }
         }
         return margin;
