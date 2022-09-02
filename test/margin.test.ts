@@ -3,8 +3,7 @@ import { fromBn, toBn } from "evm-bn";
 import { expect } from "chai";
 import { Contract } from "ethers";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { getFixedGasSigners, timeTravelTo } from "./utils/helpers";
-import { ERC1967UpgradeUpgradeable__factory } from "../typechain-types";
+import { getFixedGasSigners } from "./utils/helpers";
 
 let usdc: Contract;
 let derivative: Contract;
@@ -1207,7 +1206,6 @@ describe("ParetoMargin Contract", () => {
    * Liquidation
    ****************************************/  
   describe("Liquidation", () => {
-    // TODO
   });
 
   /****************************************

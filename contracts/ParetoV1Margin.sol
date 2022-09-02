@@ -424,9 +424,9 @@ contract ParetoV1Margin is
      * @return fullyLiquidated if true, user is fully liquidated
      */
     function liquidate(address user) external nonReentrant returns (bool fullyLiquidated) {
+        require(userRoundIxs[user].length > 0, "liquidate: user has no positions");
         (, bool satisfied) = checkMargin(user, false);
         require(!satisfied, "liquidate: user passes margin check");
-        require(userRoundIxs[user].length > 0, "liquidate: user has no positions");
 
         address liquidator = msg.sender;
 
