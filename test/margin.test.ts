@@ -4,6 +4,7 @@ import { expect } from "chai";
 import { Contract } from "ethers";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { getFixedGasSigners, timeTravelTo } from "./utils/helpers";
+import { ERC1967UpgradeUpgradeable__factory } from "../typechain-types";
 
 let usdc: Contract;
 let derivative: Contract;
@@ -828,7 +829,142 @@ describe("ParetoMargin Contract", () => {
       expect(buyerPre).to.be.lessThan(buyerPost);
       expect(sellerPre).to.be.greaterThan(sellerPost);
     });
-    it("insurance fund kicks in if not enough liq", async () => {});
+    it("balances change for two call positions, buyer wins both", async () => {
+      // Buyer purchases a call
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+
+      // Compute positions pre
+      const buyerPre = await paretoMargin.connect(buyer).getBalance();
+      const sellerPre = await paretoMargin.connect(seller).getBalance();
+
+      // Enter the position
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        7,
+        "ETH"
+      );
+
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        6,
+        "ETH"
+      );
+
+      // Let the price rise a lot so buyer wins
+      await priceFeed.connect(deployer).setLatestAnswer(ONEUSDC.mul(2000));
+
+      // Settle positions
+      const expiry = (await paretoMargin.activeExpiry()).toNumber();
+      await ethers.provider.send("evm_mine", [expiry+1]);
+      await paretoMargin.connect(deployer).settle();
+
+      // Compute positions post
+      const buyerPost = await paretoMargin.connect(buyer).getBalance();
+      const sellerPost = await paretoMargin.connect(seller).getBalance();
+
+      expect(buyerPre).to.be.lessThan(buyerPost);
+      expect(sellerPre).to.be.greaterThan(sellerPost);
+    });
+    it("balances change for five call, one put; buyer wins calls, loses put, wins overall", async () => {
+       // Buyer purchases a call
+       await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(10000));
+       await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(10000));
+       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(10000));
+       await paretoMargin.connect(seller).deposit(ONEUSDC.mul(10000));
+ 
+       // Compute positions pre
+       const buyerPre = await paretoMargin.connect(buyer).getBalance();
+       const sellerPre = await paretoMargin.connect(seller).getBalance();
+ 
+       // Enter the position
+       await paretoMargin.connect(deployer).addPosition(
+         buyer.address,
+         seller.address,
+         ONEUSDC,
+         5,
+         0,
+         7,
+         "ETH"
+       );
+       await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        3,
+        "ETH"
+      );
+
+      // Let the price rise a lot 
+      await priceFeed.connect(deployer).setLatestAnswer(ONEUSDC.mul(2000));
+
+      // Settle positions
+      const expiry = (await paretoMargin.activeExpiry()).toNumber();
+      await ethers.provider.send("evm_mine", [expiry+1]);
+      await paretoMargin.connect(deployer).settle();
+
+      // Compute positions post
+      const buyerPost = await paretoMargin.connect(buyer).getBalance();
+      const sellerPost = await paretoMargin.connect(seller).getBalance();
+
+      expect(buyerPre).to.be.lessThan(buyerPost);
+      expect(sellerPre).to.be.greaterThan(sellerPost);
+    });
+    it("insurance fund kicks in if not enough liq", async () => {
+      // Buyer purchases a call
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(500));
+      await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(500));
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(500));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(500));
+
+      const insurancePre = parseFloat(fromBn(await paretoMargin.connect(insurance).getBalance(), 18));
+      const buyerPre = parseFloat(fromBn(await paretoMargin.connect(buyer).getBalance(), 18));
+      const sellerPre = parseFloat(fromBn(await paretoMargin.connect(seller).getBalance(), 18));
+
+      // Enter the position
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        7,
+        "ETH"
+      );
+
+      // Let the price rise a lot so much that seller should get liquidated
+      await priceFeed.connect(deployer).setLatestAnswer(ONEUSDC.mul(10000));
+
+      // Settle positions
+      const expiry = (await paretoMargin.activeExpiry()).toNumber();
+      await ethers.provider.send("evm_mine", [expiry+1]);
+      await paretoMargin.connect(deployer).settle();
+
+      const insurancePost = parseFloat(fromBn(await paretoMargin.connect(insurance).getBalance()));
+      const buyerPost = parseFloat(fromBn(await paretoMargin.connect(buyer).getBalance()));
+      const sellerPost = parseFloat(fromBn(await paretoMargin.connect(seller).getBalance()));
+
+      // Insurance has to help pay the fine
+      expect(insurancePost).to.be.lessThan(insurancePre);
+      expect(buyerPost).to.be.greaterThan(buyerPre);
+      expect(sellerPost).to.be.lessThan(sellerPre);
+      expect(sellerPost).to.be.equal(0);
+
+      // Insurance is capped though, check it cannot pay the whole fine
+      expect(insurancePre - insurancePost + sellerPre).lessThan(buyerPost - buyerPre);
+    });
     it("can settle even if paused", async () => {
       const expiry = (await paretoMargin.activeExpiry()).toNumber();
       await ethers.provider.send("evm_mine", [expiry+1]);
