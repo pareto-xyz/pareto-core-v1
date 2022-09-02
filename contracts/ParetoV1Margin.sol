@@ -66,7 +66,7 @@ contract ParetoV1Margin is
 
     /// @notice The current active expiry
     /// @dev This assumes all underlying has only one expiry.
-    uint256 private activeExpiry;
+    uint256 public activeExpiry;
 
     /// @notice If the contract is paused or not
     bool private isPaused;
@@ -96,7 +96,7 @@ contract ParetoV1Margin is
     mapping(bytes32 => uint256[11]) public roundStrikes;
 
     /// @notice Store volatility smiles per hash(expiry,underlying)
-    mapping(bytes32 => Derivative.VolatilitySmile) public volSmiles;
+    mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
 
     /// @notice Store average trade sizes for each expiry/underlying
     mapping(bytes32 => uint256) private avgTradeSizes;
@@ -152,12 +152,8 @@ contract ParetoV1Margin is
         // The hash for the underlying name is what we use as the key for state objects
         bytes32 underlying_ = keccak256(abi.encodePacked(underlyingName_));
 
-        // Create a new underlying 
+        // Create a new underlying (handles strike and smile creation)
         newUnderlying(underlying_, spotOracle_, volOracle_);
-
-        // Compute strikes for the underlying
-        (,int256 dvol,,,) = IOracle(volOracles[underlying_]).latestRoundData();
-        roundStrikes[underlying_] = getStrikesAtDelta(underlying_, uint256(dvol));
     }
 
     /**
@@ -505,6 +501,21 @@ contract ParetoV1Margin is
         return balances[msg.sender];
     }
 
+    /**
+     * @notice Return a volatility smile
+     * @param underlyingName Name of the underlying token
+     * @param expiry The expiry date
+     */
+    function getVolatilitySmile(string memory underlyingName, uint256 expiry)
+      external
+      view
+      returns (Derivative.VolatilitySmile memory smile) 
+    {
+        bytes32 underlying = keccak256(abi.encodePacked(underlyingName));
+        bytes32 smileHash = Derivative.hashForSmile(underlying, expiry);
+        return volSmiles[smileHash];
+    }
+
     /************************************************
      * Internal functions
      ***********************************************/
@@ -517,18 +528,6 @@ contract ParetoV1Margin is
     function getSpot(bytes32 underlying) internal view returns (uint256) {
         require(spotOracles[underlying] != address(0), "getSpot: missing oracle");
         (,int256 answer,,,) = IOracle(spotOracles[underlying]).latestRoundData();
-        // TODO: check that this conversion is okay
-        return uint256(answer);
-    }
-
-    /**
-     * @notice Read latest oracle vol data
-     * @param underlying Hash of the underlying token
-     * @return answer Latest historical vol for underlying
-     */
-    function getHistoricalVol(bytes32 underlying) internal view returns (uint256) {
-        require(volOracles[underlying] != address(0), "getHistoricalVol: missing oracle");
-        (,int256 answer,,,) = IOracle(volOracles[underlying]).latestRoundData();
         // TODO: check that this conversion is okay
         return uint256(answer);
     }
@@ -733,11 +732,19 @@ contract ParetoV1Margin is
         address volOracle
     ) internal {
         underlyings.push(underlying);
+
+        // Set smile for underlying
         bytes32 smileHash = Derivative.hashForSmile(underlying, activeExpiry);
         (,int256 sigma,,,) = IOracle(volOracle).latestRoundData();
         volSmiles[smileHash] = Derivative.createSmile(uint256(sigma));
+
+        // Set oracles for underlying
         spotOracles[underlying] = spotOracle;
         volOracles[underlying] = volOracle;
+
+        // Compute strikes for underlying
+        (,int256 dvol,,,) = IOracle(volOracles[underlying]).latestRoundData();
+        roundStrikes[underlying] = getStrikesAtDelta(underlying, uint256(dvol));
     }
 
     /**
@@ -863,20 +870,14 @@ contract ParetoV1Margin is
             // Update smiles for each underlying token
             bytes32 smileHash = Derivative.hashForSmile(underlyings[i], activeExpiry);
 
-            if (activeExpiry > 0) {
-                // New round and options are being overwritten. In these cases, 
-                // we initialize the smile from last round's smile
-                bytes32 lastSmileHash = Derivative.hashForSmile(underlyings[i], lastExpiry);
-                volSmiles[smileHash] = volSmiles[lastSmileHash];
+            // Overwrite smile from last round's smile
+            // Smile must exist since they are created on construction and new underlying
+            bytes32 lastSmileHash = Derivative.hashForSmile(underlyings[i], lastExpiry);
+            require(volSmiles[lastSmileHash].exists_, "rollover: found non-existent smile");
+            volSmiles[smileHash] = volSmiles[lastSmileHash];
 
-                // No longer need last round's smile
-                delete volSmiles[lastSmileHash];
-            } else {
-                // Either the first time ever or new underlying.
-                // Here, create a new uniform (uninformed) smile 
-                (,int256 sigma,,,) = IOracle(volOracles[underlyings[i]]).latestRoundData();
-                volSmiles[smileHash] = Derivative.createSmile(uint256(sigma));
-            }
+            // No longer need last round's smile
+            delete volSmiles[lastSmileHash];
 
             // Update strikes using Deribit dVol
             (,int256 dvol,,,) = IOracle(volOracles[underlyings[i]]).latestRoundData();
@@ -926,7 +927,7 @@ contract ParetoV1Margin is
 
         // Get strike at chosen level from current round strikes
         uint256 strike = roundStrikes[underlying][uint8(strikeLevel)];
-        require(strike > 0, "addPosition: underlying not found");
+        require(strike > 0, "addPosition: no strike for underlying");
 
         // Build an order object
         Derivative.Order memory order = Derivative.Order(

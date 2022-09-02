@@ -2,39 +2,26 @@
 import { ethers, network } from "hardhat";
 import { BigNumber } from "ethers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
+import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 // Helpful conversions
 export const toBytes32 = ethers.utils.formatBytes32String;
 export const fromBytes32 = ethers.utils.parseBytes32String;
 
-export type Second = number;
+// Bump the timestamp by a specific amount of seconds
+export const timeTravel = async (seconds: number) => {
+  await time.increase(seconds);
+};
 
-/**
- * Helpful construct for working with time
- */
-export const time = {
-  increase: async (duration: Second) => {
-    await network.provider.send("evm_increaseTime", [duration]);
-    await network.provider.send("evm_mine");
-  },
-  duration: {
-    years: (years: number): Second => {
-      return 60 * 60 * 24 * 365 * years; //TODO: leap years..
-    },
-    months: (months: number): Second => {
-      return 60 * 60 * 24 * 30 * months; // ofc. it is simplified..
-    },
-    days: (days: number): Second => {
-      return 60 * 60 * 24 * days;
-    },
-    hours: (hours: number): Second => {
-      return 60 * 60 * hours;
-    },
-    minutes: (minutes: number): Second => {
-      return 60 * minutes;
-    }
-  }
-}
+// Or, set the time to be a specific amount (in seconds past epoch time)
+export const timeTravelTo = async (seconds: number) => {
+  await time.increaseTo(seconds);
+};
+
+export const currentTime = () => {
+  var seconds = new Date().getTime() / 1000;
+  return Math.round(seconds);
+};
 
 /**
  * @notice Fixed gas 

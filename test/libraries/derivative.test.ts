@@ -662,6 +662,60 @@ describe("Derivative Library", () => {
       const hash2 = await derivative.hashOrder(order2);
       expect(hash1).to.be.equal(hash2);
     });
+    it("different orders hash different", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const order1 = {
+        buyer: alice.address,
+        seller: bob.address,
+        tradePrice: ONE_ETH.mul(11).div(100),
+        quantity: 5,
+        option: {
+          optionType: 0,
+          strike: ONE_ETH.mul(11).div(10),
+          expiry: curTime + ONE_WEEK,
+          underlying: toBytes32("ETH"),
+          decimals: 18,
+        }
+      };
+      const order2 = {
+        buyer: alice.address,
+        seller: bob.address,
+        tradePrice: ONE_ETH.mul(10).div(100),
+        quantity: 10,
+        option: {
+          optionType: 0,
+          strike: ONE_ETH.mul(12).div(10),
+          expiry: curTime + ONE_WEEK,
+          underlying: toBytes32("ETH"),
+          decimals: 18,
+        }
+      };
+      const hash1 = await derivative.hashOrder(order1);
+      const hash2 = await derivative.hashOrder(order2);
+      expect(hash1).to.not.be.equal(hash2);
+    });
+  });
+
+  /****************************************
+   * Smile fingerprint
+   ****************************************/
+  describe("Hashing for a smile", () => {
+    it("can hash for a smile", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      await derivative.hashForSmile(toBytes32("ETH"), curTime + ONE_WEEK);
+    });
+    it("identical smiles params hash the same", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const hash1 = await derivative.hashForSmile(toBytes32("ETH"), curTime + ONE_WEEK);
+      const hash2 = await derivative.hashForSmile(toBytes32("ETH"), curTime + ONE_WEEK);
+      expect(hash1).to.be.equal(hash2);
+    });
+    it("different smiles params hash different", async () => {
+      const curTime = Math.floor(Date.now() / 1000);
+      const hash1 = await derivative.hashForSmile(toBytes32("ETH"), curTime + ONE_WEEK);
+      const hash2 = await derivative.hashForSmile(toBytes32("BTC"), curTime + ONE_WEEK);
+      expect(hash1).to.not.be.equal(hash2);
+    });
   });
 
   /****************************************
