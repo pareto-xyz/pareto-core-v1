@@ -3,7 +3,7 @@ import { fromBn, toBn } from "evm-bn";
 import { expect } from "chai";
 import { Contract } from "ethers";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { getFixedGasSigners, toBytes32 } from "./utils/helpers";
+import { getFixedGasSigners, timeTravel, timeTravelTo, toBytes32 } from "./utils/helpers";
 
 let usdc: Contract;
 let derivative: Contract;
@@ -559,24 +559,63 @@ describe("ParetoMargin Contract", () => {
    ****************************************/  
   describe("Rollover", () => {
     it("Owner can rollover", async () => {
-      expect(true).to.be.false;
+      const expiry = (await paretoMargin.activeExpiry()).toNumber();
+      timeTravelTo(expiry+1);
+      await paretoMargin.connect(deployer).rollover([]);
     });
     it("Keeper can rollover", async () => {
-      expect(true).to.be.false;
+      const expiry = (await paretoMargin.activeExpiry()).toNumber();
+      timeTravelTo(expiry+1);
+      await paretoMargin.connect(keeper).rollover([]);
     });
     it("User cannot rollover", async () => {
-      expect(true).to.be.false;
+      const expiry = (await paretoMargin.activeExpiry()).toNumber();
+      timeTravelTo(expiry+1);
+      await expect(
+        paretoMargin.connect(buyer).rollover([])
+      ).to.be.revertedWith("onlyKeeper: caller is not a keeper");
     });
     it("Cannot rollover if paused", async () => {
       await paretoMargin.connect(deployer).togglePause();
       await expect(paretoMargin.rollover([buyer.address]))
         .to.be.revertedWith("rollover: contract paused");
     });
-    it("Cannot rollover before expiry", async () => {
-      expect(true).to.be.false;
+    it("Cannot rollover before expiry, even as owner", async () => {
+      await expect(
+        paretoMargin.connect(deployer).rollover([])
+      ).to.be.revertedWith("rollover: too early");
+    });
+    it("Can delete users in rollover", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(keeper).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        7,
+        "ETH"
+      );
+      const expiry = (await paretoMargin.activeExpiry()).toNumber();
+      timeTravelTo(expiry+1);
+      await paretoMargin.connect(keeper).rollover([buyer.address, seller.address]);
     });
     it("Smiles are updated after rollover to last round", async () => {
-      expect(true).to.be.false;
+      const lastExpiry = (await paretoMargin.activeExpiry()).toNumber();
+      const lastSmile = paretoMargin.getVolatilitySmile("ETH", lastExpiry);
+      const expiry = (await paretoMargin.activeExpiry()).toNumber();
+      timeTravelTo(expiry+1);
+      await paretoMargin.connect(keeper).rollover([]);
+      const currExpiry = (await paretoMargin.activeExpiry()).toNumber();
+      const currSmile = paretoMargin.getVolatilitySmile("ETH", currExpiry);
+
+      expect(lastExpiry).to.not.be.equal(currExpiry);
+      for (var i = 0; i < 5; i++) {
+        expect(lastSmile[i]).to.be.equal(currSmile[i]);
+      }
     });
   }); 
 
