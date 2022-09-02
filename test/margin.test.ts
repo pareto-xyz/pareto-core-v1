@@ -1206,6 +1206,43 @@ describe("ParetoMargin Contract", () => {
    * Liquidation
    ****************************************/  
   describe("Liquidation", () => {
+    beforeEach(async () => {
+      // Add a position that makes the seller below
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+
+      // Enter the position
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        1,
+        0,
+        7,
+        "ETH"
+      );
+
+      // Let the price rise a lot so much that seller should get liquidated
+      await priceFeed.connect(deployer).setLatestAnswer(ONEUSDC.mul(10000));
+    });
+    it("Owner can liquidate", async () => {
+      await paretoMargin.connect(deployer).liquidate(seller.address);
+    });
+    it("User can liquidate", async () => {
+      await paretoMargin.connect(buyer).liquidate(seller.address);
+    });
+    it("Cannot liquidate user with no positions", async () => {
+      await expect(
+        paretoMargin.connect(deployer).liquidate(keeper.address)
+      ).to.be.revertedWith("liquidate: user has no positions");
+    });
+    it("Cannot liquidate if pass margin check", async () => {
+      await expect(
+        paretoMargin.connect(deployer).liquidate(buyer.address)
+      ).to.be.revertedWith("liquidate: user passes margin check");
+    });
   });
 
   /****************************************
