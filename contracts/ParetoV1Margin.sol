@@ -71,6 +71,9 @@ contract ParetoV1Margin is
     /// @notice If the contract is paused or not
     bool private isPaused;
 
+    /// @notice Tracks if the last round has been settled
+    bool private roundSettled;
+
     /// @notice Store a list of names for underlying tokens
     bytes32[] public underlyings;
 
@@ -359,6 +362,7 @@ contract ParetoV1Margin is
      */
     function settle() external nonReentrant {
         require(activeExpiry <= block.timestamp, "settle: expiry must be in the past");
+        require(!roundSettled, "settle: already settled this round");
 
         for (uint256 j = 0; j < roundPositions.length; j++) {
             Derivative.Order memory order = roundPositions[j];
@@ -401,11 +405,14 @@ contract ParetoV1Margin is
             }
         }
 
-        // Free up memory for the round
-        delete roundPositions;
+        // Track we settled last round
+        roundSettled = true;
 
         // Emit event
         emit SettlementEvent(msg.sender, curRound, roundPositions.length);
+
+        // Free up memory for the round
+        delete roundPositions;
     }
 
     /**
@@ -417,9 +424,9 @@ contract ParetoV1Margin is
      * @return fullyLiquidated if true, user is fully liquidated
      */
     function liquidate(address user) external nonReentrant returns (bool fullyLiquidated) {
+        require(userRoundIxs[user].length > 0, "liquidate: user has no positions");
         (, bool satisfied) = checkMargin(user, false);
         require(!satisfied, "liquidate: user passes margin check");
-        require(userRoundIxs[user].length > 0, "liquidate: user has no positions");
 
         address liquidator = msg.sender;
 
@@ -569,8 +576,8 @@ contract ParetoV1Margin is
     }
 
     /**
-     * @notice Compute the initial margin for all positions owned by user
-     * @dev The initial margin is equal to the sum of initial margins for all positions
+     * @notice Compute the payofff function for all positions owned by user
+     * @dev We net payoffs per strike (and expiry but there is only one expiry)
      * @param user Address to compute IM for
      * @param onlyLoss Do not count unrealized profits from open positions
      * @return payoff The payoff summed for all positions
@@ -585,12 +592,16 @@ contract ParetoV1Margin is
             return (0, false);
         }
 
-        uint256 payoff;
-        bool isNegative;
+        // Store the netted payoffs here (there are 11 strike levels)
+        uint256[11] memory payoffPerStrike;
+        bool[11] memory isNegativePerStrike;
 
         for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
             // Fetch the order in the position
             Derivative.Order memory order = roundPositions[userRoundIxs[user][i]];
+
+            // Get strike level
+            uint8 strikeLevel = order.option.strikeLevel;
 
             // Fetch the underlying token for the option
             uint256 spot = getSpot(order.option.underlying);
@@ -598,13 +609,26 @@ contract ParetoV1Margin is
             // Compute the payoff at this price
             (uint256 curPayoff, bool curIsNegative) = MarginMath.getPayoff(user, spot, order);
 
-            // If payoff is positive but we don't want to count positive open positions
-            if (onlyLoss && !curIsNegative) {
-                curPayoff = 0;
-            }
-
-            (payoff, isNegative) = NegativeMath.add(payoff, isNegative, curPayoff, curIsNegative);
+            // Net the payoff at this strike level
+            (payoffPerStrike[strikeLevel], isNegativePerStrike[strikeLevel]) = NegativeMath.add(
+                payoffPerStrike[strikeLevel], 
+                isNegativePerStrike[strikeLevel],
+                curPayoff,
+                curIsNegative
+            );
         }
+
+        uint256 payoff;
+        bool isNegative;
+        // Loop through strike levels and sum them, ignoring positive ones if `onlyLoss` is true
+        for (uint256 i = 0; i < 11; i++) {
+            // Ignore if positive payoff at strike and `onlyLoss` is on
+            if (!isNegativePerStrike[i] && onlyLoss) {
+                continue;
+            }
+            (payoff, isNegative) = NegativeMath.add(payoff, isNegative, payoffPerStrike[i], isNegativePerStrike[i]);
+        }
+
         return (payoff, isNegative);
     }
 
@@ -628,7 +652,6 @@ contract ParetoV1Margin is
             Derivative.Order memory order = roundPositions[userRoundIxs[user][i]];
             Derivative.Option memory option = order.option;
             bytes32 optionHash = Derivative.hashOption(option);
-            bytes32 smileHash = Derivative.hashForSmile(option.underlying, option.expiry);
 
             // In the case of multiple positions for the same option, 
             // compute the total amount the user wishes to buy and sell
@@ -647,9 +670,16 @@ contract ParetoV1Margin is
                 nettedSell += order.quantity;
             }
 
+            // Count the number of orders involved in netting (min 1)
+            uint256 numNetted = 1;
+
             // Nested loop to find the total quantity of this option.
             // Consider case with multiple positions with same order
-            for (uint256 j = i + 1; j < userRoundIxs[user].length; j++) {
+            for (uint256 j = 0; j < userRoundIxs[user].length; j++) {
+                // Do not double count
+                if (i == j) {
+                    continue;
+                }
                 Derivative.Order memory order2 = roundPositions[userRoundIxs[user][j]];
                 bytes32 optionHash2 = Derivative.hashOption(order2.option);
 
@@ -659,6 +689,7 @@ contract ParetoV1Margin is
                     } else {
                         nettedSell += order2.quantity;
                     }
+                    numNetted++;
                 }
             }
 
@@ -667,6 +698,7 @@ contract ParetoV1Margin is
 
             if (nettedQuantity > 0) {
                 // Fetch smile and check it is valid
+                bytes32 smileHash = Derivative.hashForSmile(option.underlying, option.expiry);
                 Derivative.VolatilitySmile memory smile = volSmiles[smileHash];
                 require(smile.exists_, "getMargin: found unknown option");
 
@@ -682,7 +714,10 @@ contract ParetoV1Margin is
                 }
 
                 // Build margin using `nettedQuantity`
-                margin += (nettedQuantity * curMargin);
+                /// @dev Divide by num netting to factor in double counting:
+                /// Suppose i and j are matched, then the code above will net at both index i and j
+                /// Suppose i, j, k are matched, then we will net at both i, j, and k
+                margin += (nettedQuantity * curMargin / numNetted);
             }
         }
         return margin;
@@ -857,6 +892,7 @@ contract ParetoV1Margin is
     function rollover(address[] calldata roundUsers) external nonReentrant onlyKeeper {
         require(!isPaused, "rollover: contract paused");
         require(activeExpiry < block.timestamp, "rollover: too early");
+        require(roundSettled, "rollover: please settle last round first");
 
         // Update the active expiry
         uint256 lastExpiry = activeExpiry;
@@ -864,6 +900,9 @@ contract ParetoV1Margin is
 
         // Update round
         curRound += 1;
+
+        // Update settled tracker
+        roundSettled = false;
 
         // Loop through underlying tokens
         for (uint256 i = 0; i < underlyings.length; i++) {
@@ -935,7 +974,7 @@ contract ParetoV1Margin is
             seller,
             tradePrice,
             quantity,
-            Derivative.Option(optionType, strike, activeExpiry, underlying, decimals)
+            Derivative.Option(optionType, uint8(strikeLevel), strike, activeExpiry, underlying, decimals)
         );
 
         // Hash together the underlying and expiry

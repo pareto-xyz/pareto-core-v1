@@ -107,6 +107,7 @@ describe("Derivative Library", () => {
         quantity: 5,
         option: {
           optionType: 0,
+          strikeLevel: 6,
           // Note moneyness is computed as spot/strike so spot/1.1
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
@@ -222,6 +223,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 0,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -234,6 +236,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 0,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -249,6 +252,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 0,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -264,6 +268,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 0,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -279,6 +284,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 1,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -294,6 +300,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 1,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -309,6 +316,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 1,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -325,6 +333,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 0,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -340,6 +349,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 0,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -355,6 +365,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 0,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -370,6 +381,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 1,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -385,6 +397,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 1,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -400,6 +413,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 1,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -418,6 +432,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 0,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
         underlying: toBytes32("ETH"),
@@ -430,6 +445,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 0,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
         underlying: toBytes32("ETH"),
@@ -445,6 +461,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 0,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
         underlying: toBytes32("ETH"),
@@ -460,6 +477,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 0,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
         underlying: toBytes32("ETH"),
@@ -475,6 +493,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 1,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
         underlying: toBytes32("ETH"),
@@ -490,6 +509,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 1,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
         underlying: toBytes32("ETH"),
@@ -505,6 +525,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 1,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
         underlying: toBytes32("ETH"),
@@ -521,6 +542,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 0,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
         underlying: toBytes32("ETH"),
@@ -536,6 +558,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 0,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
         underlying: toBytes32("ETH"),
@@ -551,6 +574,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 0,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
         underlying: toBytes32("ETH"),
@@ -566,6 +590,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 1,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
         underlying: toBytes32("ETH"),
@@ -581,6 +606,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 1,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
         underlying: toBytes32("ETH"),
@@ -596,6 +622,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option = {
         optionType: 1,
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),  // 1.1 strike
         expiry: curTime + ONE_MONTH,
         underlying: toBytes32("ETH"),
@@ -622,6 +649,7 @@ describe("Derivative Library", () => {
         quantity: 5,
         option: {
           optionType: 0,
+          strikeLevel: 6,
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -639,6 +667,7 @@ describe("Derivative Library", () => {
         quantity: 5,
         option: {
           optionType: 0,
+          strikeLevel: 6,
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -652,6 +681,7 @@ describe("Derivative Library", () => {
         quantity: 5,
         option: {
           optionType: 0,
+          strikeLevel: 6,
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -671,6 +701,7 @@ describe("Derivative Library", () => {
         quantity: 5,
         option: {
           optionType: 0,
+          strikeLevel: 6,
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -684,6 +715,7 @@ describe("Derivative Library", () => {
         quantity: 10,
         option: {
           optionType: 0,
+          strikeLevel: 6,
           strike: ONE_ETH.mul(12).div(10),
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -726,6 +758,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option =  {
         optionType: 0,
+        strikeLevel: 5,
         strike: ONE_ETH,
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -737,6 +770,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option1 =  {
         optionType: 0,
+        strikeLevel: 5,
         strike: ONE_ETH,
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -744,6 +778,7 @@ describe("Derivative Library", () => {
       };
       const option2 =  {
         optionType: 0,
+        strikeLevel: 5,
         strike: ONE_ETH,
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -757,6 +792,7 @@ describe("Derivative Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const option1 =  {
         optionType: 0,
+        strikeLevel: 5,
         strike: ONE_ETH,
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -764,6 +800,7 @@ describe("Derivative Library", () => {
       };
       const option2 =  {
         optionType: 1,
+        strikeLevel: 5,
         strike: ONE_ETH,
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),

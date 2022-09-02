@@ -46,6 +46,7 @@ describe("MarginMath Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const call = {
         optionType: 0,
+        strikeLevel: 5,
         strike: ONE_ETH,
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -58,6 +59,7 @@ describe("MarginMath Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       const put = {
         optionType: 1,
+        strikeLevel: 5,
         strike: ONE_ETH,
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -88,6 +90,7 @@ describe("MarginMath Library", () => {
         quantity: 5,
         option: {
           optionType: 0,
+          strikeLevel: 6,
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -110,6 +113,7 @@ describe("MarginMath Library", () => {
         quantity: 5,
         option: {
           optionType: 0,
+          strikeLevel: 6,
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -132,6 +136,7 @@ describe("MarginMath Library", () => {
         quantity: 5,
         option: {
           optionType: 1,
+          strikeLevel: 4,
           strike: ONE_ETH.mul(9).div(10),
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -154,6 +159,7 @@ describe("MarginMath Library", () => {
         quantity: 5,
         option: {
           optionType: 1,
+          strikeLevel: 4,
           strike: ONE_ETH.mul(9).div(10),
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -177,6 +183,7 @@ describe("MarginMath Library", () => {
         quantity: 5,
         option: {
           optionType: 0,
+          strikeLevel: 4,
           strike: ONE_ETH.mul(9).div(10),
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -199,6 +206,7 @@ describe("MarginMath Library", () => {
         quantity: 5,
         option: {
           optionType: 0,
+          strikeLevel: 4,
           strike: ONE_ETH.mul(9).div(10),
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -221,6 +229,7 @@ describe("MarginMath Library", () => {
         quantity: 5,
         option: {
           optionType: 1,
+          strikeLevel: 6,
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -243,6 +252,7 @@ describe("MarginMath Library", () => {
         quantity: 5,
         option: {
           optionType: 1,
+          strikeLevel: 6,
           strike: ONE_ETH.mul(11).div(10),
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -265,6 +275,7 @@ describe("MarginMath Library", () => {
         quantity: 5,
         option: {
           optionType: 0,
+          strikeLevel: 5,
           strike: ONE_ETH,
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -287,6 +298,7 @@ describe("MarginMath Library", () => {
         quantity: 5,
         option: {
           optionType: 0,
+          strikeLevel: 5,
           strike: ONE_ETH,
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -309,6 +321,7 @@ describe("MarginMath Library", () => {
         quantity: 5,
         option: {
           optionType: 1,
+          strikeLevel: 5,
           strike: ONE_ETH,
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -331,6 +344,7 @@ describe("MarginMath Library", () => {
         quantity: 5,
         option: {
           optionType: 1,
+          strikeLevel: 5,
           strike: ONE_ETH,
           expiry: curTime + ONE_WEEK,
           underlying: toBytes32("ETH"),
@@ -382,6 +396,7 @@ describe("MarginMath Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       option = {
         optionType: 1,  // put option
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -527,6 +542,7 @@ describe("MarginMath Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       option = {
         optionType: 0,  // call option
+        strikeLevel: 4,
         strike: ONE_ETH.mul(9).div(10),
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -608,6 +624,7 @@ describe("MarginMath Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       option = {
         optionType: 1,  // put option
+        strikeLevel: 6,
         strike: ONE_ETH.mul(11).div(10),
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
@@ -747,6 +764,7 @@ describe("MarginMath Library", () => {
       const curTime = Math.floor(Date.now() / 1000);
       option = {
         optionType: 0,  // call option
+        strikeLevel: 4,
         strike: ONE_ETH.mul(9).div(10),
         expiry: curTime + ONE_WEEK,
         underlying: toBytes32("ETH"),
