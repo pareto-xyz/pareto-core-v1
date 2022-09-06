@@ -485,43 +485,4 @@ library BlackScholesMath {
         int128 spotSqrtTauX64 = inputsX64.spotX64.mul(inputsX64.tauX64.sqrt());
         vegaX64 = spotSqrtTauX64.mul(GaussianMath.getPDF(d1));
     }
-    
-    /************************************************
-     * Solving for strike given delta
-     ***********************************************/
-
-    /**
-     * @notice Compute strike price under Black-Scholes model given a chosen delta,
-     * implied volatility, and spot price
-     */
-    function getStrikeFromDelta(StrikeCalculationInput memory inputs) 
-        internal
-        pure
-        returns (uint256 strike)
-    {
-        StrikeCalculationX64 memory inputsX64 = strikeInputToX64(inputs);
-        int128 strikeX64 = getStrikeFromDeltaX64(inputsX64);
-        strike = strikeX64.scaleFromX64(inputs.scaleFactor);
-    }
-
-    /**
-     * @notice Derivate strike from delta
-     * @dev K = S exp { (r + tau * sigma^2) / 2 - sigma * sqrt(tau) * CDF^{-1}(Delta) }
-     */
-    function getStrikeFromDeltaX64(StrikeCalculationX64 memory inputsX64)
-        internal
-        pure
-        returns (int128 strikeX64)
-    {
-        // CDF^{-1}(Delta)
-        int128 scoreX64 = inputsX64.deltaX64.getInverseCDF();
-        // sigma * sqrt(tau)
-        int128 volX64 = inputsX64.sigmaX64.mul(inputsX64.tauX64.sqrt());
-        // rate + tau * sigma^2
-        int128 rtsigsqrX64 = inputsX64.rateX64.add(inputsX64.tauX64.mul(inputsX64.sigmaX64.pow(2)));
-        // (rtsigsqrX64) / 2 - volX64 * scoreX64
-        int128 logitX64 = (rtsigsqrX64.div(TWO_INT).sub(volX64.mul(scoreX64)));
-        // spot * exp { logitX64 }
-        strikeX64 = inputsX64.spotX64.mul(logitX64.exp());
-    }
 }

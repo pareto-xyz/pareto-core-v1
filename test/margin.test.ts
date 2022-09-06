@@ -1301,8 +1301,14 @@ describe("ParetoMargin Contract", () => {
       await newVolFeed.deployed();
     });
     it("Owner can set oracle for new underlying", async () => {
+      await newPriceFeed.setLatestAnswer(toBn("1", 18));
       await paretoMargin.connect(deployer).setOracle("BTC", newPriceFeed.address, newVolFeed.address);
       expect(await paretoMargin.underlyings(0)).to.be.not.equal(await paretoMargin.underlyings(1));
+    });
+    it("Owner cannot set oracle if spot price zero", async () => {
+      await expect(
+          paretoMargin.connect(deployer).setOracle("BTC", newPriceFeed.address, newVolFeed.address)
+      ).to.be.revertedWith("getStrikeMenu: Spot price too small");
     });
     it("Keeper cannot set oracle for new underlying", async () => {
       await expect(
