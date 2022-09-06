@@ -541,13 +541,12 @@ contract ParetoV1Margin is
 
     /**
      * @notice Given spot, compute 11 strikes. Intended for use at a new round
-     * @dev Hardcodes 11 deltas
+     * https://zetamarkets.gitbook.io/zeta/zeta-protocol/trading/derivatives-framework/options-contract-specifications/options-strike-generation-schema
+     * @dev The strikes will be in the same decimals as underlying
      * @param underlying Hash of the underlying token name
-     * @param sigma Volatility - likely this is historical volatility as we cannot 
-     * use the smile without knowing the strike
      * @return strikes Eleven strikes
      */
-    function getStrikesAtDelta(bytes32 underlying, uint256 sigma)
+    function getStrikeMenu(bytes32 underlying)
         internal
         view
         returns (uint256[11] memory strikes)
@@ -557,21 +556,54 @@ contract ParetoV1Margin is
         // The spot of the underlying will be in terms of decimals
         uint8 decimals = IERC20Upgradeable(usdc).decimals();
 
-        // Hardcoded deltas for the 11 strikes (decimals 4)
-        uint16[11] memory deltas = [250,500,1000,2250,3500,5000,6500,7750,9000,9500,9750];
+        // Fetch the spot price
+        uint256 spot = getSpot(underlying);
 
-        for (uint256 i = 0; i < 11; i++) {
-            // Compute strike from chosen delta
-            strikes[i] = BlackScholesMath.getStrikeFromDelta(
-                BlackScholesMath.StrikeCalculationInput(
-                    uint256(deltas[i]),
-                    getSpot(underlying),
-                    sigma,
-                    activeExpiry - block.timestamp,
-                    0,  // TODO: replace with rate
-                    10**(18 - decimals)
-                )
-            );
+        // Check spot is not out of range
+        require(spot >= 10**(decimals - 2), "getStrikeMenu: Spot price too small");
+        require(spot <= 10**(decimals + 6), "getStrikeMenu: Spot price too large");
+
+        uint256 lower;
+        uint256 upper;
+        uint256 increment;
+
+        /// @notice Store 32 lower/upper bounds for strike selection
+        /// @dev Decimals are in 4
+        uint40[33] memory bounds = [
+            100, 200, 300, 600, 1000, 2000, 3000, 6000,
+            10000, 20000, 30000, 60000, 
+            100000, 200000, 400000, 700000,
+            1000000, 2000000, 4000000, 7000000,
+            10000000, 20000000, 40000000, 70000000,
+            100000000, 200000000, 400000000, 800000000,
+            1000000000, 3000000000, 5000000000, 8000000000,
+            10000000000
+        ];
+
+        /// @notice Store 32 increment sizes for strike selection
+        /// @dev Decimals are in 4
+        uint32[32] memory increments = [
+            9, 20, 30, 50, 90, 200, 300, 600, 1000, 2000, 3000, 6000, 
+            10000, 20000, 30000, 60000, 100000, 200000, 400000, 600000,
+            1000000, 2000000, 4000000, 7000000,
+            10000000, 20000000, 40000000, 70000000,
+            100000000, 200000000, 400000000, 700000000
+        ];
+ 
+        // Search which bounds the current spot falls in
+        for (uint256 i = 0; i < 32; i++) {
+            lower = bounds[i] * 10**(decimals - 4); 
+            upper = bounds[i + 1] * 10**(decimals - 4); 
+            increment = increments[i] * 10**(decimals - 4);
+
+            // If the spot is within range
+            if ((spot >= lower) && (spot < upper)) {
+                for (uint256 j = 0; j < 11; j++) {
+                    strikes[j] = lower + j * increment;
+                }
+                // Once you find the range, quit
+                break;
+            }
         }
     }
 
@@ -775,11 +807,9 @@ contract ParetoV1Margin is
 
         // Set oracles for underlying
         spotOracles[underlying] = spotOracle;
-        volOracles[underlying] = volOracle;
 
         // Compute strikes for underlying
-        (,int256 dvol,,,) = IOracle(volOracles[underlying]).latestRoundData();
-        roundStrikes[underlying] = getStrikesAtDelta(underlying, uint256(dvol));
+        roundStrikes[underlying] = getStrikeMenu(underlying);
     }
 
     /**
@@ -918,9 +948,8 @@ contract ParetoV1Margin is
             // No longer need last round's smile
             delete volSmiles[lastSmileHash];
 
-            // Update strikes using Deribit dVol
-            (,int256 dvol,,,) = IOracle(volOracles[underlyings[i]]).latestRoundData();
-            roundStrikes[underlyings[i]] = getStrikesAtDelta(underlyings[i], uint256(dvol));
+            // Update strike menu
+            roundStrikes[underlyings[i]] = getStrikeMenu(underlyings[i]);
 
             // Clean up smile artifacts
             delete numTrades[smileHash];
