@@ -1,15 +1,20 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.9;
 
-import "../interfaces/ISpotFeed.sol";
+import "../interfaces/IMarkFeed.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
- * @notice Since chainlink updates too slowly, we opt to use a custom oracle.
+ * @notice Custom oracle for fetching the Black-Scholes call and put prices
  * @dev This does not store past round data
  */
-contract SpotFeed is ISpotFeed, Ownable {
-    uint256 public spot;
+contract MarkFeed is IMarkFeed, Ownable {
+    /// @dev 11 call prices for the 11 strike levels
+    uint256[11] public callPrices;
+
+    /// @dev 11 put prices for the 11 strike levels
+    uint256[11] public putPrices;
+
     uint80 public roundId;
     string public description;
     uint256 public roundTimestamp;
@@ -45,23 +50,37 @@ contract SpotFeed is ISpotFeed, Ownable {
         isAdmin[account_] = isAdmin_;
     }
 
-    /// @notice Set the latest oracle price
-    /// @dev Only callable by admin
-    function setLatestPrice(uint256 spot_) external onlyAdmin {
+    /**
+     * @notice Set the latest oracle prices for calls and puts at different strikes
+     * @dev Only callable by admin
+     * @param callPrices_ An array of 11 numbers for the 11 call prices
+     * @param putPrices_ An array of 11 numbers for the 11 put prices
+     */ 
+    function setLatestPrices(
+        uint256[11] calldata callPrices_,
+        uint256[11] calldata putPrices_
+    ) 
+        external 
+        onlyAdmin 
+    {
         roundId = roundId + 1;
         roundTimestamp = block.timestamp;
-        spot = spot_;
+        callPrices = callPrices_;
+        putPrices = putPrices_;
     }
 
     /**
      * @notice See `interfaces/IOracle.sol`
      */
-    function latestRoundData()
+    function latestRoundData(bool isCall, uint8 strikeLevel)
         external
         override
         view
         returns (uint80, uint256, uint256)
     {
-        return (roundId, spot, roundTimestamp);
+        require(strikeLevel < 11, "latestRoundData: invalid strike level");
+
+        uint256 mark = isCall ? callPrices[strikeLevel] : putPrices[strikeLevel];
+        return (roundId, mark, roundTimestamp);
     }
 }

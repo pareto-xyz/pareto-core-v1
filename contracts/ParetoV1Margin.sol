@@ -528,7 +528,7 @@ contract ParetoV1Margin is
         returns (uint256 answer) 
     {
         require(markOracles[underlying] != address(0), "getMark: missing oracle");
-        (,answer,) = IMarkFeed(markOracles[underlying]).latestRoundData(isCall, strikeLevel);
+        (,answer,) = IMarkFeed(markOracles[underlying]).latestRoundData(isCall, uint8(strikeLevel));
         return answer;
     }
 

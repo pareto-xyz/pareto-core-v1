@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.9;
 
-import "../libraries/Derivative.sol";
-
 /**
  * @notice Interface for an oracle to query mark prices
  */
@@ -15,7 +13,7 @@ interface IMarkFeed {
      * @return mark The call price
      * @return roundTimestamp Timestamp of when the round was created
      */
-    function latestRoundData(bool isCall, Derivative.StrikeLevel strikeLevel)
+    function latestRoundData(bool isCall, uint8 strikeLevel)
         external
         view
         returns (uint80 roundId, uint256 mark, uint256 roundTimestamp);
