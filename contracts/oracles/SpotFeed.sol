@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.9;
 
-import "../interfaces/IOracle.sol";
+import "../interfaces/ISpotFeed.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @notice Since chainlink updates too slowly, we opt to use a custom oracle.
- * The median price of Binance, FTX and Bitfinex is posted.
+ * Separate deployments of this contract will serve many purposes: 
+ * 1) It will serve spot data e.g. the median price of Binance, FTX, and BitFinex
+ * 2) It will serve prices of calls e.g. mark price of call options for the active expiry
+ * 3) It will serve prices of puts e.g. mark price of call options for the active expiry
  * @dev This does not store past round data
  */
-contract PriceFeed is IOracle, Ownable {
-    int256 public answer;
+contract SpotFeed is ISpotFeed, Ownable {
+    uint256 public spot;
     uint80 public roundId;
     string public description;
     uint256 public roundTimestamp;
@@ -49,22 +52,12 @@ contract PriceFeed is IOracle, Ownable {
         isAdmin[account_] = isAdmin_;
     }
 
-    /// @notice Get the latest answer
-    function latestAnswer() external view returns (int256) {
-        return answer;
-    }
-
-    /// @notice Get the latest round id
-    function latestRound() external view returns (uint80) {
-        return roundId;
-    }
-
-    /// @notice Set the latest oracle answer
+    /// @notice Set the latest oracle price
     /// @dev Only callable by admin
-    function setLatestAnswer(int256 _answer) external onlyAdmin {
+    function setLatestPrice(uint256 spot_) external onlyAdmin {
         roundId = roundId + 1;
         roundTimestamp = block.timestamp;
-        answer = _answer;
+        spot = spot_;
     }
 
     /**
@@ -74,14 +67,8 @@ contract PriceFeed is IOracle, Ownable {
         external
         override
         view
-        returns (uint80, int256, uint256, uint256, uint80)
+        returns (uint80, uint256, uint256)
     {
-        return (
-            roundId,
-            answer,
-            roundTimestamp,
-            roundTimestamp,
-            roundId
-        );
+        return (roundId, spot, roundTimestamp);
     }
 }

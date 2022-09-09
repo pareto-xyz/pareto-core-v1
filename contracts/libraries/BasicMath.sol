@@ -18,16 +18,4 @@ library BasicMath {
     function min(uint256 a, uint256 b) internal pure returns (uint256) {
         return a < b ? a : b;
     }
-
-    /**
-     * @dev Returns the absolute difference between two numbers, and if the 
-     * difference is positive (false) or negative (true).
-     */
-    function absdiff(uint256 a, uint256 b) internal pure returns (uint256, bool) {
-        if (a >= b) {
-            return (a - b, false);
-        } else {
-            return (b - a, true);
-        }
-    }
 }

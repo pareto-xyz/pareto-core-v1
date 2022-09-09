@@ -53,12 +53,4 @@ contract TestMarginMath {
     {
         return MarginMath.getPayoff(trader, spot, order);
     }
-
-    function isCall(Derivative.Option memory option)
-        external
-        pure
-        returns (bool) 
-    {
-        return MarginMath.isCall(option);
-    }
 }
