@@ -357,7 +357,7 @@ contract ParetoV1Margin is
             address ower = (netPayoff < 0) ? order.buyer : order.seller;
             address owee = (netPayoff < 0) ? order.seller : order.buyer;
 
-            uint256 absPayoff = abs(netPayoff);
+            uint256 absPayoff = (netPayoff >= 0) ? uint256(netPayoff) : uint256(-netPayoff);
 
             if (balances[ower] >= absPayoff) {
                 // If the ower has enough in the margin account, then make shift
@@ -1009,12 +1009,5 @@ contract ParetoV1Margin is
             strikeLevel,
             activeExpiry
         );
-    }
-
-    /**
-     * @dev Returns the absolute value of a signed integer
-     */
-    function abs(int256 x) private pure returns (uint256) {
-        return x >= 0 ? uint256(x) : uint256(-x);
     }
 }
