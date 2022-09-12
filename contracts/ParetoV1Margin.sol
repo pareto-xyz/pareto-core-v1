@@ -14,6 +14,7 @@ import "./libraries/Derivative.sol";
 import "./libraries/MarginMath.sol";
 import "./libraries/DateMath.sol";
 
+import "hardhat/console.sol";
 
 /**
  * @notice Contract acting as the margin account for a Pareto trader.
@@ -326,8 +327,8 @@ contract ParetoV1Margin is
         // Compute `balance + PnL`
         int256 diff = int256(balance) + pnl - int256(maintainence);
 
-        // if diff > 0, then satisfied = true
-        bool satisfied = (diff > 0);
+        // if diff >= 0, then satisfied = true
+        bool satisfied = (diff >= 0);
 
         return (diff, satisfied);
     }
@@ -776,7 +777,7 @@ contract ParetoV1Margin is
         int256 total = margin - int256(amount);
 
         // Satisfied if not negative
-        bool satisfied = total > 0;
+        bool satisfied = total >= 0;
 
         return (total, satisfied);
     }
