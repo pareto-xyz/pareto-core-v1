@@ -198,7 +198,7 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
@@ -211,7 +211,7 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
@@ -225,7 +225,7 @@ describe("ParetoMargin Contract", () => {
           seller.address,
           ONEUSDC,
           1,
-          0,
+          true,
           7,
           0,
         )
@@ -240,13 +240,13 @@ describe("ParetoMargin Contract", () => {
           seller.address,
           ONEUSDC,
           1,
-          0,
+          true,
           7,
           0,
         )
       )
         .to.emit(paretoMargin, "RecordPositionEvent")
-        .withArgs(ONEUSDC, 1, 0, 0, 7, expiry);
+        .withArgs(ONEUSDC, 1, true, 0, 7, expiry);
     });
     it("Buyer passes margin check after position added", async () => {
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
@@ -256,7 +256,7 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
@@ -271,7 +271,7 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
@@ -315,7 +315,7 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         1,
       );
@@ -329,7 +329,7 @@ describe("ParetoMargin Contract", () => {
           seller.address,
           0,
           1,
-          0,
+          true,
           7,
           0
         )
@@ -344,7 +344,7 @@ describe("ParetoMargin Contract", () => {
           seller.address,
           ONEUSDC,
           0,
-          0,
+          true,
           7,
           0
         )
@@ -359,7 +359,7 @@ describe("ParetoMargin Contract", () => {
           seller.address,
           ONEUSDC,
           1,
-          0,
+          true,
           7,
           0,
         )
@@ -374,7 +374,7 @@ describe("ParetoMargin Contract", () => {
           seller.address,
           ONEUSDC,
           1,
-          0,
+          true,
           7,
           0,
         )
@@ -390,7 +390,7 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
@@ -400,7 +400,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
@@ -425,7 +425,7 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
@@ -435,7 +435,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         ONEUSDC,
         1,
-        0,
+        true,
         6,
         0,
       );
@@ -460,7 +460,7 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
@@ -470,7 +470,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         ONEUSDC,
         1,
-        1,
+        false,
         7,
         0,
       );
@@ -503,7 +503,7 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         5,
-        0,
+        true,
         7,
         0,
       );
@@ -513,7 +513,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         ONEUSDC,
         2,
-        0,
+        true,
         7,
         0,
       );
@@ -524,7 +524,7 @@ describe("ParetoMargin Contract", () => {
         keeper.address,
         ONEUSDC,
         3,
-        0,
+        true,
         7,
         0,
       );
@@ -554,7 +554,7 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         3,
-        0,
+        true,
         7,
         0,
       );
@@ -563,7 +563,7 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         2,
-        0,
+        true,
         7,
         0,
       );
@@ -572,7 +572,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
@@ -581,7 +581,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
@@ -591,7 +591,7 @@ describe("ParetoMargin Contract", () => {
         keeper.address,
         ONEUSDC,
         2,
-        0,
+        true,
         7,
         0,
       );
@@ -600,7 +600,7 @@ describe("ParetoMargin Contract", () => {
         keeper.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
@@ -644,7 +644,7 @@ describe("ParetoMargin Contract", () => {
           seller.address,
           ONEUSDC,
           1,
-          0,
+          true,
           7,
           0,
         )
@@ -721,7 +721,7 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         5,
         0,
       );
@@ -739,7 +739,7 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         5,
         0,
       );
@@ -803,7 +803,7 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
@@ -872,13 +872,13 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
 
       // Let the price rise a lot so buyer wins
-      await spotFeed.connect(deployer).setLatestAnswer(ONEUSDC.mul(2000));
+      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(2000));
 
       // Settle positions
       const expiry = (await paretoMargin.activeExpiry()).toNumber();
@@ -909,13 +909,13 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
 
       // Let the price drop a lot so seller wins
-      await spotFeed.connect(deployer).setLatestAnswer(ONEUSDC.mul(1000));
+      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(1000));
 
       // Settle positions
       const expiry = (await paretoMargin.activeExpiry()).toNumber();
@@ -946,13 +946,13 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         3,
         0,
       );
       
       // Let the price drop a lot so buyer wins
-      await spotFeed.connect(deployer).setLatestAnswer(ONEUSDC.mul(1000));
+      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(1000));
 
       // Settle positions
       const expiry = (await paretoMargin.activeExpiry()).toNumber();
@@ -983,13 +983,13 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         3,
         0,
       );
       
       // Let the price rise a lot so seller wins
-      await spotFeed.connect(deployer).setLatestAnswer(ONEUSDC.mul(2000));
+      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(2000));
 
       // Settle positions
       const expiry = (await paretoMargin.activeExpiry()).toNumber();
@@ -1020,7 +1020,7 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
@@ -1030,13 +1030,13 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         6,
         0,
       );
 
       // Let the price rise a lot so buyer wins
-      await spotFeed.connect(deployer).setLatestAnswer(ONEUSDC.mul(2000));
+      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(2000));
 
       // Settle positions
       const expiry = (await paretoMargin.activeExpiry()).toNumber();
@@ -1076,13 +1076,13 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         3,
         0,
       );
 
       // Let the price rise a lot 
-      await spotFeed.connect(deployer).setLatestAnswer(ONEUSDC.mul(2000));
+      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(2000));
 
       // Settle positions
       const expiry = (await paretoMargin.activeExpiry()).toNumber();
@@ -1113,13 +1113,13 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
 
       // Let the price rise a lot so much that seller should get liquidated
-      await spotFeed.connect(deployer).setLatestAnswer(ONEUSDC.mul(10000));
+      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
 
       // Settle positions
       const expiry = (await paretoMargin.activeExpiry()).toNumber();
@@ -1164,13 +1164,13 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         ONEUSDC,
         1,
-        0,
+        true,
         7,
         0,
       );
 
       // Let the price rise a lot so much that seller should get liquidated
-      await spotFeed.connect(deployer).setLatestAnswer(ONEUSDC.mul(10000));
+      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
     });
     it("Owner can liquidate", async () => {
       await paretoMargin.connect(deployer).liquidate(seller.address);
@@ -1260,24 +1260,24 @@ describe("ParetoMargin Contract", () => {
       }
       await newMarkFeed.setLatestPrices(callPrices, putPrices);
 
-      expect(paretoMargin.isActiveUnderlying(0)).to.be.true;
-      expect(paretoMargin.isActiveUnderlying(1)).to.be.false;
+      expect(await paretoMargin.isActiveUnderlying(0)).to.be.true;
+      expect(await paretoMargin.isActiveUnderlying(1)).to.be.false;
       await paretoMargin.connect(deployer).setOracle(1, newSpotFeed.address, newMarkFeed.address);
-      expect(paretoMargin.isActiveUnderlying(1)).to.be.true;
+      expect(await paretoMargin.isActiveUnderlying(1)).to.be.true;
     });
     it("Owner cannot set oracle if spot price zero", async () => {
       await expect(
-          paretoMargin.connect(deployer).setOracle("BTC", newPriceFeed.address, newVolFeed.address)
+          paretoMargin.connect(deployer).setOracle(1, newSpotFeed.address, newMarkFeed.address)
       ).to.be.revertedWith("getStrikeMenu: Spot price too small");
     });
     it("Keeper cannot set oracle for new underlying", async () => {
       await expect(
-        paretoMargin.connect(keeper).setOracle("BTC", newPriceFeed.address, newVolFeed.address)
+        paretoMargin.connect(keeper).setOracle(1, newSpotFeed.address, newMarkFeed.address)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
     it("User cannot set oracle for new underlying", async () => {
       await expect(
-        paretoMargin.connect(buyer).setOracle("BTC", newPriceFeed.address, newVolFeed.address)
+        paretoMargin.connect(buyer).setOracle(1, newSpotFeed.address, newMarkFeed.address)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
   });
