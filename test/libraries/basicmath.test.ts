@@ -31,21 +31,4 @@ describe("BasicMath Library", () => {
       expect(await basicMath.min(2, 2)).to.be.equal(2);
     });
   });
-  describe("Test absdiff function", () => {
-    it("Correct absdiff when a > b", async() => {
-      const [diff, isNeg] = await basicMath.absdiff(2, 1);
-      expect(diff).to.be.equal(1);
-      expect(isNeg).to.be.equal(false);
-    });
-    it("Correct absdiff when a < b", async() => {
-      const [diff, isNeg] = await basicMath.absdiff(1, 2);
-      expect(diff).to.be.equal(1);
-      expect(isNeg).to.be.equal(true);
-    });
-    it("Correct absdiff when a = b", async() => {
-      const [diff, isNeg] = await basicMath.absdiff(2, 2);
-      expect(diff).to.be.equal(0);
-      expect(isNeg).to.be.equal(false);
-    });
-  });
 });
