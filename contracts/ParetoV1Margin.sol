@@ -72,7 +72,7 @@ contract ParetoV1Margin is
     mapping(Derivative.Underlying => address) private markOracles;
 
     /// @notice Stores active underlyings
-    mapping(Derivative.Underlying => bool) private isActiveUnderlying;
+    mapping(Derivative.Underlying => bool) public isActiveUnderlying;
 
     /// @notice List of keepers who can add positions
     mapping(address => bool) private keepers;
