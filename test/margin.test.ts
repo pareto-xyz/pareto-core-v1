@@ -1,7 +1,7 @@
 import { ethers, upgrades } from "hardhat";
 import { fromBn, toBn } from "evm-bn";
 import { expect } from "chai";
-import { Contract } from "ethers";
+import { Contract, BigNumber } from "ethers";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { getFixedGasSigners } from "./utils/helpers";
 
@@ -15,13 +15,27 @@ let keeper: SignerWithAddress;
 let buyer: SignerWithAddress;
 let seller: SignerWithAddress;
 let insurance: SignerWithAddress;
+let feeRecipient: SignerWithAddress;
 
 const ONEUSDC = toBn("1", 18);
+
+async function getFees(
+  quantity: number,
+  tradePrice: number,
+): Promise<[BigNumber, BigNumber]> {
+  const [,spotBn,] = await spotFeed.latestRoundData();
+  const spot = parseFloat(fromBn(spotBn, 18));
+  const makerFee = Math.min(0.0003 * spot * quantity, 0.1 * tradePrice);
+  const takerFee = Math.min(0.0006 * spot * quantity, 0.1 * tradePrice);
+  const makerFeeBn = toBn(makerFee.toString(), 18);
+  const takerFeeBn = toBn(takerFee.toString(), 18);
+  return [takerFeeBn, makerFeeBn];
+}
 
 describe("ParetoMargin Contract", () => {
   beforeEach(async () => {
     const wallets = await getFixedGasSigners(10000000);
-    [deployer, keeper, buyer, seller, insurance] = wallets;
+    [deployer, keeper, buyer, seller, insurance, feeRecipient] = wallets;
   
     // Deploy a MockERC20 contract to mimic USDC
     const MockERC20 = await ethers.getContractFactory("MockERC20", deployer);
@@ -65,6 +79,7 @@ describe("ParetoMargin Contract", () => {
       [
         usdc.address,
         insurance.address,
+        feeRecipient.address,
         0,
         spotFeed.address,
         markFeed.address,
@@ -355,6 +370,10 @@ describe("ParetoMargin Contract", () => {
     it("Cannot add position if buyer below margin", async () => {
       // seller puts in 1k usdc into margin account but buyer does not
       await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      // buyer needs to put in minimum amount for fees
+      const [takerFee,] = await getFees(7, 1);
+      await paretoMargin.connect(buyer).deposit(takerFee);
+
       await expect(
         paretoMargin.connect(deployer).addPosition(
           buyer.address,
@@ -370,6 +389,8 @@ describe("ParetoMargin Contract", () => {
     it("Cannot add position if seller below margin", async () => {
       // buyer puts in 1k usdc into margin account but seller does not
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      const [,makerFee] = await getFees(7, 1);
+      await paretoMargin.connect(seller).deposit(makerFee);
       await expect(
         paretoMargin.connect(deployer).addPosition(
           buyer.address,

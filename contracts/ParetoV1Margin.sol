@@ -1079,7 +1079,7 @@ contract ParetoV1Margin is
         }
     }
 
-        /**
+    /**
      * @notice Add an address to the whitelist
      * @dev Add as a list for gas efficiency
      * @param accounts Addresses to add as keepers
@@ -1101,6 +1101,22 @@ contract ParetoV1Margin is
             require(whitelist[accounts[i]], "removeFromWhitelist: not in whitelist");
             whitelist[accounts[i]] = false;
         }
+    }
+
+    /**
+     * @notice Sets insurance fund address
+     */
+    function setInsurance(address newInsurance) external onlyOwner {
+        require(insurance != newInsurance, "setInsuranceFund: must be new address");
+        insurance = newInsurance;
+    }
+
+    /**
+     * @notice Sets fee recipient address
+     */
+    function setFeeRecipient(address newFeeRecipient) external onlyOwner {
+        require(feeRecipient != newFeeRecipient, "setFeeRecipient: must be new fee recipient");
+        feeRecipient = newFeeRecipient;
     }
 
     /**
@@ -1298,8 +1314,8 @@ contract ParetoV1Margin is
         }
 
         // Check that buyers and sellers have enough to pay fees
-        require(balances[order.buyer] < takerFees, "addPosition: taker cannot pay fees");
-        require(balances[order.seller] < makerFees, "addPosition: maker cannot pay fees");
+        require(balances[order.buyer] >= takerFees, "addPosition: taker cannot pay fees");
+        require(balances[order.seller] >= makerFees, "addPosition: maker cannot pay fees");
 
         // Make fee transfers
         balances[order.buyer] -= takerFees;
