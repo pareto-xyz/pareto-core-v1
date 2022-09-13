@@ -56,7 +56,7 @@ contract ParetoV1Margin is
     uint256 public maxBalanceCap; 
 
     /// @notice Maximum notional value allowed in order
-    mapping(Derivative.Underlying => uint256) minNotionalPerUnderlying;
+    mapping(Derivative.Underlying => uint256) minQuantityPerUnderlying;
 
     /// @notice Maximum percentage the insurance fund can payoff for a single position in USDC
     uint256 public maxInsuredPerc;
@@ -119,7 +119,7 @@ contract ParetoV1Margin is
      * @param underlying_ Name of underlying token to support at deployment
      * @param spotOracle_ Address of spot oracle for the underlying
      * @param markOracle_ Address of mark price oracle for the underlying
-     * @param minNotional_ Max notional value for underlying
+     * @param minQuantity_ Minimum quantity in option for underlying
      */
     function initialize(
         address usdc_,
@@ -128,7 +128,7 @@ contract ParetoV1Margin is
         Derivative.Underlying underlying_,
         address spotOracle_,
         address markOracle_,
-        uint256 minNotional_
+        uint256 minQuantity_
     )
         public
         initializer 
@@ -164,7 +164,7 @@ contract ParetoV1Margin is
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
 
         // Create a new underlying (handles strike and smile creation)
-        newUnderlying(underlying_, spotOracle_, markOracle_, minNotional_);
+        newUnderlying(underlying_, spotOracle_, markOracle_, minQuantity_);
     }
 
     /**
@@ -265,14 +265,14 @@ contract ParetoV1Margin is
      * @param underlying Underlying enum
      * @param spotOracle Address for spot oracle
      * @param markOracle Address for mark oracle
-     * @param minNotional Maximum amount of notional allowed for underlying
+     * @param minQuantity Minimum quantity for order allowed for underlying
      */
     event NewUnderlyingEvent(
         address indexed owner,
         Derivative.Underlying underlying,
         address spotOracle,
         address markOracle,
-        uint256 minNotional
+        uint256 minQuantity
     );
 
     /************************************************
@@ -720,11 +720,12 @@ contract ParetoV1Margin is
     /**
      * @notice Compute notional value of option
      * @dev Notional = quantity * spot
+     * @dev We return the notional in the same decimals as the spot
      * @param order Derivative.Order object
      * @return value Notional value in decimals of underlying
      */
     function getNotional(Derivative.Order memory order) internal view returns (uint256) {
-        return order.quantity * getSpot(order.option.underlying);
+        return order.quantity * getSpot(order.option.underlying) / 10**Derivative.QUANTITY_DECIMALS;
     }
 
     /**
@@ -787,7 +788,7 @@ contract ParetoV1Margin is
 
             // If the spot is within range
             if ((spot >= lower) && (spot < upper)) {
-                for (uint256 j = 0; j < Derivative.NumStrikeLevel; j++) {
+                for (uint256 j = 0; j < Derivative.NUM_STRIKE_LEVEL; j++) {
                     strikes[j] = lower + j * increment;
                 }
                 // Once you find the range, quit
@@ -839,7 +840,7 @@ contract ParetoV1Margin is
 
         int256 payoff;
         // Loop through strike levels and sum them, ignoring positive ones if `onlyLoss` is true
-        for (uint256 i = 0; i < Derivative.NumStrikeLevel; i++) {
+        for (uint256 i = 0; i < Derivative.NUM_STRIKE_LEVEL; i++) {
             // Ignore if positive payoff at strike and `onlyLoss` is on
             // If `onlyLoss` is on, then the returned value will be negative
             if ((payoffPerStrike[i] < 0) && onlyLoss) {
@@ -950,7 +951,8 @@ contract ParetoV1Margin is
                 /// @dev Divide by num netting to factor in double counting:
                 /// Suppose i and j are matched, then the code above will net at both index i and j
                 /// Suppose i, j, k are matched, then we will net at both i, j, and k
-                margin += (nettedQuantity * curMargin / numNetted);
+                /// @dev `nettedQuantity` is in quantity decimals 
+                margin += (nettedQuantity * curMargin / (numNetted * 10**Derivative.QUANTITY_DECIMALS));
             }
         }
         return margin;
@@ -992,23 +994,23 @@ contract ParetoV1Margin is
      * @param underlying Enum for the underlying token
      * @param spotOracle Address for an oracle for spot prices
      * @param markOracle Address for an oracle for mark prices
-     * @param minNotional Maximum notional for underlying
+     * @param minQuantity Maximum notional for underlying
      */
     function newUnderlying(
         Derivative.Underlying underlying,
         address spotOracle,
         address markOracle,
-        uint256 minNotional
+        uint256 minQuantity
     ) internal {
         require(!isActiveUnderlying[underlying], "newUnderlying: underlying already active");
-        require(minNotional > 0, "newUnderlying: max notional must be > 0");
+        require(minQuantity > 0, "newUnderlying: max notional must be > 0");
 
         // Set oracles for underlying
         spotOracles[underlying] = spotOracle;
         markOracles[underlying] = markOracle;
         
         // Set maximum notional values
-        minNotionalPerUnderlying[underlying] = minNotional;
+        minQuantityPerUnderlying[underlying] = minQuantity;
 
         // Compute strikes for underlying
         roundStrikes[underlying] = getStrikeMenu(underlying);
@@ -1124,13 +1126,13 @@ contract ParetoV1Margin is
      * @param underlying Enum for the underlying token
      * @param spotOracle Address for an oracle for spot prices
      * @param markOracle Address for an oracle for mark prices
-     * @param minNotional Maximum amount of notional for underlying
+     * @param minQuantity Minimum order quantity for underlying
      */
     function activateUnderlying(
         Derivative.Underlying underlying,
         address spotOracle,
         address markOracle,
-        uint256 minNotional
+        uint256 minQuantity
     ) 
         external
         onlyOwner
@@ -1139,10 +1141,10 @@ contract ParetoV1Margin is
             !isActiveUnderlying[underlying], 
             "activateUnderlying: underlying must not yet be active"
         );
-        newUnderlying(underlying, spotOracle, markOracle, minNotional);
+        newUnderlying(underlying, spotOracle, markOracle, minQuantity);
 
         // Emit event 
-        emit NewUnderlyingEvent(msg.sender, underlying, spotOracle, markOracle, minNotional);
+        emit NewUnderlyingEvent(msg.sender, underlying, spotOracle, markOracle, minQuantity);
     }
 
     /**
@@ -1165,15 +1167,15 @@ contract ParetoV1Margin is
     /**
      * @notice Set the maximum notional for an underlying token
      * @param underlying Enum for the underlying token
-     * @param minNotional Maximum notional in the decimals of the underlying
+     * @param minQuantity Minimum order quantity for underlying
      */
-    function setMinNotional(Derivative.Underlying underlying, uint256 minNotional) 
+    function setMinQuantity(Derivative.Underlying underlying, uint256 minQuantity) 
         external
         onlyOwner
     {
-        require(isActiveUnderlying[underlying], "setMinNotional: underlying must already be active");
-        require(minNotional > 0, "setMinNotional: max notional must be > 0");
-        minNotionalPerUnderlying[underlying] = minNotional;
+        require(isActiveUnderlying[underlying], "setMinQuantity: underlying must already be active");
+        require(minQuantity > 0, "setMinQuantity: min quantity must be > 0");
+        minQuantityPerUnderlying[underlying] = minQuantity;
     }   
 
     /**
@@ -1236,7 +1238,7 @@ contract ParetoV1Margin is
         roundSettled = false;
 
         // Loop through underlying tokens
-        for (uint256 i = 0; i < Derivative.NumUnderlying; i++) {
+        for (uint256 i = 0; i < Derivative.NUM_UNDERLYING; i++) {
             Derivative.Underlying underlying = Derivative.Underlying(i);
 
             // Some underlying may be planned but not active
@@ -1300,10 +1302,7 @@ contract ParetoV1Margin is
         );
 
         // Check we are not below minimum notional
-        require(
-            getNotional(order) >= minNotionalPerUnderlying[underlying],
-            "addPosition: below min notional"
-        );
+        require(order.quantity >= minQuantityPerUnderlying[underlying], "addPosition: below min quantity");
 
         // Charge fees
         (uint256 takerFees, uint256 makerFees) = getFees(order);
