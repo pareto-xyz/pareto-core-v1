@@ -1406,13 +1406,17 @@ describe("ParetoMargin Contract", () => {
   });
 
   describe("Liquidation: Edge Cases", () => {
-    beforeEach(async () => {
+    it("Liquidates short positions before long positions", async () => {
       await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(1000));
       await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(1000));
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
       await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
-    });
-    it("Liquidates short positions before long positions", async () => {
+
+      // raise max balance so deployer can handle the liquidation of a bad position
+      await paretoMargin.connect(deployer).setMaxBalanceCap(ONEUSDC.mul(100000));
+      await usdc.connect(deployer).approve(paretoMargin.address, ONEUSDC.mul(100000));
+      await paretoMargin.connect(deployer).deposit(ONEUSDC.mul(100000));
+
       // Add a call position
       await paretoMargin.connect(deployer).addPosition(
         buyer.address,
@@ -1439,6 +1443,14 @@ describe("ParetoMargin Contract", () => {
 
       // Call liquidate
       await paretoMargin.connect(deployer).liquidate(buyer.address);
+
+      // Get positions
+      const positions = await paretoMargin.connect(buyer).getPositions();
+      
+      expect(positions.length).to.be.equal(1); 
+      // Check that this position is the long position
+      expect(positions[0].buyer).to.be.equal(buyer.address);
+      expect(positions[0].seller).to.be.equal(seller.address);
     });
     it("Liquidation marks user order as inactive", async () => {
       // TODO
