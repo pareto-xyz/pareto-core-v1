@@ -292,7 +292,7 @@ contract ParetoV1Margin is
 
         // In the beginning we set a maximum cap. Insurance fund needs to break cap
         if (msg.sender != insurance) {
-            require(balances[msg.sender] <= maxBalanceCap, "deposit: exceeds maxCap");
+            require(balances[msg.sender] <= maxBalanceCap, "deposit: exceeds maximum");
         }
 
         // Pull resources from sender to this contract

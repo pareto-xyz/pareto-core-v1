@@ -89,7 +89,7 @@ describe("ParetoMargin Contract", () => {
         0,
         spotFeed.address,
         markFeed.address,
-        toBn("5", 3),  // 0.5
+        toBn("0.5", 4),
       ]
     );
     await paretoMargin.deployed();
@@ -119,6 +119,18 @@ describe("ParetoMargin Contract", () => {
     });
     it("Correct insurance address", async () => {
       expect(await paretoMargin.insurance()).to.be.equal(insurance.address);
+    });
+    it("Correct fee recipient address", async () => {
+      expect(await paretoMargin.feeRecipient()).to.be.equal(feeRecipient.address);
+    });
+    it("Correct max balance cap", async () => {
+      expect(await paretoMargin.maxBalanceCap()).to.be.equal(toBn("2000", 18));
+    });
+    it("Correct max insured percentage", async () => {
+      expect(await paretoMargin.maxInsuredPerc()).to.be.equal(toBn("0.5", 4));
+    });
+    it("Correct min margin percentage", async () => {
+      expect(await paretoMargin.minMarginPerc()).to.be.equal(toBn("0.01", 4));
     });
     it("Correct default round counter", async () => {
       expect(await paretoMargin.curRound()).to.be.equal(1);
@@ -183,6 +195,17 @@ describe("ParetoMargin Contract", () => {
       await expect(paretoMargin.connect(buyer).deposit(0))
         .to.be.revertedWith("deposit: `amount` must be > 0");
     });
+    it("Cannot deposit more than max cap", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(2500));
+      await expect(paretoMargin.connect(buyer).deposit(ONEUSDC.mul(2500)))
+        .to.be.revertedWith("deposit: exceeds maximum");
+    })
+    it("Cannot deposit twice to exceed max cap", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(2500));
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1500));
+      await expect(paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000)))
+        .to.be.revertedWith("deposit: exceeds maximum");
+    });
   });
 
   /****************************************
@@ -199,6 +222,17 @@ describe("ParetoMargin Contract", () => {
       await usdc.connect(buyer).approve(paretoMargin.address, 1);
       await paretoMargin.connect(buyer).deposit(1);
       expect(await paretoMargin.connect(buyer).getBalance()).to.be.equal("1");
+    });
+    it("Owner can check balance for anyone", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, 1);
+      await paretoMargin.connect(buyer).deposit(1);
+      expect(await paretoMargin.connect(deployer).getBalanceOf(buyer.address)).to.be.equal("1");
+    });
+    it("EOA cannot check balance for another EOA", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, 1);
+      await paretoMargin.connect(buyer).deposit(1);
+      await expect(paretoMargin.connect(seller).getBalanceOf(buyer.address))
+        .to.be.revertedWith("Ownable: caller is not the owner")
     });
   });
 
@@ -1298,6 +1332,47 @@ describe("ParetoMargin Contract", () => {
   });
 
   /****************************************
+   * Whitelist management
+   ****************************************/  
+  describe("Managing whitelist", () => {
+    it("Owner can add to whitelist", async () => {
+      await paretoMargin.connect(deployer).addToWhitelist([buyer.address]);
+    });
+    it("Cannot add whitelist twice", async () => {
+      await paretoMargin.connect(deployer).addToWhitelist([buyer.address]);
+      await expect(
+        paretoMargin.connect(deployer).addToWhitelist([buyer.address])
+      ).to.be.revertedWith("addToWhitelist: already in whitelist");
+    });
+    it("Owner can add multiple addresses to whitelist at once", async () => {
+      await paretoMargin.connect(deployer).addToWhitelist([buyer.address, seller.address]);
+    });
+    it("Owner can remove whitelist", async () => {
+      await paretoMargin.connect(deployer).removeKeepers([keeper.address]);
+    });
+    it("Keeper cannot add whitelist", async () => {
+      await expect(
+        paretoMargin.connect(keeper).addToWhitelist([buyer.address])
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("Keeper cannot remove whitelist", async () => {
+      await expect(
+        paretoMargin.connect(keeper).removeKeepers([keeper.address])
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("User cannot add whitelist", async () => {
+      await expect(
+        paretoMargin.connect(buyer).addToWhitelist([seller.address])
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("User cannot remove whitelist", async () => {
+      await expect(
+        paretoMargin.connect(buyer).removeKeepers([keeper.address])
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+  });
+
+  /****************************************
    * Oracle management
    ****************************************/  
   describe("Managing oracles", () => {
@@ -1430,6 +1505,24 @@ describe("ParetoMargin Contract", () => {
     });
     it("User cannot set min margin percent", async () => {
       await expect(paretoMargin.connect(buyer).setMinMarginPerc(500))
+        .to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("Owner can set max balance cap", async () => {
+      expect(await paretoMargin.maxBalanceCap()).to.be.equal(toBn("2000", 18));
+      await paretoMargin.connect(deployer).setMaxBalanceCap(toBn("3000", 18));
+      expect(await paretoMargin.maxBalanceCap()).to.be.equal(toBn("3000", 18));
+    });
+    it("Setting max balance cap % emits event", async () => {
+      await expect(paretoMargin.connect(deployer).setMaxBalanceCap(toBn("3000", 18)))
+        .to.emit(paretoMargin, "MaxBalanceCapEvent")
+        .withArgs(deployer.address, toBn("3000", 18));
+    });
+    it("Keeper cannot set max balance cap", async () => {
+      await expect(paretoMargin.connect(keeper).setMaxBalanceCap(toBn("3000", 18)))
+        .to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("User cannot set max balance cap", async () => {
+      await expect(paretoMargin.connect(buyer).setMaxBalanceCap(toBn("3000", 18)))
         .to.be.revertedWith("Ownable: caller is not the owner");
     });
   });
