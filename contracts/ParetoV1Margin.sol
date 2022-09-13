@@ -87,6 +87,12 @@ contract ParetoV1Margin is
     /// @notice Stores map from user address to index into the current round positions
     mapping(address => uint16[]) private userRoundIxs;
 
+    /// @notice Rather than deleting indices, which can be expensive, we will track if a user round ix is active
+    mapping(address => bool[]) private userRoundIxsIsActive;
+
+    /// @notice Stores the number of positions a user has in the current round
+    mapping(address => uint16) private userRoundCount;
+
     /// @notice Stores strike prices for the current round per underlying
     mapping(Derivative.Underlying => uint256[11]) public roundStrikes;
 
@@ -345,6 +351,12 @@ contract ParetoV1Margin is
 
         for (uint256 j = 0; j < roundPositions.length; j++) {
             Derivative.Order memory order = roundPositions[j];
+
+            // In `liquidatePosition`, we set quantity to zero as a shorthand for having settled 
+            if (order.quantity == 0) {
+                continue; 
+            }
+
             uint256 spot = getSpot(order.option.underlying);
 
             // Compute buyer payoff; seller payoff is exact opposite
@@ -394,9 +406,164 @@ contract ParetoV1Margin is
 
         // Emit event
         emit SettlementEvent(msg.sender, curRound, roundPositions.length);
+    }
 
-        // Free up memory for the round
-        delete roundPositions;
+    /**
+     * @notice Liquidates a single position
+     * @dev Used internally by `liquidate` function
+     * @param liquidator Address performing the lqiuidation
+     * @param user Address being liquidated
+     * @param ix Index of the order in user's round positions
+     * @return success True if the position was successfully liquidated, otherwise false
+     */
+    function liquidatePosition(address liquidator, address user, uint256 ix)
+        internal
+        returns (bool success)
+    {
+        // Store order memory since we are only reading
+        Derivative.Order storage order = roundPositions[userRoundIxs[user][ix]];
+
+        // Track if the the user is the buyer or seller
+        bool userIsBuyer = (order.buyer == user) ? true : false;
+
+        // Compute mark price for option: this is the amount the liquidator must pay to obtain the position
+        uint256 spot = getSpot(order.option.underlying);
+        uint256 mark = getMark(order.option.underlying, order.option.isCall, order.option.strikeLevel);
+
+        // Compute user payoff: if it is non-negative, skip as liquidating would not help
+        int256 buyerPayoff = MarginMath.getPayoff(order.buyer, spot, order);
+        int256 userPayoff = (userIsBuyer) ? buyerPayoff : (-buyerPayoff);
+        if (userPayoff >= 0) {
+            return false;
+        }
+
+        // Find the other address in the order
+        address counterparty = (userIsBuyer) ? order.seller : order.buyer;
+
+        if (liquidator == counterparty) {
+            /** 
+             * @dev If the liquidator is the other side to the user, then we can settle this position 
+             * since this is effectively the liquidator taking both sides, and netting out the order
+             */
+
+            // The liquidator's payoff is the reverse of the user's payoff
+            // Mark is the amount owed to the user by liquidator
+            int256 liquidatorNet = (-userPayoff) - int256(mark);
+
+            if (liquidatorNet < 0) {
+                uint256 liquidatorAbsNet = (liquidatorNet < 0) ? uint256(-liquidatorNet) : uint256(liquidatorNet);
+                // Liquidator still owes user some money though less than mark due to payoff obtained
+                bool liquidatorOk = attemptLiquidation(liquidator, user, liquidatorAbsNet, ix);
+                if (!liquidatorOk) {
+                    return false;
+                }
+            } else {
+                // Liquidator does not need to pay the user and accepts a smaller payoff. But liquidator now 
+                // owns both sides of the position, so this results in no change to balances
+                /// @dev A cheap way to mark this order as canceled is setting the quantity to 0
+                order.quantity = 0;
+            }
+        } else {
+            /**
+             * @dev If the liquidator is not the other side, this is a third party.
+             * Here, we must perform a transfer of position from user to liquidator
+             */
+            bool liquidatorOk = attemptLiquidation(liquidator, user, mark, ix);
+            if (!liquidatorOk) {
+                return false;
+            }
+        }
+
+        // Now that user no longer owns position, we reward liquidator using MM from this 
+        // position (which cannot push user back below margin even if 100% of MM is gone).
+        // 25% of MM -> liquidator; 10% of MM -> insurance fund
+        /// @dev Liquidators must pass margin check BEFORE receiving reward
+        uint256 margin = MarginMath.getMaintainenceMargin(
+            spot, 
+            userIsBuyer,
+            order.option,
+            mark, 
+            minMarginPerc
+        );
+        // This require statement should never fire
+        require(balances[user] >= (margin * 35 / 100), "liquidate: user cannot pay reward");
+        balances[user] -= (margin * 35 / 100);
+        balances[liquidator] += (margin * 25 / 100);
+        balances[insurance] += (margin / 10);
+
+        return true;
+    }
+
+    /**
+     * @notice Steps for liquidation by liquidator of user's position
+     * @param liquidator Address of the account doing the liquidation
+     * @param user Address of the account being liquidated
+     * @param payment The amount the liquidator will pay the user for the position
+     * @param ix The index of the order in the user's round positions
+     * @return liquidatorOk True if the liquidation was reverted due to liquidator falling below margin
+     */
+    function attemptLiquidation(
+        address liquidator,
+        address user,
+        uint256 payment,
+        uint256 ix
+    ) 
+        internal 
+        returns (bool liquidatorOk) 
+    {
+        // Fetch the order in storage as we will be doing edits
+        uint16 index = userRoundIxs[user][ix];
+        Derivative.Order storage order = roundPositions[index];
+
+        // Check if user is buyer or seller
+        bool userIsBuyer = (order.buyer == user) ? true : false;
+
+        // Transfer payment from liquidator to user for inheriting position
+        balances[liquidator] -= payment;
+        balances[user] += payment;
+
+        // Add order to liquidator's positions
+        userRoundIxs[liquidator].push(index);
+        userRoundIxsIsActive[liquidator].push(true);
+        userRoundCount[liquidator]++;
+
+        // Remove position from user
+        userRoundIxsIsActive[user][ix] = false;
+        userRoundCount[user]--;
+
+        // Ovewrite user's position with liquidator
+        if (userIsBuyer) {
+            order.buyer = liquidator;
+        } else {
+            order.seller = liquidator;
+        }
+
+        // Check liquidator can handle the new position and the payment to liquidatee
+        (, liquidatorOk) = checkMargin(liquidator, false);
+
+        if (!liquidatorOk) {
+            /**
+             * @dev If the liquidator is now below margin, undo changes.
+             * We don't just revert to allow liquidators to take one of many positions
+             */
+            userRoundIxs[liquidator].pop();
+            userRoundIxsIsActive[liquidator].pop();
+            userRoundCount[liquidator]--;
+
+            userRoundIxsIsActive[user][ix] = true;
+            userRoundCount[user]++;
+
+            // Reset the original buyer
+            if (userIsBuyer) {
+                order.buyer = user;
+            } else {
+                order.seller = user;
+            }
+
+            // Undo changes to balances
+            balances[liquidator] += payment;
+            balances[user] -= payment;
+        }
     }
 
     /**
@@ -406,86 +573,68 @@ contract ParetoV1Margin is
      * @dev Any EOA can call this on any EOA
      * @dev A liquidator need not inherit all positions of liquidatee. We allow some positions to be liquidated and others not
      * @param user Address of the user to liquidate
-     * @return fullyLiquidated if true, user is fully liquidated
      */
-    function liquidate(address user) external nonReentrant returns (bool fullyLiquidated) {
-        require(userRoundIxs[user].length > 0, "liquidate: user has no positions");
+    function liquidate(address user) external nonReentrant {
+        require(userRoundCount[user] > 0, "liquidate: user has no positions");
         (, bool satisfied) = checkMargin(user, false);
         require(!satisfied, "liquidate: user passes margin check");
 
-        address liquidator = msg.sender;
-
-        // Default is to assume user can be fully liquidated
-        fullyLiquidated = true;
+        // Cannot liquidate yourself since you are already under margin
+        require(msg.sender != user, "liquidate: cannot liquidate yourself");
 
         for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
-            uint256 index = userRoundIxs[user][i];
-            Derivative.Order storage order = roundPositions[index];
-
-            // Compute mark price for option
-            uint256 spot = getSpot(order.option.underlying);
-            uint256 mark = getMark(order.option.underlying, order.option.isCall, order.option.strikeLevel);
-
-            // Liquidator must pay mark price
-            if (balances[liquidator] < mark) {
-                fullyLiquidated = false;
-                break;
+            // Check that the order has not been marked inactive already
+            // If so, nothing to liquidate
+            if (!userRoundIxsIsActive[user][i]) {
+                continue;
             }
-            balances[liquidator] -= mark;
-            balances[user] += mark;
-
-            // Add order to liquidator's positions
-            userRoundIxs[liquidator].push(uint16(index));
-
-            // Check liquidator can handle the new position and the payment to liquidatee
-            (, bool liquidatorOk) = checkMargin(liquidator, false);
-
-            if (!liquidatorOk) {
-                // If the liquidator is now below margin, undo changes
-                /// @dev We don't just revert to allow liquidators to take one of many positions
-                delete userRoundIxs[liquidator][userRoundIxs[liquidator].length - 1];
-
-                // Undo adding the new position (last index)
-                fullyLiquidated = false;
-
-                // Undo changes to balances
-                balances[liquidator] += mark;
-                balances[user] -= mark;
-                break;
+            
+            // Ignore long positions
+            if (roundPositions[userRoundIxs[user][i]].buyer == user) {
+                continue;
             }
 
-            // If we have reached here, then the liquidator is able to inherit position
-            // Delete position, dropping it from current user
-            deleteUserPosition(user, index);
+            // Perform liquidation and check if success
+            bool success = liquidatePosition(msg.sender, user, i);
 
-            // Ovewrite user's position with liquidator
-            if (order.buyer == user) {
-                order.buyer = liquidator;
-            } else {
-                order.seller = liquidator;
+            // Ignore positions we could not liquidate
+            if (!success) {
+                continue;
             }
 
-            // Now that user no longer owns position, we reward liquidator using MM from this 
-            // position (which cannot push user back below margin even if 100% of MM is gone).
-            // 25% of MM -> liquidator; 10% of MM -> insurance fund
-            uint256 margin = MarginMath.getMaintainenceMargin(
-                spot, 
-                order.buyer == liquidator, 
-                order.option,
-                mark, 
-                minMarginPerc
-            );
-            balances[user] -= (margin * 35 / 100);
-            balances[liquidator] += (margin * 25 / 100);
-            balances[insurance] += (margin / 10);
-
-            // Check if the user is no longer below margin, if so quit
+            // Check if the user is no longer below margin, if so quit to avoid over-liquidation
             (, satisfied) = checkMargin(user, false);
             if (satisfied) {
                 break;
             }
         }
-        return fullyLiquidated;
+
+        // If we reach here, then liquidating all short positions (if any) was not enough.
+        // Perform a second loop to liquidate long positions
+        for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
+            if (!userRoundIxsIsActive[user][i]) {
+                continue;
+            }
+            
+            // Ignore short positions
+            if (roundPositions[userRoundIxs[user][i]].seller == user) {
+                continue;
+            }
+
+            // Perform liquidation and check if success
+            bool success = liquidatePosition(msg.sender, user, i);
+
+            // Ignore positions we could not liquidate
+            if (!success) {
+                continue;
+            }
+
+            // Check if the user is no longer below margin, if so quit to avoid over-liquidation
+            (, satisfied) = checkMargin(user, false);
+            if (satisfied) {
+                break;
+            }
+        }
     }
 
     /**
@@ -614,7 +763,7 @@ contract ParetoV1Margin is
         view
         returns (int256) 
     {
-        if (userRoundIxs[user].length == 0) {
+        if (userRoundCount[user] == 0) {
             return 0;
         }
 
@@ -622,6 +771,10 @@ contract ParetoV1Margin is
         int256[11] memory payoffPerStrike;
 
         for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
+            // Ignore order if has been turned inactive for user 
+            if (!userRoundIxsIsActive[user][i]) {
+                continue;
+            }
             // Fetch the order in the position
             Derivative.Order memory order = roundPositions[userRoundIxs[user][i]];
 
@@ -670,6 +823,12 @@ contract ParetoV1Margin is
 
         // Loop through open positions by user
         for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
+            // Ignore order if has been turned inactive for user 
+            if (!userRoundIxsIsActive[user][i]) {
+                continue;
+            }
+
+            // Fetch order
             Derivative.Order memory order = roundPositions[userRoundIxs[user][i]];
             Derivative.Option memory option = order.option;
             bytes32 optionHash = Derivative.hashOption(option);
@@ -697,8 +856,8 @@ contract ParetoV1Margin is
             // Nested loop to find the total quantity of this option.
             // Consider case with multiple positions with same order
             for (uint256 j = 0; j < userRoundIxs[user].length; j++) {
-                // Do not double count
-                if (i == j) {
+                // Do not double count & ignore inactive positions
+                if ((i == j) || (!userRoundIxsIsActive[user][j])) {
                     continue;
                 }
                 Derivative.Order memory order2 = roundPositions[userRoundIxs[user][j]];
@@ -805,20 +964,6 @@ contract ParetoV1Margin is
 
         // Mark as active
         isActiveUnderlying[underlying] = true;
-    }
-
-    /**
-     * @notice Delete one of the user's position
-     * @param user Address of the user
-     * @param index Index to delete
-     */
-    function deleteUserPosition(address user, uint256 index) internal {
-        uint256 size = userRoundIxs[user].length;
-        if (size > 1) {
-            userRoundIxs[user][index] = userRoundIxs[user][size - 1];
-        }
-        // Implicitly recovers gas from last element storage
-        delete userRoundIxs[user][size - 1];
     }
 
     /************************************************
@@ -936,11 +1081,16 @@ contract ParetoV1Margin is
                 roundStrikes[underlying] = getStrikeMenu(underlying);
             }
         }
+        
+        // Free up memory for the round options
+        delete roundPositions;
 
         // Clear positions for the user. It is up to the caller to maintain and provide 
         // a correct list of user addresses, otherwise memory will not be freed properly
         for (uint256 i = 0; i < roundUsers.length; i++) {
             delete userRoundIxs[roundUsers[i]];
+            delete userRoundIxsIsActive[roundUsers[i]];
+            userRoundCount[roundUsers[i]] = 0;
         }
     }
 
@@ -967,6 +1117,7 @@ contract ParetoV1Margin is
         require(tradePrice > 0, "addPosition: tradePrice must be > 0");
         require(quantity > 0, "addPosition: quantity must be > 0");
         require(spotOracles[underlying] != address(0), "addPosition: no oracle for underlying");
+        require(buyer != seller, "addPosition: cannot enter a position with yourself");
 
         // USDC decimals will be used for spot/strike calculations
         uint8 decimals = IERC20Upgradeable(usdc).decimals();
@@ -990,9 +1141,19 @@ contract ParetoV1Margin is
         // Get the index for the newly added value
         uint16 orderIndex = uint16(roundPositions.length - 1);
 
+        // Sanity checks for buyer/seller positions
+        require(userRoundIxs[buyer].length == userRoundIxsIsActive[buyer].length);
+        require(userRoundIxs[seller].length == userRoundIxsIsActive[seller].length);
+        require(userRoundIxs[buyer].length >= userRoundCount[buyer]);
+        require(userRoundIxs[seller].length >= userRoundCount[seller]);
+
         // Save that the buyer/seller have this position
         userRoundIxs[buyer].push(orderIndex);
         userRoundIxs[seller].push(orderIndex);
+        userRoundIxsIsActive[buyer].push(true);
+        userRoundIxsIsActive[seller].push(true);
+        userRoundCount[buyer]++;
+        userRoundCount[seller]++;
 
         // Check margin for buyer and seller
         (, bool checkBuyerMargin) = checkMargin(buyer, false);

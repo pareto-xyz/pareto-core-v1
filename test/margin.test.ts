@@ -1158,13 +1158,16 @@ describe("ParetoMargin Contract", () => {
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
       await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
 
+      console.log("js: buyer", buyer.address);
+      console.log("js: seller", seller.address);
+
       // Enter the position
       await paretoMargin.connect(deployer).addPosition(
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
-        true,
+        2,
+        false,
         7,
         0,
       );
@@ -1175,8 +1178,14 @@ describe("ParetoMargin Contract", () => {
     it("Owner can liquidate", async () => {
       await paretoMargin.connect(deployer).liquidate(seller.address);
     });
-    it("User can liquidate", async () => {
+    it("Buyer can liquidate", async () => {
       await paretoMargin.connect(buyer).liquidate(seller.address);
+    });
+    it("Seller can liquidate", async () => {
+      await paretoMargin.connect(seller).liquidate(seller.address);
+    });
+    it("Random EOA can liquidate", async () => {
+      await paretoMargin.connect(keeper).liquidate(seller.address);
     });
     it("Cannot liquidate user with no positions", async () => {
       await expect(

@@ -244,6 +244,7 @@ library MarginMath {
 
     /**
      * @notice Computes payoff for option i.e. unrealized P&L
+     * @dev Accounts for premium already
      * @param trader Address of the trader
      * @param spot Current spot price
      * @param order Order object containing option parameters and price/quantity
