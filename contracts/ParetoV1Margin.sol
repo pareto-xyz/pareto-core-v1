@@ -492,6 +492,9 @@ contract ParetoV1Margin is
                 // owns both sides of the position, so this results in no change to balances
                 /// @dev A cheap way to mark this order as canceled is setting the quantity to 0
                 order.quantity = 0;
+                // Decrement the round count to signify the netting has occured
+                userRoundCount[liquidator]--;
+                userRoundCount[user]--;
             }
         } else {
             /**
@@ -688,10 +691,15 @@ contract ParetoV1Margin is
         Derivative.Order[] memory orders = new Derivative.Order[](userRoundCount[msg.sender]);
         uint256 count = 0;
         for (uint256 i = 0; i < userRoundIxs[msg.sender].length; i++) {
+            // Ignore contracts marked as inactive
             if (!userRoundIxsIsActive[msg.sender][i]) {
                 continue;
             }
             Derivative.Order storage order = roundPositions[userRoundIxs[msg.sender][i]];
+            // Ignore orders that have already been netted
+            if (order.quantity == 0) {
+              continue;
+            }
             orders[count] = order;
             count++;
         }
@@ -841,6 +849,11 @@ contract ParetoV1Margin is
             // Fetch the order in the position
             Derivative.Order memory order = roundPositions[userRoundIxs[user][i]];
 
+            // If already netted, we know payoff 0
+            if (order.quantity == 0) {
+              continue;
+            }
+
             // Get strike level & convert to integer index
             uint8 strikeLevel = uint8(order.option.strikeLevel);
 
@@ -896,6 +909,11 @@ contract ParetoV1Margin is
             Derivative.Option memory option = order.option;
             bytes32 optionHash = Derivative.hashOption(option);
 
+            // If netted order, then has no impact on margin
+            if (order.quantity == 0) {
+                continue;
+            }
+
             // In the case of multiple positions for the same option, 
             // compute the total amount the user wishes to buy and sell
             uint256 nettedBuy = 0;
@@ -925,6 +943,10 @@ contract ParetoV1Margin is
                 }
                 Derivative.Order memory order2 = roundPositions[userRoundIxs[user][j]];
                 bytes32 optionHash2 = Derivative.hashOption(order2.option);
+
+                if (order2.quantity == 0) {
+                    continue;
+                }
 
                 if (optionHash == optionHash2) {
                     if (user == order2.buyer) {

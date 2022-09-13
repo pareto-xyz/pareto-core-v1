@@ -1446,17 +1446,63 @@ describe("ParetoMargin Contract", () => {
       await paretoMargin.connect(deployer).liquidate(buyer.address);
 
       // Get positions
-      const positions = await paretoMargin.connect(buyer).getPositions();
-      expect(positions.length).to.be.equal(1); 
+      const buyerPositions = await paretoMargin.connect(buyer).getPositions();
+      expect(buyerPositions.length).to.be.equal(1); 
       // Check that this position is the long position
-      expect(positions[0].buyer).to.be.equal(buyer.address);
-      expect(positions[0].seller).to.be.equal(seller.address);
-    });
-    it("Liquidation marks user order as inactive", async () => {
-      // TODO
+      expect(buyerPositions[0].buyer).to.be.equal(buyer.address);
+      expect(buyerPositions[0].seller).to.be.equal(seller.address);
+
+      const sellerPositions = await paretoMargin.connect(seller).getPositions();
+      // Seller is still in two positions
+      expect(sellerPositions.length).to.be.equal(2); 
+      
+      const liquidatorPositions = await paretoMargin.connect(deployer).getPositions();
+      // Check liquidator is now in a position
+      expect(liquidatorPositions.length).to.be.equal(1); 
     });
     it("If counterparty liquidates, order is netted", async () => {
-      // TODO
+      // raise max balance so seller can handle the liquidation of a bad position
+      await paretoMargin.connect(deployer).setMaxBalanceCap(ONEUSDC.mul(200000));
+      await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(100000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(100000));
+
+      // Add a call position
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC.mul(100),
+        toBn("0.5", 4),  // small position
+        true,
+        6,
+        0,
+      );
+      // Add another call at a different strike, switch buyer and seller rolls
+      await paretoMargin.connect(deployer).addPosition(
+        seller.address,
+        buyer.address,
+        ONEUSDC.mul(100),
+        toBn("10", 4),  // much larger position
+        true,
+        7,
+        0,
+      );  
+      // Let the price rise a lot: now the buyer who sold the second strike 
+      // will be liquidated
+      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
+
+      // Call liquidate from the seller
+      await paretoMargin.connect(seller).liquidate(buyer.address);
+
+      const buyerPositions = await paretoMargin.connect(buyer).getPositions();
+      const sellerPositions = await paretoMargin.connect(seller).getPositions();
+      const deployerPositions = await paretoMargin.connect(deployer).getPositions();
+
+      // Both buyer and seller have only one position b/c netted
+      expect(buyerPositions.length).to.be.equal(1); 
+      expect(sellerPositions.length).to.be.equal(1); 
+
+      // deployer has nothing to do with this so no positions
+      expect(deployerPositions.length).to.be.equal(0);
     });
     it("If liquidator falls below margin, everything is reset", async () => {
       // Add a call position
