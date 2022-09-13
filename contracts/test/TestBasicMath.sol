@@ -14,8 +14,4 @@ contract TestBasicMath {
     function min(uint256 a, uint256 b) external pure returns (uint256) {
         return BasicMath.min(a, b);
     }
-
-    function absdiff(uint256 a, uint256 b) external pure returns (uint256, bool) {
-        return BasicMath.absdiff(a, b);
-    }
 }

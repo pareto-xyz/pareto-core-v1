@@ -1,7 +1,7 @@
 import hre from "hardhat";
 import { expect } from "chai";
 import { Contract } from "ethers";
-import { currentTime, timeTravel } from "../utils/helpers";
+import { currentTime } from "../utils/helpers";
 
 let dateMath: Contract;
 

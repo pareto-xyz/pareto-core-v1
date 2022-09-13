@@ -7,13 +7,12 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
 import "./interfaces/IERC20Upgradeable.sol";
-import "./interfaces/IOracle.sol";
+import "./interfaces/ISpotFeed.sol";
+import "./interfaces/IMarkFeed.sol";
 import "./utils/SafeERC20Upgradeable.sol";
 import "./libraries/Derivative.sol";
 import "./libraries/MarginMath.sol";
 import "./libraries/DateMath.sol";
-import "./libraries/NegativeMath.sol";
-import "./libraries/BlackScholesMath.sol";
 
 import "hardhat/console.sol";
 
@@ -36,13 +35,6 @@ contract ParetoV1Margin is
     OwnableUpgradeable
 {
     using SafeERC20Upgradeable for IERC20Upgradeable;
-
-    /************************************************
-     * Enum variables
-     ***********************************************/
-
-    /// @notice Eleven different strike levels, 5 ITM, 1 ATM, 5 OTM
-    enum StrikeLevel { ITM5,ITM4,ITM3,ITM2,ITM1,ATM,OTM1,OTM2,OTM3,OTM4,OTM5 }
 
     /************************************************
      * State variables
@@ -74,14 +66,14 @@ contract ParetoV1Margin is
     /// @notice Tracks if the last round has been settled
     bool private roundSettled;
 
-    /// @notice Store a list of names for underlying tokens
-    bytes32[] public underlyings;
-
     /// @notice Stores addresses for spot oracles of each underlying
-    mapping(bytes32 => address) private spotOracles;
+    mapping(Derivative.Underlying => address) private spotOracles;
 
-    /// @notice Stores addresses for historical volatility oracles of each underlying
-    mapping(bytes32 => address) private volOracles;
+    /// @notice Stores addresses for mark price oracles of each underlying
+    mapping(Derivative.Underlying => address) private markOracles;
+
+    /// @notice Stores active underlyings
+    mapping(Derivative.Underlying => bool) public isActiveUnderlying;
 
     /// @notice List of keepers who can add positions
     mapping(address => bool) private keepers;
@@ -95,17 +87,14 @@ contract ParetoV1Margin is
     /// @notice Stores map from user address to index into the current round positions
     mapping(address => uint16[]) private userRoundIxs;
 
+    /// @notice Rather than deleting indices, which can be expensive, we will track if a user round ix is active
+    mapping(address => bool[]) private userRoundIxsIsActive;
+
+    /// @notice Stores the number of positions a user has in the current round
+    mapping(address => uint16) private userRoundCount;
+
     /// @notice Stores strike prices for the current round per underlying
-    mapping(bytes32 => uint256[11]) public roundStrikes;
-
-    /// @notice Store volatility smiles per hash(expiry,underlying)
-    mapping(bytes32 => Derivative.VolatilitySmile) private volSmiles;
-
-    /// @notice Store average trade sizes for each expiry/underlying
-    mapping(bytes32 => uint256) private avgTradeSizes;
-
-    /// @notice Store number of trades for each expiry/underlying
-    mapping(bytes32 => uint256) private numTrades;
+    mapping(Derivative.Underlying => uint256[11]) public roundStrikes;
 
     /************************************************
      * Initialization and Upgradeability
@@ -114,16 +103,16 @@ contract ParetoV1Margin is
     /**
      * @param usdc_ Address for the USDC token (e.g. cash)
      * @param insurance_ Address for the insurance fund
-     * @param underlyingName_ Name of underlying token to support at deployment
+     * @param underlying_ Name of underlying token to support at deployment
      * @param spotOracle_ Address of spot oracle for the underlying
-     * @param volOracle_ Address of historical vol oracle for the underlying
+     * @param markOracle_ Address of mark price oracle for the underlying
      */
     function initialize(
         address usdc_,
         address insurance_,
-        string memory underlyingName_,
+        Derivative.Underlying underlying_,
         address spotOracle_,
-        address volOracle_
+        address markOracle_
     )
         public
         initializer 
@@ -152,11 +141,8 @@ contract ParetoV1Margin is
         // Set the expiry to the next friday
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
 
-        // The hash for the underlying name is what we use as the key for state objects
-        bytes32 underlying_ = keccak256(abi.encodePacked(underlyingName_));
-
         // Create a new underlying (handles strike and smile creation)
-        newUnderlying(underlying_, spotOracle_, volOracle_);
+        newUnderlying(underlying_, spotOracle_, markOracle_);
     }
 
     /**
@@ -195,9 +181,9 @@ contract ParetoV1Margin is
     event RecordPositionEvent(
         uint256 tradePrice,
         uint256 quantity,
-        Derivative.OptionType optionType,
-        string underlyingName,
-        StrikeLevel strikeLevel,
+        bool isCall,
+        Derivative.Underlying underlying,
+        Derivative.StrikeLevel strikeLevel,
         uint256 expiry
     );
 
@@ -334,24 +320,23 @@ contract ParetoV1Margin is
      * @dev If the margin check fails, then the user margin account can be liquidated
      * @param user Address of the account to check
      * @param useInitialMargin Use IM instead of MM. Recall IM > MM
-     * @return diff |AB + UP - MM|, always positive
+     * @return diff AB + UP - MM, signed integer
      * @return satisfied True if AB + UP > MM, else false
      */
-    function checkMargin(address user, bool useInitialMargin) public view returns (uint256, bool) {
+    function checkMargin(address user, bool useInitialMargin) public view returns (int256, bool) {
         uint256 balance = balances[user];
         uint256 maintainence = getMargin(user, useInitialMargin);
 
-        // Compute the unrealized PnL (actually this is only unrealized losses)
-        (uint256 pnl, bool pnlIsNeg) = getPayoff(user, true);
+        // Compute the unrealized PnL, emphasizing losses
+        int256 pnl = getPayoff(user, true);
 
         // Compute `balance + PnL`
-        (uint256 bpnl, bool bpnlIsNeg) = NegativeMath.add(balance, false, pnl, pnlIsNeg);
+        int256 diff = int256(balance) + pnl - int256(maintainence);
 
-        // Compute `balance + PnL - MM`
-        (uint256 diff, bool diffIsNeg) = NegativeMath.add(bpnl, bpnlIsNeg, maintainence, true);
+        // if diff >= 0, then satisfied = true
+        bool satisfied = (diff >= 0);
 
-        // if diff > 0, then satisfied = true
-        return (diff, !diffIsNeg);
+        return (diff, satisfied);
     }
 
     /**
@@ -366,39 +351,50 @@ contract ParetoV1Margin is
 
         for (uint256 j = 0; j < roundPositions.length; j++) {
             Derivative.Order memory order = roundPositions[j];
+
+            // In `liquidatePosition`, we set quantity to zero as a shorthand for having settled 
+            if (order.quantity == 0) {
+                continue; 
+            }
+
             uint256 spot = getSpot(order.option.underlying);
 
             // Compute buyer payoff; seller payoff is exact opposite
-            (uint256 buyerPayoff, bool buyerIsNeg) = MarginMath.getPayoff(order.buyer, spot, order);
+            /// @dev Reduces calls to `MarginMath`
+            int256 buyerPayoff = MarginMath.getPayoff(order.buyer, spot, order);
 
             // Add together the payoff and the premium
-            (uint256 netPayoff, bool netIsNeg) = NegativeMath.add(buyerPayoff, buyerIsNeg, order.tradePrice, true);
+            int256 netPayoff = buyerPayoff - int256(order.tradePrice);
 
-            address ower = netIsNeg ? order.buyer : order.seller;
-            address owee = netIsNeg ? order.seller : order.buyer;
+            // If the buyer's net payoff is negative, they are the ower
+            address ower = (netPayoff < 0) ? order.buyer : order.seller;
+            address owee = (netPayoff < 0) ? order.seller : order.buyer;
 
-            if (balances[ower] >= netPayoff) {
+            uint256 absPayoff = (netPayoff >= 0) ? uint256(netPayoff) : uint256(-netPayoff);
+
+            if (balances[ower] >= absPayoff) {
                 // If the ower has enough in the margin account, then make shift
-                balances[ower] -= netPayoff;
-                balances[owee] += netPayoff;
+                balances[ower] -= absPayoff;
+                balances[owee] += absPayoff;
             } else {
                 // TODO: can this be frontrun by a withdrawal?
-                // Make up the difference in the insurance fund
+                // Attempt to make up the difference in the insurance fund
                 uint256 partialAmount = balances[ower];
-                uint256 insuredAmount = netPayoff - partialAmount;
-                uint256 maxInsuredAmount = netPayoff * maxInsuredPerc / 10**4;
+                uint256 insuredAmount = absPayoff - partialAmount;
+                uint256 maxInsuredAmount = absPayoff * maxInsuredPerc / 10**4;
 
                 // We cannot payback for more than the max insured amount
+                // Prevents catastrophic depletion of the insurance fund
                 if (insuredAmount > maxInsuredAmount) {
                     insuredAmount = maxInsuredAmount;
                 }
 
                 if (balances[insurance] >= insuredAmount) {
-                    balances[owee] += netPayoff;
+                    balances[owee] += absPayoff;
                     balances[insurance] -= insuredAmount;
                     balances[ower] = 0;
                 } else {
-                    // Do the best we can
+                    // Do the best we can: the insurance fund cannot help
                     balances[owee] += partialAmount;
                     balances[ower] = 0;
                 }
@@ -410,117 +406,244 @@ contract ParetoV1Margin is
 
         // Emit event
         emit SettlementEvent(msg.sender, curRound, roundPositions.length);
+    }
 
-        // Free up memory for the round
-        delete roundPositions;
+    /**
+     * @notice Liquidates a single position
+     * @dev Used internally by `liquidate` function
+     * @param liquidator Address performing the lqiuidation
+     * @param user Address being liquidated
+     * @param ix Index of the order in user's round positions
+     * @return success True if the position was successfully liquidated, otherwise false
+     */
+    function liquidatePosition(address liquidator, address user, uint256 ix)
+        internal
+        returns (bool success)
+    {
+        // Store order memory since we are only reading
+        Derivative.Order storage order = roundPositions[userRoundIxs[user][ix]];
+
+        // Track if the the user is the buyer or seller
+        bool userIsBuyer = (order.buyer == user) ? true : false;
+
+        // Compute mark price for option: this is the amount the liquidator must pay to obtain the position
+        uint256 spot = getSpot(order.option.underlying);
+        uint256 mark = getMark(order.option.underlying, order.option.isCall, order.option.strikeLevel);
+
+        // Compute user payoff: if it is non-negative, skip as liquidating would not help
+        int256 buyerPayoff = MarginMath.getPayoff(order.buyer, spot, order);
+        int256 userPayoff = (userIsBuyer) ? buyerPayoff : (-buyerPayoff);
+        if (userPayoff >= 0) {
+            return false;
+        }
+
+        // Find the other address in the order
+        address counterparty = (userIsBuyer) ? order.seller : order.buyer;
+
+        if (liquidator == counterparty) {
+            /** 
+             * @dev If the liquidator is the other side to the user, then we can settle this position 
+             * since this is effectively the liquidator taking both sides, and netting out the order
+             */
+
+            // The liquidator's payoff is the reverse of the user's payoff
+            // Mark is the amount owed to the user by liquidator
+            int256 liquidatorNet = (-userPayoff) - int256(mark);
+
+            if (liquidatorNet < 0) {
+                uint256 liquidatorAbsNet = (liquidatorNet < 0) ? uint256(-liquidatorNet) : uint256(liquidatorNet);
+                // Liquidator still owes user some money though less than mark due to payoff obtained
+                bool liquidatorOk = attemptLiquidation(liquidator, user, liquidatorAbsNet, ix);
+                if (!liquidatorOk) {
+                    return false;
+                }
+            } else {
+                // Liquidator does not need to pay the user and accepts a smaller payoff. But liquidator now 
+                // owns both sides of the position, so this results in no change to balances
+                /// @dev A cheap way to mark this order as canceled is setting the quantity to 0
+                order.quantity = 0;
+            }
+        } else {
+            /**
+             * @dev If the liquidator is not the other side, this is a third party.
+             * Here, we must perform a transfer of position from user to liquidator
+             */
+            bool liquidatorOk = attemptLiquidation(liquidator, user, mark, ix);
+            if (!liquidatorOk) {
+                return false;
+            }
+        }
+
+        // Now that user no longer owns position, we reward liquidator using MM from this 
+        // position (which cannot push user back below margin even if 100% of MM is gone).
+        // 25% of MM -> liquidator; 10% of MM -> insurance fund
+        /// @dev Liquidators must pass margin check BEFORE receiving reward
+        uint256 margin = MarginMath.getMaintainenceMargin(
+            spot, 
+            userIsBuyer,
+            order.option,
+            mark, 
+            minMarginPerc
+        );
+        // This require statement should never fire
+        require(balances[user] >= (margin * 35 / 100), "liquidate: user cannot pay reward");
+        balances[user] -= (margin * 35 / 100);
+        balances[liquidator] += (margin * 25 / 100);
+        balances[insurance] += (margin / 10);
+
+        return true;
+    }
+
+    /**
+     * @notice Steps for liquidation by liquidator of user's position
+     * @param liquidator Address of the account doing the liquidation
+     * @param user Address of the account being liquidated
+     * @param payment The amount the liquidator will pay the user for the position
+     * @param ix The index of the order in the user's round positions
+     * @return liquidatorOk True if the liquidation was reverted due to liquidator falling below margin
+     */
+    function attemptLiquidation(
+        address liquidator,
+        address user,
+        uint256 payment,
+        uint256 ix
+    ) 
+        internal 
+        returns (bool liquidatorOk) 
+    {
+        // Fetch the order in storage as we will be doing edits
+        uint16 index = userRoundIxs[user][ix];
+        Derivative.Order storage order = roundPositions[index];
+
+        // Check if user is buyer or seller
+        bool userIsBuyer = (order.buyer == user) ? true : false;
+
+        // Transfer payment from liquidator to user for inheriting position
+        balances[liquidator] -= payment;
+        balances[user] += payment;
+
+        // Add order to liquidator's positions
+        userRoundIxs[liquidator].push(index);
+        userRoundIxsIsActive[liquidator].push(true);
+        userRoundCount[liquidator]++;
+
+        // Remove position from user
+        userRoundIxsIsActive[user][ix] = false;
+        userRoundCount[user]--;
+
+        // Ovewrite user's position with liquidator
+        if (userIsBuyer) {
+            order.buyer = liquidator;
+        } else {
+            order.seller = liquidator;
+        }
+
+        // Check liquidator can handle the new position and the payment to liquidatee
+        (, liquidatorOk) = checkMargin(liquidator, false);
+
+        if (!liquidatorOk) {
+            /**
+             * @dev If the liquidator is now below margin, undo changes.
+             * We don't just revert to allow liquidators to take one of many positions
+             */
+            userRoundIxs[liquidator].pop();
+            userRoundIxsIsActive[liquidator].pop();
+            userRoundCount[liquidator]--;
+
+            userRoundIxsIsActive[user][ix] = true;
+            userRoundCount[user]++;
+
+            // Reset the original buyer
+            if (userIsBuyer) {
+                order.buyer = user;
+            } else {
+                order.seller = user;
+            }
+
+            // Undo changes to balances
+            balances[liquidator] += payment;
+            balances[user] -= payment;
+        }
     }
 
     /**
      * @notice Performs partial liquidation on user. Liquidates the user's 
-     * positions one by one until margin check succeeds. User is penalized with the 35% of MM
-     * which are split between liquidator and insurance fund
+     * positions one by one until margin check succeeds. User is penalized with 35% of MM being reallocated,
+     * split between liquidator and insurance fund
      * @dev Any EOA can call this on any EOA
+     * @dev A liquidator need not inherit all positions of liquidatee. We allow some positions to be liquidated and others not
      * @param user Address of the user to liquidate
-     * @return fullyLiquidated if true, user is fully liquidated
      */
-    function liquidate(address user) external nonReentrant returns (bool fullyLiquidated) {
-        require(userRoundIxs[user].length > 0, "liquidate: user has no positions");
+    function liquidate(address user) external nonReentrant {
+        require(userRoundCount[user] > 0, "liquidate: user has no positions");
         (, bool satisfied) = checkMargin(user, false);
         require(!satisfied, "liquidate: user passes margin check");
 
-        address liquidator = msg.sender;
-
-        // Default is to assume user can be fully liquidated
-        fullyLiquidated = true;
+        // Cannot liquidate yourself since you are already under margin
+        require(msg.sender != user, "liquidate: cannot liquidate yourself");
 
         for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
-            uint256 index = userRoundIxs[user][i];
-            Derivative.Order storage order = roundPositions[index];
-
-            // Compute mark price for option
-            uint256 spot = getSpot(order.option.underlying);
-            bytes32 smileHash = Derivative.hashForSmile(order.option.underlying, order.option.expiry);
-            uint256 markPrice = MarginMath.getMarkPriceFromOption(spot, order.option, volSmiles[smileHash]);
-
-            // Liquidator must pay user mark price
-            if (balances[liquidator] < markPrice) {
-                fullyLiquidated = false;
-                break;
+            // Check that the order has not been marked inactive already
+            // If so, nothing to liquidate
+            if (!userRoundIxsIsActive[user][i]) {
+                continue;
             }
-            balances[liquidator] -= markPrice;
-            balances[user] += markPrice;
-
-            // Add order to new user's positions
-            userRoundIxs[liquidator].push(uint16(index));
-
-            // Check liquidator can handle the new position and the payment to liquidatee
-            (, bool liquidatorOk) = checkMargin(liquidator, false);
-
-            if (!liquidatorOk) {
-                // If the liquidator is now below margin, undo changes
-                /// @dev We don't just revert to allow liquidators to take one of many positions
-                delete userRoundIxs[liquidator][userRoundIxs[liquidator].length - 1];
-
-                // Undo adding the new position (last index)
-                fullyLiquidated = false;
-
-                // Undo changes to balances
-                balances[liquidator] += markPrice;
-                balances[user] -= markPrice;
-                break;
+            
+            // Ignore long positions
+            if (roundPositions[userRoundIxs[user][i]].buyer == user) {
+                continue;
             }
 
-            // If we have reached here, then the liquidator is able to inherit position
-            // Delete position, dropping it from current user
-            deleteUserPosition(user, index);
+            // Perform liquidation and check if success
+            bool success = liquidatePosition(msg.sender, user, i);
 
-            // Ovewrite user's position with liquidator
-            bool isSeller;
-            if (order.buyer == user) {
-                order.buyer = liquidator;
-            } else {
-                isSeller = true;
-                order.seller = liquidator;
+            // Ignore positions we could not liquidate
+            if (!success) {
+                continue;
             }
 
-            // Now that user no longer owns position, we reward liquidator using MM from this 
-            // position (which cannot push user back below margin even if 100% of MM is gone).
-            // 25% of MM -> liquidator; 10% of MM -> insurance fund
-            uint256 margin = MarginMath.getMaintainenceMargin(spot, !isSeller, order.option, volSmiles[smileHash], minMarginPerc);
-            balances[user] -= (margin * 35 / 100);
-            balances[liquidator] += (margin * 25 / 100);
-            balances[insurance] += (margin / 10);
-
-            // Check if the user is no longer below margin, if so quit
+            // Check if the user is no longer below margin, if so quit to avoid over-liquidation
             (, satisfied) = checkMargin(user, false);
             if (satisfied) {
                 break;
             }
         }
-        return fullyLiquidated;
+
+        // If we reach here, then liquidating all short positions (if any) was not enough.
+        // Perform a second loop to liquidate long positions
+        for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
+            if (!userRoundIxsIsActive[user][i]) {
+                continue;
+            }
+            
+            // Ignore short positions
+            if (roundPositions[userRoundIxs[user][i]].seller == user) {
+                continue;
+            }
+
+            // Perform liquidation and check if success
+            bool success = liquidatePosition(msg.sender, user, i);
+
+            // Ignore positions we could not liquidate
+            if (!success) {
+                continue;
+            }
+
+            // Check if the user is no longer below margin, if so quit to avoid over-liquidation
+            (, satisfied) = checkMargin(user, false);
+            if (satisfied) {
+                break;
+            }
+        }
     }
 
     /**
      * @notice Get balance for user
+     * @dev Intended so callers can only get their own balance
      * @return balance Amount of USDC
      */
     function getBalance() external view returns (uint256) {
         return balances[msg.sender];
-    }
-
-    /**
-     * @notice Return a volatility smile
-     * @param underlyingName Name of the underlying token
-     * @param expiry The expiry date
-     */
-    function getVolatilitySmile(string memory underlyingName, uint256 expiry)
-      external
-      view
-      returns (Derivative.VolatilitySmile memory smile) 
-    {
-        bytes32 underlying = keccak256(abi.encodePacked(underlyingName));
-        bytes32 smileHash = Derivative.hashForSmile(underlying, expiry);
-        return volSmiles[smileHash];
     }
 
     /************************************************
@@ -529,29 +652,50 @@ contract ParetoV1Margin is
 
     /**
      * @notice Read latest oracle price data
-     * @param underlying Hash of the underlying token
+     * @param underlying Enum for the underlying token
      * @return answer Latest price for underlying
      */
-    function getSpot(bytes32 underlying) internal view returns (uint256) {
+    function getSpot(Derivative.Underlying underlying) internal view returns (uint256) {
         require(spotOracles[underlying] != address(0), "getSpot: missing oracle");
-        (,int256 answer,,,) = IOracle(spotOracles[underlying]).latestRoundData();
-        // TODO: check that this conversion is okay
-        return uint256(answer);
+        (,uint256 answer,) = ISpotFeed(spotOracles[underlying]).latestRoundData();
+        return answer;
+    }
+
+    /**
+     * @notice Read latest oracle of mark price
+     * @param underlying Enum for the underlying token
+     * @param isCall Whether we want a call price (true) or put price (false)
+     * @param strikeLevel The strike that we want the mark price for
+     * @return answer The mark price
+     */
+    function getMark(
+        Derivative.Underlying underlying,
+        bool isCall,
+        Derivative.StrikeLevel strikeLevel
+    )
+        internal
+        view
+        returns (uint256 answer) 
+    {
+        require(markOracles[underlying] != address(0), "getMark: missing oracle");
+        (,answer,) = IMarkFeed(markOracles[underlying]).latestRoundData(isCall, uint8(strikeLevel));
+        return answer;
     }
 
     /**
      * @notice Given spot, compute 11 strikes. Intended for use at a new round
      * https://zetamarkets.gitbook.io/zeta/zeta-protocol/trading/derivatives-framework/options-contract-specifications/options-strike-generation-schema
      * @dev The strikes will be in the same decimals as underlying
-     * @param underlying Hash of the underlying token name
+     * @dev The chosen strikes below align with Deribit's strikes
+     * @param underlying Enum for the underlying token
      * @return strikes Eleven strikes
      */
-    function getStrikeMenu(bytes32 underlying)
+    function getStrikeMenu(Derivative.Underlying underlying)
         internal
         view
         returns (uint256[11] memory strikes)
     {
-        require(activeExpiry > block.timestamp, "getStrikesAtDelta: expiry in the past");
+        require(activeExpiry > block.timestamp, "getStrikeMenu: expiry in the past");
 
         // The spot of the underlying will be in terms of decimals
         uint8 decimals = IERC20Upgradeable(usdc).decimals();
@@ -598,7 +742,7 @@ contract ParetoV1Margin is
 
             // If the spot is within range
             if ((spot >= lower) && (spot < upper)) {
-                for (uint256 j = 0; j < 11; j++) {
+                for (uint256 j = 0; j < Derivative.NumStrikeLevel; j++) {
                     strikes[j] = lower + j * increment;
                 }
                 // Once you find the range, quit
@@ -612,56 +756,54 @@ contract ParetoV1Margin is
      * @dev We net payoffs per strike (and expiry but there is only one expiry)
      * @param user Address to compute IM for
      * @param onlyLoss Do not count unrealized profits from open positions
-     * @return payoff The payoff summed for all positions
-     * @return isNegative True if the payoff is less than 0, else false
+     * @return payoff The payoff summed for all positions (can be negative)
      */
     function getPayoff(address user, bool onlyLoss)
         internal
         view
-        returns (uint256, bool) 
+        returns (int256) 
     {
-        if (userRoundIxs[user].length == 0) {
-            return (0, false);
+        if (userRoundCount[user] == 0) {
+            return 0;
         }
 
         // Store the netted payoffs here (there are 11 strike levels)
-        uint256[11] memory payoffPerStrike;
-        bool[11] memory isNegativePerStrike;
+        int256[11] memory payoffPerStrike;
 
         for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
+            // Ignore order if has been turned inactive for user 
+            if (!userRoundIxsIsActive[user][i]) {
+                continue;
+            }
             // Fetch the order in the position
             Derivative.Order memory order = roundPositions[userRoundIxs[user][i]];
 
-            // Get strike level
-            uint8 strikeLevel = order.option.strikeLevel;
+            // Get strike level & convert to integer index
+            uint8 strikeLevel = uint8(order.option.strikeLevel);
 
             // Fetch the underlying token for the option
             uint256 spot = getSpot(order.option.underlying);
 
             // Compute the payoff at this price
-            (uint256 curPayoff, bool curIsNegative) = MarginMath.getPayoff(user, spot, order);
+            /// @dev `curPayoff` is a signed integer
+            int256 curPayoff = MarginMath.getPayoff(user, spot, order);
 
             // Net the payoff at this strike level
-            (payoffPerStrike[strikeLevel], isNegativePerStrike[strikeLevel]) = NegativeMath.add(
-                payoffPerStrike[strikeLevel], 
-                isNegativePerStrike[strikeLevel],
-                curPayoff,
-                curIsNegative
-            );
+            payoffPerStrike[strikeLevel] = payoffPerStrike[strikeLevel] + curPayoff;
         }
 
-        uint256 payoff;
-        bool isNegative;
+        int256 payoff;
         // Loop through strike levels and sum them, ignoring positive ones if `onlyLoss` is true
-        for (uint256 i = 0; i < 11; i++) {
+        for (uint256 i = 0; i < Derivative.NumStrikeLevel; i++) {
             // Ignore if positive payoff at strike and `onlyLoss` is on
-            if (!isNegativePerStrike[i] && onlyLoss) {
+            // If `onlyLoss` is on, then the returned value will be negative
+            if ((payoffPerStrike[i] < 0) && onlyLoss) {
                 continue;
             }
-            (payoff, isNegative) = NegativeMath.add(payoff, isNegative, payoffPerStrike[i], isNegativePerStrike[i]);
+            payoff = payoff + payoffPerStrike[i];
         }
 
-        return (payoff, isNegative);
+        return payoff;
     }
 
     /**
@@ -681,6 +823,12 @@ contract ParetoV1Margin is
 
         // Loop through open positions by user
         for (uint256 i = 0; i < userRoundIxs[user].length; i++) {
+            // Ignore order if has been turned inactive for user 
+            if (!userRoundIxsIsActive[user][i]) {
+                continue;
+            }
+
+            // Fetch order
             Derivative.Order memory order = roundPositions[userRoundIxs[user][i]];
             Derivative.Option memory option = order.option;
             bytes32 optionHash = Derivative.hashOption(option);
@@ -708,8 +856,8 @@ contract ParetoV1Margin is
             // Nested loop to find the total quantity of this option.
             // Consider case with multiple positions with same order
             for (uint256 j = 0; j < userRoundIxs[user].length; j++) {
-                // Do not double count
-                if (i == j) {
+                // Do not double count & ignore inactive positions
+                if ((i == j) || (!userRoundIxsIsActive[user][j])) {
                     continue;
                 }
                 Derivative.Order memory order2 = roundPositions[userRoundIxs[user][j]];
@@ -725,24 +873,32 @@ contract ParetoV1Margin is
                 }
             }
 
+            uint256 nettedQuantity;
+            bool isBuyer;
+
             // Compute total buy - total sell
-            (uint256 nettedQuantity, bool isSeller) = NegativeMath.add(nettedBuy, false, nettedSell, true);
+            if (nettedBuy >= nettedSell) {
+                nettedQuantity = nettedBuy - nettedSell;
+                isBuyer = true;
+            } else {
+                nettedQuantity = nettedSell - nettedBuy;
+                isBuyer = false;
+            }
 
+            // If happens to equal 0, do nothing
             if (nettedQuantity > 0) {
-                // Fetch smile and check it is valid
-                bytes32 smileHash = Derivative.hashForSmile(option.underlying, option.expiry);
-                Derivative.VolatilitySmile memory smile = volSmiles[smileHash];
-                require(smile.exists_, "getMargin: found unknown option");
-
                 // Fetch spot price
                 uint256 spot = getSpot(option.underlying);
+
+                // Fetch mark price
+                uint256 mark = getMark(option.underlying, option.isCall, option.strikeLevel);
 
                 // Compute maintainence (or initial) margin for option
                 uint256 curMargin;
                 if (useInitialMargin) {
-                    curMargin = MarginMath.getInitialMargin(spot, !isSeller, option, smile, minMarginPerc);
+                    curMargin = MarginMath.getInitialMargin(spot, isBuyer, option, mark, minMarginPerc);
                 } else {
-                    curMargin = MarginMath.getMaintainenceMargin(spot, !isSeller, option, smile, minMarginPerc);
+                    curMargin = MarginMath.getMaintainenceMargin(spot, isBuyer, option, mark, minMarginPerc);
                 }
 
                 // Build margin using `nettedQuantity`
@@ -762,68 +918,52 @@ contract ParetoV1Margin is
      * MM = maintainence margin requirements
      * @param user Address of the margin account to check
      * @param amount Amount requesting to be withdrawn from account
-     * @return diff |AB - amount + UP - MM|, always positive
+     * @return diff AB - amount + UP - MM, a signed integer
      * @return satisfied True if non-negative, else false
      */
     function checkMarginOnWithdrawal(address user, uint256 amount) 
         internal
         view
-        returns (uint256, bool) 
+        returns (int256, bool) 
     {
         require(amount > 0, "checkMarginOnWithdrawal: amount must be > 0");
         require(amount <= balances[user], "checkMarginOnWithdrawal: amount must be <= balance");
 
         // Perform standard margin check
-        (uint256 margin, bool satisfied) = checkMargin(user, false);
-
-        // `satisfied = true` => `isNegative = false`, vice versa
-        bool isMarginNeg = !satisfied;
+        (int256 margin,) = checkMargin(user, false);
 
         // Subtract the withdraw
-        (uint256 total, bool isNeg) = NegativeMath.add(margin, isMarginNeg, amount, true);
+        int256 total = margin - int256(amount);
 
         // Satisfied if not negative
-        return (total, !isNeg);
+        bool satisfied = total >= 0;
+
+        return (total, satisfied);
     }
 
     /**
      * @notice Add a new underlying
      * @dev For code reuse
-     * @param underlying Hash of an underlying token
-     * @param spotOracle Address for an oracle price feed contract
-     * @param volOracle Address for an oracle volatility feed contract
+     * @param underlying Enum for the underlying token
+     * @param spotOracle Address for an oracle for spot prices
+     * @param markOracle Address for an oracle for mark prices
      */
     function newUnderlying(
-        bytes32 underlying,
+        Derivative.Underlying underlying,
         address spotOracle,
-        address volOracle
+        address markOracle
     ) internal {
-        underlyings.push(underlying);
-
-        // Set smile for underlying
-        bytes32 smileHash = Derivative.hashForSmile(underlying, activeExpiry);
-        (,int256 sigma,,,) = IOracle(volOracle).latestRoundData();
-        volSmiles[smileHash] = Derivative.createSmile(uint256(sigma));
+        require(!isActiveUnderlying[underlying], "newUnderlying: underlying already active");
 
         // Set oracles for underlying
         spotOracles[underlying] = spotOracle;
+        markOracles[underlying] = markOracle;
 
         // Compute strikes for underlying
         roundStrikes[underlying] = getStrikeMenu(underlying);
-    }
 
-    /**
-     * @notice Delete one of the user's position
-     * @param user Address of the user
-     * @param index Index to delete
-     */
-    function deleteUserPosition(address user, uint256 index) internal {
-        uint256 size = userRoundIxs[user].length;
-        if (size > 1) {
-            userRoundIxs[user][index] = userRoundIxs[user][size - 1];
-        }
-        // Implicitly recovers gas from last element storage
-        delete userRoundIxs[user][size - 1];
+        // Mark as active
+        isActiveUnderlying[underlying] = true;
     }
 
     /************************************************
@@ -863,24 +1003,21 @@ contract ParetoV1Margin is
     /**
      * @notice Set the oracle for an underlying token
      * @dev This function can also be used to replace or delete spotOracles
-     * @param underlyingName Underlying token name
-     * @param spotOracle Address for an oracle price feed contract
-     * @param volOracle Address for an oracle volatility feed contract
+     * @param underlying Enum for the underlying token
+     * @param spotOracle Address for an oracle for spot prices
+     * @param markOracle Address for an oracle for mark prices
      */
-    function setOracle(string memory underlyingName, address spotOracle, address volOracle) 
+    function setOracle(Derivative.Underlying underlying, address spotOracle, address markOracle) 
         external
         onlyOwner 
     {
-        require(bytes(underlyingName).length > 0, "setOracle: underlying is empty");
-        bytes32 underlying = keccak256(abi.encodePacked(underlyingName));
-
-        if (spotOracles[underlying] == address(0)) {
+        if (spotOracles[underlying] == address(0) || markOracles[underlying] == address(0)) {
             // Brand new oracle
-            newUnderlying(underlying, spotOracle, volOracle);
+            newUnderlying(underlying, spotOracle, markOracle);
         } else {
             // Existing underlying, overwrite oracle
             spotOracles[underlying] = spotOracle;
-            volOracles[underlying] = volOracle;
+            markOracles[underlying] = markOracle;
         }
     }
 
@@ -935,31 +1072,25 @@ contract ParetoV1Margin is
         roundSettled = false;
 
         // Loop through underlying tokens
-        for (uint256 i = 0; i < underlyings.length; i++) {
-            // Update smiles for each underlying token
-            bytes32 smileHash = Derivative.hashForSmile(underlyings[i], activeExpiry);
+        for (uint256 i = 0; i < Derivative.NumUnderlying; i++) {
+            Derivative.Underlying underlying = Derivative.Underlying(i);
 
-            // Overwrite smile from last round's smile
-            // Smile must exist since they are created on construction and new underlying
-            bytes32 lastSmileHash = Derivative.hashForSmile(underlyings[i], lastExpiry);
-            require(volSmiles[lastSmileHash].exists_, "rollover: found non-existent smile");
-            volSmiles[smileHash] = volSmiles[lastSmileHash];
-
-            // No longer need last round's smile
-            delete volSmiles[lastSmileHash];
-
-            // Update strike menu
-            roundStrikes[underlyings[i]] = getStrikeMenu(underlyings[i]);
-
-            // Clean up smile artifacts
-            delete numTrades[smileHash];
-            delete avgTradeSizes[smileHash];
+            // Some underlying may be planned but not active
+            if (isActiveUnderlying[underlying]) {
+                // Update strike menu
+                roundStrikes[underlying] = getStrikeMenu(underlying);
+            }
         }
+        
+        // Free up memory for the round options
+        delete roundPositions;
 
         // Clear positions for the user. It is up to the caller to maintain and provide 
         // a correct list of user addresses, otherwise memory will not be freed properly
         for (uint256 i = 0; i < roundUsers.length; i++) {
             delete userRoundIxs[roundUsers[i]];
+            delete userRoundIxsIsActive[roundUsers[i]];
+            userRoundCount[roundUsers[i]] = 0;
         }
     }
 
@@ -975,9 +1106,9 @@ contract ParetoV1Margin is
         address seller,
         uint256 tradePrice,
         uint256 quantity,
-        Derivative.OptionType optionType,
-        StrikeLevel strikeLevel,
-        string memory underlyingName
+        bool isCall,
+        Derivative.StrikeLevel strikeLevel,
+        Derivative.Underlying underlying
     ) 
         external
         nonReentrant
@@ -985,10 +1116,8 @@ contract ParetoV1Margin is
     {
         require(tradePrice > 0, "addPosition: tradePrice must be > 0");
         require(quantity > 0, "addPosition: quantity must be > 0");
-        require(bytes(underlyingName).length > 0, "addPosition: underlying is empty");
-        bytes32 underlying = keccak256(abi.encodePacked(underlyingName));
-
         require(spotOracles[underlying] != address(0), "addPosition: no oracle for underlying");
+        require(buyer != seller, "addPosition: cannot enter a position with yourself");
 
         // USDC decimals will be used for spot/strike calculations
         uint8 decimals = IERC20Upgradeable(usdc).decimals();
@@ -1003,21 +1132,8 @@ contract ParetoV1Margin is
             seller,
             tradePrice,
             quantity,
-            Derivative.Option(optionType, uint8(strikeLevel), strike, activeExpiry, underlying, decimals)
+            Derivative.Option(isCall, strikeLevel, strike, activeExpiry, underlying, decimals)
         );
-
-        // Hash together the underlying and expiry
-        bytes32 smileHash = Derivative.hashForSmile(underlying, activeExpiry);
-        require(volSmiles[smileHash].exists_, "addPosition: missing smile");
-
-        // Update the rolling averages
-        /// @dev https://en.wikipedia.org/wiki/Moving_average
-        avgTradeSizes[smileHash] = (order.quantity + avgTradeSizes[smileHash] * numTrades[smileHash]) / (numTrades[smileHash] + 1);
-        // Update the count
-        numTrades[smileHash]++;
-
-        // Update the smile with order information
-        Derivative.updateSmile(getSpot(underlying), order, volSmiles[smileHash], avgTradeSizes[smileHash]);
 
         // Save position to mapping by expiry
         roundPositions.push(order);
@@ -1025,9 +1141,19 @@ contract ParetoV1Margin is
         // Get the index for the newly added value
         uint16 orderIndex = uint16(roundPositions.length - 1);
 
+        // Sanity checks for buyer/seller positions
+        require(userRoundIxs[buyer].length == userRoundIxsIsActive[buyer].length);
+        require(userRoundIxs[seller].length == userRoundIxsIsActive[seller].length);
+        require(userRoundIxs[buyer].length >= userRoundCount[buyer]);
+        require(userRoundIxs[seller].length >= userRoundCount[seller]);
+
         // Save that the buyer/seller have this position
         userRoundIxs[buyer].push(orderIndex);
         userRoundIxs[seller].push(orderIndex);
+        userRoundIxsIsActive[buyer].push(true);
+        userRoundIxsIsActive[seller].push(true);
+        userRoundCount[buyer]++;
+        userRoundCount[seller]++;
 
         // Check margin for buyer and seller
         (, bool checkBuyerMargin) = checkMargin(buyer, false);
@@ -1040,8 +1166,8 @@ contract ParetoV1Margin is
         emit RecordPositionEvent(
             tradePrice,
             quantity,
-            optionType,
-            underlyingName,
+            isCall,
+            underlying,
             strikeLevel,
             activeExpiry
         );

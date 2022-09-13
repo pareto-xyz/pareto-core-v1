@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.9;
 
-import "../interfaces/IOracle.sol";
+import "../interfaces/IMarkFeed.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
- * @notice Since chainlink updates too slowly, we opt to use a custom oracle.
- * The median price of Binance, FTX and Bitfinex is posted.
+ * @notice Custom oracle for fetching the Black-Scholes call and put prices
  * @dev This does not store past round data
  */
-contract PriceFeed is IOracle, Ownable {
-    int256 public answer;
+contract MarkFeed is IMarkFeed, Ownable {
+    /// @dev 11 call prices for the 11 strike levels
+    uint256[11] public callPrices;
+
+    /// @dev 11 put prices for the 11 strike levels
+    uint256[11] public putPrices;
+
     uint80 public roundId;
     string public description;
     uint256 public roundTimestamp;
@@ -18,10 +22,7 @@ contract PriceFeed is IOracle, Ownable {
     /// @notice Stores admin addresses who can publish to price feed
     mapping(address => bool) public isAdmin;
 
-    constructor(
-        string memory description_,
-        address[] memory admins_
-    ) {
+    constructor(string memory description_, address[] memory admins_) {
         description = description_;
         _transferOwnership(msg.sender);
 
@@ -49,39 +50,37 @@ contract PriceFeed is IOracle, Ownable {
         isAdmin[account_] = isAdmin_;
     }
 
-    /// @notice Get the latest answer
-    function latestAnswer() external view returns (int256) {
-        return answer;
-    }
-
-    /// @notice Get the latest round id
-    function latestRound() external view returns (uint80) {
-        return roundId;
-    }
-
-    /// @notice Set the latest oracle answer
-    /// @dev Only callable by admin
-    function setLatestAnswer(int256 _answer) external onlyAdmin {
+    /**
+     * @notice Set the latest oracle prices for calls and puts at different strikes
+     * @dev Only callable by admin
+     * @param callPrices_ An array of 11 numbers for the 11 call prices
+     * @param putPrices_ An array of 11 numbers for the 11 put prices
+     */ 
+    function setLatestPrices(
+        uint256[11] calldata callPrices_,
+        uint256[11] calldata putPrices_
+    ) 
+        external 
+        onlyAdmin 
+    {
         roundId = roundId + 1;
         roundTimestamp = block.timestamp;
-        answer = _answer;
+        callPrices = callPrices_;
+        putPrices = putPrices_;
     }
 
     /**
      * @notice See `interfaces/IOracle.sol`
      */
-    function latestRoundData()
+    function latestRoundData(bool isCall, uint8 strikeLevel)
         external
         override
         view
-        returns (uint80, int256, uint256, uint256, uint80)
+        returns (uint80, uint256, uint256)
     {
-        return (
-            roundId,
-            answer,
-            roundTimestamp,
-            roundTimestamp,
-            roundId
-        );
+        require(strikeLevel < 11, "latestRoundData: invalid strike level");
+
+        uint256 mark = isCall ? callPrices[strikeLevel] : putPrices[strikeLevel];
+        return (roundId, mark, roundTimestamp);
     }
 }
