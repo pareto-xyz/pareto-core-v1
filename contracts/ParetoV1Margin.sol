@@ -49,6 +49,9 @@ contract ParetoV1Margin is
     /// @notice Current round
     uint8 public curRound;
 
+    /// @notice Maximum amount allowed in margin account
+    uint256 public maxBalanceCap; 
+
     /// @notice Maximum percentage the insurance fund can payoff for a single position in USDC
     uint256 public maxInsuredPerc;
 
@@ -137,6 +140,11 @@ contract ParetoV1Margin is
         // Default alternative minimum % to 1%
         // Decimals are 4, so 100 => 0.01
         minMarginPerc = 100;
+
+        // The spot of the underlying will be in terms of decimals
+        // Users cannot deposit more than 2000 USDC
+        uint8 decimals = IERC20Upgradeable(usdc).decimals();
+        maxBalanceCap = 2000 * 10**decimals;
     
         // Set the expiry to the next friday
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
@@ -250,6 +258,13 @@ contract ParetoV1Margin is
      */
     event MinMarginPercEvent(address indexed owner, uint256 perc);
 
+    /**
+     * @notice Event when the maximum balance cap is updated
+     * @param owner Address who called the max balance cap
+     * @param maxBalance Cap on balance allowed
+     */
+    event MaxBalanceCapEvent(address indexed owner, uint256 maxBalance);
+
     /************************************************
      * External functions
      ***********************************************/
@@ -264,6 +279,9 @@ contract ParetoV1Margin is
 
         // Increment counters
         balances[msg.sender] += amount;
+
+        // In the beginning we set a maximum cap
+        require(balances[msg.sender] <= maxBalanceCap, "deposit: exceeds maxCap");
 
         // Pull resources from sender to this contract
         IERC20Upgradeable(usdc).safeTransferFrom(msg.sender, address(this), amount);
@@ -971,6 +989,15 @@ contract ParetoV1Margin is
      ***********************************************/
 
     /**
+     * @notice Get balance for user as an admin
+     * @dev Intended so callers can only get their own balance
+     * @return balance Amount of USDC
+     */
+    function getBalanceOf(address user) external view onlyOwner returns (uint256) {
+        return balances[user];
+    }
+
+    /**
      * @notice Add a keeper
      * @dev Add as a list for gas efficiency
      * @param accounts Addresses to add as keepers
@@ -1037,6 +1064,15 @@ contract ParetoV1Margin is
         require(perc <= 10**4, "setMinMarginPerc: must be <= 10**4");
         minMarginPerc = perc;
         emit MinMarginPercEvent(msg.sender, perc);
+    }
+
+    /**
+     * @notice Set the maximum balance cap allowed in margin accounts
+     */
+    function setMaxBalanceCap(uint256 maxBalance) external onlyOwner {
+        require(maxBalance > 0, "setMaxBalanceCap: must be > 0");
+        maxBalanceCap = maxBalance;
+        emit MaxBalanceCapEvent(msg.sender, maxBalance);
     }
 
     /**
