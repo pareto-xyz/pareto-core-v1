@@ -303,11 +303,12 @@ describe("ParetoMargin Contract", () => {
       }
       await newMarkFeed.connect(deployer).setLatestPrices(callPrices, putPrices);
       
-      // Add oracles to Pareto, making a new underlying
-      await paretoMargin.connect(deployer).setOracle(
+      // Making a new underlying
+      await paretoMargin.connect(deployer).activateUnderlying(
         1, 
         newSpotFeed.address, 
         newMarkFeed.address,
+        ONEBTC.div(10),
       );
 
       // Now make a new position for said underlying
@@ -1273,22 +1274,18 @@ describe("ParetoMargin Contract", () => {
 
       expect(await paretoMargin.isActiveUnderlying(0)).to.be.true;
       expect(await paretoMargin.isActiveUnderlying(1)).to.be.false;
-      await paretoMargin.connect(deployer).setOracle(1, newSpotFeed.address, newMarkFeed.address);
+      await paretoMargin.connect(deployer).activateUnderlying(
+        1, newSpotFeed.address, newMarkFeed.address, ONEBTC.div(10));
       expect(await paretoMargin.isActiveUnderlying(1)).to.be.true;
     });
-    it("Owner cannot set oracle if spot price zero", async () => {
+    it("Keeper cannot set oracle for existing underlying", async () => {
       await expect(
-          paretoMargin.connect(deployer).setOracle(1, newSpotFeed.address, newMarkFeed.address)
-      ).to.be.revertedWith("getStrikeMenu: Spot price too small");
-    });
-    it("Keeper cannot set oracle for new underlying", async () => {
-      await expect(
-        paretoMargin.connect(keeper).setOracle(1, newSpotFeed.address, newMarkFeed.address)
+        paretoMargin.connect(keeper).setOracle(0, newSpotFeed.address, newMarkFeed.address)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
-    it("User cannot set oracle for new underlying", async () => {
+    it("User cannot set oracle for existing underlying", async () => {
       await expect(
-        paretoMargin.connect(buyer).setOracle(1, newSpotFeed.address, newMarkFeed.address)
+        paretoMargin.connect(buyer).setOracle(0, newSpotFeed.address, newMarkFeed.address)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
   });

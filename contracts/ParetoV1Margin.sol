@@ -253,6 +253,22 @@ contract ParetoV1Margin is
      */
     event MaxBalanceCapEvent(address indexed owner, uint256 maxBalance);
 
+    /**
+     * @notice Event when the maximum balance cap is updated
+     * @param owner Address who called the activate underlying function
+     * @param underlying Underlying enum
+     * @param spotOracle Address for spot oracle
+     * @param markOracle Address for mark oracle
+     * @param maxNotional Maximum amount of notional allowed for underlying
+     */
+    event NewUnderlyingEvent(
+        address indexed owner,
+        Derivative.Underlying underlying,
+        address spotOracle,
+        address markOracle,
+        uint256 maxNotional
+    );
+
     /************************************************
      * External functions
      ***********************************************/
@@ -1047,6 +1063,32 @@ contract ParetoV1Margin is
             require(whitelist[accounts[i]], "removeFromWhitelist: not in whitelist");
             whitelist[accounts[i]] = false;
         }
+    }
+
+    /**
+     * @notice Active an underlying so users can make trades on it
+     * @param underlying Enum for the underlying token
+     * @param spotOracle Address for an oracle for spot prices
+     * @param markOracle Address for an oracle for mark prices
+     * @param maxNotional Maximum amount of notional for underlying
+     */
+    function activateUnderlying(
+        Derivative.Underlying underlying,
+        address spotOracle,
+        address markOracle,
+        uint256 maxNotional
+    ) 
+        external
+        onlyOwner
+    {
+        require(
+            !isActiveUnderlying[underlying], 
+            "activateUnderlying: underlying must not yet be active"
+        );
+        newUnderlying(underlying, spotOracle, markOracle, maxNotional);
+
+        // Emit event 
+        emit NewUnderlyingEvent(msg.sender, underlying, spotOracle, markOracle, maxNotional);
     }
 
     /**
