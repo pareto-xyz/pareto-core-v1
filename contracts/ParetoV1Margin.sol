@@ -611,7 +611,8 @@ contract ParetoV1Margin is
      */
     function liquidate(address user) external nonReentrant {
         require(userRoundCount[user] > 0, "liquidate: user has no positions");
-        (, bool satisfied) = checkMargin(user, false);
+        (int256 margin, bool satisfied) = checkMargin(user, false);
+        console.logInt(margin);
         require(!satisfied, "liquidate: user passes margin check");
 
         // Cannot liquidate yourself since you are already under margin
@@ -679,6 +680,23 @@ contract ParetoV1Margin is
      */
     function getBalance() external view returns (uint256) {
         return balances[msg.sender];
+    }
+
+    /**
+     * @notice Get all positions that the user is participating in
+     */
+    function getPositions() external view returns (Derivative.Order[] memory) {
+        Derivative.Order[] memory orders = new Derivative.Order[](userRoundCount[msg.sender]);
+        uint256 count = 0;
+        for (uint256 i = 0; i < userRoundIxs[msg.sender].length; i++) {
+            if (!userRoundIxsIsActive[msg.sender][i]) {
+                continue;
+            }
+            Derivative.Order storage order = roundPositions[userRoundIxs[msg.sender][i]];
+            orders[count] = order;
+            count++;
+        }
+        return orders;
     }
 
     /************************************************
