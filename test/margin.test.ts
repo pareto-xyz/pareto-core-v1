@@ -1406,12 +1406,13 @@ describe("ParetoMargin Contract", () => {
   });
 
   describe("Liquidation: Edge Cases", () => {
-    it("Liquidates short positions before long positions", async () => {
+    beforeEach(async () => {
       await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(1000));
       await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(1000));
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
       await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
-
+    })
+    it("Liquidates short positions before long positions", async () => {
       // raise max balance so deployer can handle the liquidation of a bad position
       await paretoMargin.connect(deployer).setMaxBalanceCap(ONEUSDC.mul(100000));
       await usdc.connect(deployer).approve(paretoMargin.address, ONEUSDC.mul(100000));
@@ -1446,7 +1447,6 @@ describe("ParetoMargin Contract", () => {
 
       // Get positions
       const positions = await paretoMargin.connect(buyer).getPositions();
-      
       expect(positions.length).to.be.equal(1); 
       // Check that this position is the long position
       expect(positions[0].buyer).to.be.equal(buyer.address);
@@ -1459,7 +1459,53 @@ describe("ParetoMargin Contract", () => {
       // TODO
     });
     it("If liquidator falls below margin, everything is reset", async () => {
-      // TODO
+      // Add a call position
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC.mul(100),
+        toBn("0.5", 4),  // small position
+        true,
+        6,
+        0,
+      );
+      // Add another call at a different strike, switch buyer and seller rolls
+      await paretoMargin.connect(deployer).addPosition(
+        seller.address,
+        buyer.address,
+        ONEUSDC.mul(100),
+        toBn("10", 4),  // much larger position
+        true,
+        7,
+        0,
+      );  
+      // Let the price rise a lot: now the buyer who sold the second strike 
+      // will be liquidated
+      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
+
+      // Check margin of liquidator (deployer) and buyer
+      const [liquidatorMarginPre, liquidatorSatisfiedPre] = await paretoMargin.checkMargin(deployer.address, false);
+      const [buyerMarginPre, buyerSatisfiedPre] = await paretoMargin.checkMargin(buyer.address, false);
+
+      expect(liquidatorSatisfiedPre).to.be.true;
+      expect(buyerSatisfiedPre).to.be.false;
+
+      // This will fail though not return anythng
+      await paretoMargin.connect(deployer).liquidate(buyer.address);
+
+      // Check buyer still has both positions
+      const positions = await paretoMargin.connect(buyer).getPositions();
+      expect(positions.length).to.be.equal(2); 
+
+      // Check margin and it should be the same (this implicitly checks balance)
+      const [liquidatorMarginPost, liquidatorSatisfiedPost] = await paretoMargin.checkMargin(deployer.address, false);
+      const [buyerMarginPost, buyerSatisfiedPost] = await paretoMargin.checkMargin(buyer.address, false);
+      expect(liquidatorMarginPost).to.be.equal(liquidatorMarginPre);
+      expect(buyerMarginPost).to.be.equal(buyerMarginPre);
+
+      // Buyer should still be under margin
+      expect(liquidatorSatisfiedPost).to.be.true;
+      expect(buyerSatisfiedPost).to.be.false;
     });
   });
 

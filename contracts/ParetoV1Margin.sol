@@ -611,8 +611,7 @@ contract ParetoV1Margin is
      */
     function liquidate(address user) external nonReentrant {
         require(userRoundCount[user] > 0, "liquidate: user has no positions");
-        (int256 margin, bool satisfied) = checkMargin(user, false);
-        console.logInt(margin);
+        (,bool satisfied) = checkMargin(user, false);
         require(!satisfied, "liquidate: user passes margin check");
 
         // Cannot liquidate yourself since you are already under margin
