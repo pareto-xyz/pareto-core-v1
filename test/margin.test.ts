@@ -19,6 +19,12 @@ let feeRecipient: SignerWithAddress;
 
 const ONEUSDC = toBn("1", 18);
 
+/**
+ * Function to compute fees from order information
+ * @param quantity Number of units in contract
+ * @param tradePrice Price of the contract
+ * @returns Array of length two: the taker and maker fees in BigNumbers
+ */
 async function getFees(
   quantity: number,
   tradePrice: number,
@@ -371,7 +377,7 @@ describe("ParetoMargin Contract", () => {
       // seller puts in 1k usdc into margin account but buyer does not
       await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
       // buyer needs to put in minimum amount for fees
-      const [takerFee,] = await getFees(7, 1);
+      const [takerFee,] = await getFees(1, 1);
       await paretoMargin.connect(buyer).deposit(takerFee);
 
       await expect(
@@ -389,7 +395,7 @@ describe("ParetoMargin Contract", () => {
     it("Cannot add position if seller below margin", async () => {
       // buyer puts in 1k usdc into margin account but seller does not
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
-      const [,makerFee] = await getFees(7, 1);
+      const [,makerFee] = await getFees(1, 1);
       await paretoMargin.connect(seller).deposit(makerFee);
       await expect(
         paretoMargin.connect(deployer).addPosition(
@@ -405,7 +411,7 @@ describe("ParetoMargin Contract", () => {
     });
     it("Check opposite orders cancel", async () => {
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
-      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));      
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
 
       // Buy a call position
       await paretoMargin.connect(deployer).addPosition(
@@ -427,20 +433,20 @@ describe("ParetoMargin Contract", () => {
         7,
         0,
       );
-      const [marginA,] = await paretoMargin.checkMargin(buyer.address, false);
-      const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
+      const [buyerMargin,] = await paretoMargin.checkMargin(buyer.address, false);
+      const [sellerMargin,] = await paretoMargin.checkMargin(seller.address, false);
 
       // Get balance for the two individuals
       const buyerBalance = await paretoMargin.connect(buyer).getBalance();
       const sellerBalance = await paretoMargin.connect(seller).getBalance();
 
       // Both should be netted to be zero since orders cancel
-      expect(marginA).to.be.equal(buyerBalance);
-      expect(marginB).to.be.equal(sellerBalance);
+      expect(buyerMargin).to.be.equal(buyerBalance);
+      expect(sellerMargin).to.be.equal(sellerBalance);
     });
     it("Check opposite orders of different strikes do not cancel", async () => {
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
-      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));      
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
 
       // Buy a call position
       await paretoMargin.connect(deployer).addPosition(
@@ -462,16 +468,16 @@ describe("ParetoMargin Contract", () => {
         6,
         0,
       );
-      const [marginA,] = await paretoMargin.checkMargin(buyer.address, false);
-      const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
+      const [buyerMargin,] = await paretoMargin.checkMargin(buyer.address, false);
+      const [sellerMargin,] = await paretoMargin.checkMargin(seller.address, false);
       
       // Get balance for the two individuals
       const buyerBalance = await paretoMargin.connect(buyer).getBalance();
       const sellerBalance = await paretoMargin.connect(seller).getBalance();
 
       // Margin should be less for both
-      expect(marginA).to.be.lessThan(buyerBalance);
-      expect(marginB).to.be.lessThan(sellerBalance);
+      expect(buyerMargin).to.be.lessThan(buyerBalance);
+      expect(sellerMargin).to.be.lessThan(sellerBalance);
     });
     it("Check opposite orders of put & call do not cancel", async () => {
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
@@ -497,16 +503,16 @@ describe("ParetoMargin Contract", () => {
         7,
         0,
       );
-      const [marginA,] = await paretoMargin.checkMargin(buyer.address, false);
-      const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
+      const [buyerMargin,] = await paretoMargin.checkMargin(buyer.address, false);
+      const [sellerMargin,] = await paretoMargin.checkMargin(seller.address, false);
       
       // Get balance for the two individuals
       const buyerBalance = await paretoMargin.connect(buyer).getBalance();
       const sellerBalance = await paretoMargin.connect(seller).getBalance();
 
       // Margin should be less for both
-      expect(marginA).to.be.lessThan(buyerBalance);
-      expect(marginB).to.be.lessThan(sellerBalance);
+      expect(buyerMargin).to.be.lessThan(buyerBalance);
+      expect(sellerMargin).to.be.lessThan(sellerBalance);
     });
     it("Check opposite orders of different quantities partially cancel", async () => {
       await paretoMargin.connect(deployer).setMaxBalanceCap(ONEUSDC.mul(5000));
@@ -521,6 +527,10 @@ describe("ParetoMargin Contract", () => {
       await usdc.connect(keeper).approve(paretoMargin.address, ONEUSDC.mul(5000));
       await paretoMargin.connect(deployer).deposit(ONEUSDC.mul(5000));
       await paretoMargin.connect(keeper).deposit(ONEUSDC.mul(5000));
+
+      const [takerFees5, makerFees5] = await getFees(5, 1);
+      const [takerFees2, makerFees2] = await getFees(2, 1);
+      const [takerFees7, makerFees7] = await getFees(7, 1);
 
       // Buy five call positions
       await paretoMargin.connect(deployer).addPosition(
@@ -542,6 +552,9 @@ describe("ParetoMargin Contract", () => {
         7,
         0,
       );
+
+      const buyerFees = takerFees5.add(makerFees2);
+      const sellerFees = makerFees5.add(takerFees2);
       
       // Separately deployer buys 3 call positions
       await paretoMargin.connect(deployer).addPosition(
@@ -554,13 +567,16 @@ describe("ParetoMargin Contract", () => {
         0,
       );
 
-      const [marginA,] = await paretoMargin.checkMargin(buyer.address, false);
-      const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
-      const [marginC,] = await paretoMargin.checkMargin(deployer.address, false);
-      const [marginD,] = await paretoMargin.checkMargin(keeper.address, false);
+      const deployerFees = takerFees7;
+      const keeperFees = makerFees7;
 
-      expect(marginA).to.be.equal(marginC);
-      expect(marginB).to.be.equal(marginD);
+      const [buyerMargin,] = await paretoMargin.checkMargin(buyer.address, false);
+      const [sellerMargin,] = await paretoMargin.checkMargin(seller.address, false);
+      const [deployerMargin,] = await paretoMargin.checkMargin(deployer.address, false);
+      const [keeperMargin,] = await paretoMargin.checkMargin(keeper.address, false);
+
+      expect(buyerMargin.add(buyerFees)).to.be.equal(deployerMargin.add(deployerFees));
+      expect(sellerMargin.add(sellerFees)).to.be.equal(keeperMargin.add(keeperFees));
     });
     it("Check opposite orders of lots of quantities partially cancel", async () => {
       await paretoMargin.connect(deployer).setMaxBalanceCap(ONEUSDC.mul(5000));
@@ -576,6 +592,10 @@ describe("ParetoMargin Contract", () => {
       await paretoMargin.connect(deployer).deposit(ONEUSDC.mul(5000));
       await paretoMargin.connect(keeper).deposit(ONEUSDC.mul(5000));
 
+      const [takerFees3, makerFees3] = await getFees(3, 1);
+      const [takerFees2, makerFees2] = await getFees(2, 1);
+      const [takerFees1, makerFees1] = await getFees(1, 1);
+
       await paretoMargin.connect(deployer).addPosition(
         buyer.address,
         seller.address,
@@ -613,6 +633,9 @@ describe("ParetoMargin Contract", () => {
         0,
       );
 
+      const buyerFees = takerFees3.add(takerFees2).add(makerFees1).add(makerFees1);
+      const sellerFees = makerFees3.add(makerFees2).add(takerFees1).add(takerFees1);
+
       await paretoMargin.connect(deployer).addPosition(
         deployer.address,
         keeper.address,
@@ -632,13 +655,16 @@ describe("ParetoMargin Contract", () => {
         0,
       );
 
-      const [marginA,] = await paretoMargin.checkMargin(buyer.address, false);
-      const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
-      const [marginC,] = await paretoMargin.checkMargin(deployer.address, false);
-      const [marginD,] = await paretoMargin.checkMargin(keeper.address, false);
+      const deployerFees = takerFees2.add(takerFees1);
+      const keeperFees = makerFees2.add(makerFees1);
 
-      expect(marginA).to.be.equal(marginC);
-      expect(marginB).to.be.equal(marginD);
+      const [buyerMargin,] = await paretoMargin.checkMargin(buyer.address, false);
+      const [sellerMargin,] = await paretoMargin.checkMargin(seller.address, false);
+      const [deployerMargin,] = await paretoMargin.checkMargin(deployer.address, false);
+      const [keeperMargin,] = await paretoMargin.checkMargin(keeper.address, false);
+
+      expect(buyerMargin.add(buyerFees)).to.be.equal(deployerMargin.add(deployerFees));
+      expect(sellerMargin.add(sellerFees)).to.be.equal(keeperMargin.add(keeperFees));
     });
   });
 
@@ -664,7 +690,10 @@ describe("ParetoMargin Contract", () => {
     });
     it("Person can fail margin check after entering a position", async () => {
       await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(10));
+      await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(10));
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(10));
+      const [,makerFee] = await getFees(1, 1);
+      await paretoMargin.connect(seller).deposit(makerFee);
       await expect(
         paretoMargin.connect(deployer).addPosition(
           buyer.address,

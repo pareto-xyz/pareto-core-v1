@@ -3,7 +3,6 @@
  * @dev Implementation of `MarginMath.sol` in Typescript
  */
 
-
 // payoff = max(spot - strike, 0) 
 export function getPayoffLongCall(
   spot: number,
