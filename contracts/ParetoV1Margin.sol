@@ -63,6 +63,9 @@ contract ParetoV1Margin is
     /// @dev This assumes all underlying has only one expiry.
     uint256 public activeExpiry;
 
+    /// @notice Whitelist for market maker accounts
+    mapping(address => bool) whitelist;
+
     /// @notice If the contract is paused or not
     bool private isPaused;
 
@@ -203,26 +206,6 @@ contract ParetoV1Margin is
     event WithdrawEvent(
         address indexed user,
         uint256 amount
-    );
-
-    /**
-     * @notice Event when owner adds keepers
-     * @param owner Owner who added keepers
-     * @param numKeepers Number of keepers added
-     */
-    event AddKeepersEvent(
-        address indexed owner,
-        uint256 numKeepers
-    );
-
-    /**
-     * @notice Event when owner removes keepers
-     * @param owner Owner who removed keepers
-     * @param numKeepers Number of keepers removed
-     */
-    event RemoveKeepersEvent(
-        address indexed owner,
-        uint256 numKeepers
     );
 
     /**
@@ -1007,9 +990,6 @@ contract ParetoV1Margin is
             require(!keepers[accounts[i]], "addKeeper: already a keeper");
             keepers[accounts[i]] = true;
         }
-
-        // Emit event
-        emit AddKeepersEvent(msg.sender, accounts.length);
     }
 
     /**
@@ -1022,9 +1002,30 @@ contract ParetoV1Margin is
             require(keepers[accounts[i]], "removeKeeper: not a keeper");
             keepers[accounts[i]] = false;
         }
+    }
 
-        // Emit event
-        emit RemoveKeepersEvent(msg.sender, accounts.length);
+        /**
+     * @notice Add an address to the whitelist
+     * @dev Add as a list for gas efficiency
+     * @param accounts Addresses to add as keepers
+     */
+    function addToWhitelist(address[] calldata accounts) external onlyOwner {
+        for (uint256 i = 0; i < accounts.length; i++) {
+            require(!whitelist[accounts[i]], "addToWhitelist: already in whitelist");
+            whitelist[accounts[i]] = true;
+        }
+    }
+
+    /**
+     * @notice Remove an address from the whitelist
+     * @dev Add as a list for gas efficiency
+     * @param accounts Addresses to remove as keepers
+     */
+    function removeFromWhitelist(address[] calldata accounts) external onlyOwner {
+        for (uint256 i = 0; i < accounts.length; i++) {
+            require(whitelist[accounts[i]], "removeFromWhitelist: not in whitelist");
+            whitelist[accounts[i]] = false;
+        }
     }
 
     /**
