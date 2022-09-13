@@ -17,6 +17,8 @@ let seller: SignerWithAddress;
 let insurance: SignerWithAddress;
 
 const ONEUSDC = toBn("1", 18);
+const ONEETH = toBn("1", 18);
+const ONEBTC = toBn("1", 18);
 
 describe("ParetoMargin Contract", () => {
   beforeEach(async () => {
@@ -67,7 +69,8 @@ describe("ParetoMargin Contract", () => {
         insurance.address,
         0,
         spotFeed.address,
-        markFeed.address
+        markFeed.address,
+        ONEETH,
       ]
     );
     await paretoMargin.deployed();
