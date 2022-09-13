@@ -377,6 +377,21 @@ describe("ParetoMargin Contract", () => {
         1,
       );
     });
+    it("Cannot add position under the minimum quantity", async () => {
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await expect(
+        paretoMargin.connect(deployer).addPosition(
+          buyer.address,
+          seller.address,
+          ONEUSDC,
+          toBn("0.1", 4),
+          true,
+          7,
+          0,
+        )
+      ).to.be.revertedWith("addPosition: below min quantity");
+    });
     it("Cannot add position with trade price 0", async () => {
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
       await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
@@ -699,6 +714,31 @@ describe("ParetoMargin Contract", () => {
 
       expect(buyerMargin.add(buyerFees)).to.be.equal(deployerMargin.add(deployerFees));
       expect(sellerMargin.add(sellerFees)).to.be.equal(keeperMargin.add(keeperFees));
+    });
+    it("Seller who is whitelisted takes no fees", async () => {
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+
+      const sellerBalancePre = await paretoMargin.connect(seller).getBalance();
+      const buyerBalancePre = await paretoMargin.connect(buyer).getBalance();
+
+      // Add seller to white so no fees
+      await paretoMargin.connect(deployer).addToWhitelist([seller.address]);
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        toBn("1", 4),
+        true,
+        7,
+        0,
+      );
+
+      const sellerBalancePost = await paretoMargin.connect(seller).getBalance();
+      const buyerBalancePost = await paretoMargin.connect(buyer).getBalance();
+
+      expect(buyerBalancePre).to.be.greaterThan(buyerBalancePost);
+      expect(sellerBalancePre).to.be.equal(sellerBalancePost);
     });
   });
 
