@@ -46,6 +46,9 @@ contract ParetoV1Margin is
     /// @notice Address of the insurance fund
     address public insurance;
 
+    /// @notice Address to send fees
+    address public feeRecipient;
+
     /// @notice Current round
     uint8 public curRound;
 
@@ -112,6 +115,7 @@ contract ParetoV1Margin is
     /**
      * @param usdc_ Address for the USDC token (e.g. cash)
      * @param insurance_ Address for the insurance fund
+     * @param feeRecipient_ Address to receive fees
      * @param underlying_ Name of underlying token to support at deployment
      * @param spotOracle_ Address of spot oracle for the underlying
      * @param markOracle_ Address of mark price oracle for the underlying
@@ -120,6 +124,7 @@ contract ParetoV1Margin is
     function initialize(
         address usdc_,
         address insurance_,
+        address feeRecipient_,
         Derivative.Underlying underlying_,
         address spotOracle_,
         address markOracle_,
@@ -130,6 +135,7 @@ contract ParetoV1Margin is
     {
         usdc = usdc_;
         insurance = insurance_;
+        feeRecipient = feeRecipient_;
 
         // Initialize the upgradeable dependencies
         __ReentrancyGuard_init();
@@ -541,6 +547,11 @@ contract ParetoV1Margin is
 
         // Check if user is buyer or seller
         bool userIsBuyer = (order.buyer == user) ? true : false;
+
+        // If liquidator doesnt have enough, return immediately
+        if (balances[liquidator] < payment) {
+            return false;
+        }
 
         // Transfer payment from liquidator to user for inheriting position
         balances[liquidator] -= payment;
@@ -1006,6 +1017,31 @@ contract ParetoV1Margin is
         isActiveUnderlying[underlying] = true;
     }
 
+    /**
+     * @notice Get maker and take fees
+     * @dev Taker fees: min(0.06% of notional, 10% options prices)
+     * @dev Maker fees: min(0.03% of notional, 10% of the options price)
+     * @param order Object representing an order
+     * @return takerFees Fees for takers
+     * @return makerFees Fees for makers
+     */
+    function getFees(Derivative.Order memory order) 
+        internal
+        view
+        returns (uint256 takerFees, uint256 makerFees)
+    {
+        uint256 notional = getNotional(order);
+        uint256 price = order.tradePrice;
+        // min(0.06% of notional, 10% options prices)
+        // min(0.0006 * notional, 0.1 * price)
+        // min(6 * notional, 1000 * price) / 10000
+        takerFees = BasicMath.min(6 * notional, 1000 * price) / 10**4;
+        // min(0.03% of notional, 10% options prices)
+        // min(0.0003 * notional, 0.1 * price)
+        // min(3 * notional, 1000 * price) / 10000
+        makerFees = BasicMath.min(3 * notional, 1000 * price) / 10**4;
+    } 
+
     /************************************************
      * Admin functions
      ***********************************************/
@@ -1247,11 +1283,28 @@ contract ParetoV1Margin is
             Derivative.Option(isCall, strikeLevel, strike, activeExpiry, underlying, decimals)
         );
 
-        // Check we did not exceed max notional
+        // Check we are not below minimum notional
         require(
             getNotional(order) >= minNotionalPerUnderlying[underlying],
             "addPosition: below min notional"
         );
+
+        // Charge fees
+        (uint256 takerFees, uint256 makerFees) = getFees(order);
+
+        // If the maker is whitelisted, set to zero
+        if (whitelist[order.seller]) {
+            makerFees = 0;
+        }
+
+        // Check that buyers and sellers have enough to pay fees
+        require(balances[order.buyer] < takerFees, "addPosition: taker cannot pay fees");
+        require(balances[order.seller] < makerFees, "addPosition: maker cannot pay fees");
+
+        // Make fee transfers
+        balances[order.buyer] -= takerFees;
+        balances[order.seller] -= makerFees;
+        balances[feeRecipient] += (takerFees + makerFees);
 
         // Save position to mapping by expiry
         roundPositions.push(order);
