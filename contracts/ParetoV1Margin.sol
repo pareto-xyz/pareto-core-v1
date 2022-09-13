@@ -46,8 +46,17 @@ contract ParetoV1Margin is
     /// @notice Address of the insurance fund
     address public insurance;
 
+    /// @notice Address to send fees
+    address public feeRecipient;
+
     /// @notice Current round
     uint8 public curRound;
+
+    /// @notice Maximum amount allowed in margin account
+    uint256 public maxBalanceCap; 
+
+    /// @notice Maximum notional value allowed in order
+    mapping(Derivative.Underlying => uint256) minQuantityPerUnderlying;
 
     /// @notice Maximum percentage the insurance fund can payoff for a single position in USDC
     uint256 public maxInsuredPerc;
@@ -59,6 +68,9 @@ contract ParetoV1Margin is
     /// @notice The current active expiry
     /// @dev This assumes all underlying has only one expiry.
     uint256 public activeExpiry;
+
+    /// @notice Whitelist for market maker accounts
+    mapping(address => bool) whitelist;
 
     /// @notice If the contract is paused or not
     bool private isPaused;
@@ -103,22 +115,27 @@ contract ParetoV1Margin is
     /**
      * @param usdc_ Address for the USDC token (e.g. cash)
      * @param insurance_ Address for the insurance fund
+     * @param feeRecipient_ Address to receive fees
      * @param underlying_ Name of underlying token to support at deployment
      * @param spotOracle_ Address of spot oracle for the underlying
      * @param markOracle_ Address of mark price oracle for the underlying
+     * @param minQuantity_ Minimum quantity in option for underlying
      */
     function initialize(
         address usdc_,
         address insurance_,
+        address feeRecipient_,
         Derivative.Underlying underlying_,
         address spotOracle_,
-        address markOracle_
+        address markOracle_,
+        uint256 minQuantity_
     )
         public
         initializer 
     {
         usdc = usdc_;
         insurance = insurance_;
+        feeRecipient = feeRecipient_;
 
         // Initialize the upgradeable dependencies
         __ReentrancyGuard_init();
@@ -137,12 +154,17 @@ contract ParetoV1Margin is
         // Default alternative minimum % to 1%
         // Decimals are 4, so 100 => 0.01
         minMarginPerc = 100;
+
+        // The spot of the underlying will be in terms of decimals
+        // Users cannot deposit more than 2000 USDC
+        uint8 decimals = IERC20Upgradeable(usdc).decimals();
+        maxBalanceCap = 2000 * 10**decimals;
     
         // Set the expiry to the next friday
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
 
         // Create a new underlying (handles strike and smile creation)
-        newUnderlying(underlying_, spotOracle_, markOracle_);
+        newUnderlying(underlying_, spotOracle_, markOracle_, minQuantity_);
     }
 
     /**
@@ -198,26 +220,6 @@ contract ParetoV1Margin is
     );
 
     /**
-     * @notice Event when owner adds keepers
-     * @param owner Owner who added keepers
-     * @param numKeepers Number of keepers added
-     */
-    event AddKeepersEvent(
-        address indexed owner,
-        uint256 numKeepers
-    );
-
-    /**
-     * @notice Event when owner removes keepers
-     * @param owner Owner who removed keepers
-     * @param numKeepers Number of keepers removed
-     */
-    event RemoveKeepersEvent(
-        address indexed owner,
-        uint256 numKeepers
-    );
-
-    /**
      * @notice Event when positions are settled
      * @param caller Caller of the settlment event
      * @param round Round that was settled
@@ -250,6 +252,29 @@ contract ParetoV1Margin is
      */
     event MinMarginPercEvent(address indexed owner, uint256 perc);
 
+    /**
+     * @notice Event when the maximum balance cap is updated
+     * @param owner Address who called the max balance cap
+     * @param maxBalance Cap on balance allowed
+     */
+    event MaxBalanceCapEvent(address indexed owner, uint256 maxBalance);
+
+    /**
+     * @notice Event when the maximum balance cap is updated
+     * @param owner Address who called the activate underlying function
+     * @param underlying Underlying enum
+     * @param spotOracle Address for spot oracle
+     * @param markOracle Address for mark oracle
+     * @param minQuantity Minimum quantity for order allowed for underlying
+     */
+    event NewUnderlyingEvent(
+        address indexed owner,
+        Derivative.Underlying underlying,
+        address spotOracle,
+        address markOracle,
+        uint256 minQuantity
+    );
+
     /************************************************
      * External functions
      ***********************************************/
@@ -264,6 +289,11 @@ contract ParetoV1Margin is
 
         // Increment counters
         balances[msg.sender] += amount;
+
+        // In the beginning we set a maximum cap. Insurance fund needs to break cap
+        if (msg.sender != insurance) {
+            require(balances[msg.sender] <= maxBalanceCap, "deposit: exceeds maximum");
+        }
 
         // Pull resources from sender to this contract
         IERC20Upgradeable(usdc).safeTransferFrom(msg.sender, address(this), amount);
@@ -462,6 +492,9 @@ contract ParetoV1Margin is
                 // owns both sides of the position, so this results in no change to balances
                 /// @dev A cheap way to mark this order as canceled is setting the quantity to 0
                 order.quantity = 0;
+                // Decrement the round count to signify the netting has occured
+                userRoundCount[liquidator]--;
+                userRoundCount[user]--;
             }
         } else {
             /**
@@ -517,6 +550,11 @@ contract ParetoV1Margin is
 
         // Check if user is buyer or seller
         bool userIsBuyer = (order.buyer == user) ? true : false;
+
+        // If liquidator doesnt have enough, return immediately
+        if (balances[liquidator] < payment) {
+            return false;
+        }
 
         // Transfer payment from liquidator to user for inheriting position
         balances[liquidator] -= payment;
@@ -576,7 +614,7 @@ contract ParetoV1Margin is
      */
     function liquidate(address user) external nonReentrant {
         require(userRoundCount[user] > 0, "liquidate: user has no positions");
-        (, bool satisfied) = checkMargin(user, false);
+        (,bool satisfied) = checkMargin(user, false);
         require(!satisfied, "liquidate: user passes margin check");
 
         // Cannot liquidate yourself since you are already under margin
@@ -646,6 +684,28 @@ contract ParetoV1Margin is
         return balances[msg.sender];
     }
 
+    /**
+     * @notice Get all positions that the user is participating in
+     */
+    function getPositions() external view returns (Derivative.Order[] memory) {
+        Derivative.Order[] memory orders = new Derivative.Order[](userRoundCount[msg.sender]);
+        uint256 count = 0;
+        for (uint256 i = 0; i < userRoundIxs[msg.sender].length; i++) {
+            // Ignore contracts marked as inactive
+            if (!userRoundIxsIsActive[msg.sender][i]) {
+                continue;
+            }
+            Derivative.Order storage order = roundPositions[userRoundIxs[msg.sender][i]];
+            // Ignore orders that have already been netted
+            if (order.quantity == 0) {
+              continue;
+            }
+            orders[count] = order;
+            count++;
+        }
+        return orders;
+    }
+
     /************************************************
      * Internal functions
      ***********************************************/
@@ -680,6 +740,17 @@ contract ParetoV1Margin is
         require(markOracles[underlying] != address(0), "getMark: missing oracle");
         (,answer,) = IMarkFeed(markOracles[underlying]).latestRoundData(isCall, uint8(strikeLevel));
         return answer;
+    }
+
+    /**
+     * @notice Compute notional value of option
+     * @dev Notional = quantity * spot
+     * @dev We return the notional in the same decimals as the spot
+     * @param order Derivative.Order object
+     * @return value Notional value in decimals of underlying
+     */
+    function getNotional(Derivative.Order memory order) internal view returns (uint256) {
+        return order.quantity * getSpot(order.option.underlying) / 10**Derivative.QUANTITY_DECIMALS;
     }
 
     /**
@@ -742,7 +813,7 @@ contract ParetoV1Margin is
 
             // If the spot is within range
             if ((spot >= lower) && (spot < upper)) {
-                for (uint256 j = 0; j < Derivative.NumStrikeLevel; j++) {
+                for (uint256 j = 0; j < Derivative.NUM_STRIKE_LEVEL; j++) {
                     strikes[j] = lower + j * increment;
                 }
                 // Once you find the range, quit
@@ -778,6 +849,11 @@ contract ParetoV1Margin is
             // Fetch the order in the position
             Derivative.Order memory order = roundPositions[userRoundIxs[user][i]];
 
+            // If already netted, we know payoff 0
+            if (order.quantity == 0) {
+              continue;
+            }
+
             // Get strike level & convert to integer index
             uint8 strikeLevel = uint8(order.option.strikeLevel);
 
@@ -794,7 +870,7 @@ contract ParetoV1Margin is
 
         int256 payoff;
         // Loop through strike levels and sum them, ignoring positive ones if `onlyLoss` is true
-        for (uint256 i = 0; i < Derivative.NumStrikeLevel; i++) {
+        for (uint256 i = 0; i < Derivative.NUM_STRIKE_LEVEL; i++) {
             // Ignore if positive payoff at strike and `onlyLoss` is on
             // If `onlyLoss` is on, then the returned value will be negative
             if ((payoffPerStrike[i] < 0) && onlyLoss) {
@@ -833,6 +909,11 @@ contract ParetoV1Margin is
             Derivative.Option memory option = order.option;
             bytes32 optionHash = Derivative.hashOption(option);
 
+            // If netted order, then has no impact on margin
+            if (order.quantity == 0) {
+                continue;
+            }
+
             // In the case of multiple positions for the same option, 
             // compute the total amount the user wishes to buy and sell
             uint256 nettedBuy = 0;
@@ -862,6 +943,10 @@ contract ParetoV1Margin is
                 }
                 Derivative.Order memory order2 = roundPositions[userRoundIxs[user][j]];
                 bytes32 optionHash2 = Derivative.hashOption(order2.option);
+
+                if (order2.quantity == 0) {
+                    continue;
+                }
 
                 if (optionHash == optionHash2) {
                     if (user == order2.buyer) {
@@ -905,7 +990,8 @@ contract ParetoV1Margin is
                 /// @dev Divide by num netting to factor in double counting:
                 /// Suppose i and j are matched, then the code above will net at both index i and j
                 /// Suppose i, j, k are matched, then we will net at both i, j, and k
-                margin += (nettedQuantity * curMargin / numNetted);
+                /// @dev `nettedQuantity` is in quantity decimals 
+                margin += (nettedQuantity * curMargin / (numNetted * 10**Derivative.QUANTITY_DECIMALS));
             }
         }
         return margin;
@@ -947,17 +1033,23 @@ contract ParetoV1Margin is
      * @param underlying Enum for the underlying token
      * @param spotOracle Address for an oracle for spot prices
      * @param markOracle Address for an oracle for mark prices
+     * @param minQuantity Maximum notional for underlying
      */
     function newUnderlying(
         Derivative.Underlying underlying,
         address spotOracle,
-        address markOracle
+        address markOracle,
+        uint256 minQuantity
     ) internal {
         require(!isActiveUnderlying[underlying], "newUnderlying: underlying already active");
+        require(minQuantity > 0, "newUnderlying: max notional must be > 0");
 
         // Set oracles for underlying
         spotOracles[underlying] = spotOracle;
         markOracles[underlying] = markOracle;
+        
+        // Set maximum notional values
+        minQuantityPerUnderlying[underlying] = minQuantity;
 
         // Compute strikes for underlying
         roundStrikes[underlying] = getStrikeMenu(underlying);
@@ -966,9 +1058,43 @@ contract ParetoV1Margin is
         isActiveUnderlying[underlying] = true;
     }
 
+    /**
+     * @notice Get maker and take fees
+     * @dev Taker fees: min(0.06% of notional, 10% options prices)
+     * @dev Maker fees: min(0.03% of notional, 10% of the options price)
+     * @param order Object representing an order
+     * @return takerFees Fees for takers
+     * @return makerFees Fees for makers
+     */
+    function getFees(Derivative.Order memory order) 
+        internal
+        view
+        returns (uint256 takerFees, uint256 makerFees)
+    {
+        uint256 notional = getNotional(order);
+        uint256 price = order.tradePrice;
+        // min(0.06% of notional, 10% options prices)
+        // min(0.0006 * notional, 0.1 * price)
+        // min(6 * notional, 1000 * price) / 10000
+        takerFees = BasicMath.min(6 * notional, 1000 * price) / 10**4;
+        // min(0.03% of notional, 10% options prices)
+        // min(0.0003 * notional, 0.1 * price)
+        // min(3 * notional, 1000 * price) / 10000
+        makerFees = BasicMath.min(3 * notional, 1000 * price) / 10**4;
+    } 
+
     /************************************************
      * Admin functions
      ***********************************************/
+
+    /**
+     * @notice Get balance for user as an admin
+     * @dev Intended so callers can only get their own balance
+     * @return balance Amount of USDC
+     */
+    function getBalanceOf(address user) external view onlyOwner returns (uint256) {
+        return balances[user];
+    }
 
     /**
      * @notice Add a keeper
@@ -980,9 +1106,6 @@ contract ParetoV1Margin is
             require(!keepers[accounts[i]], "addKeeper: already a keeper");
             keepers[accounts[i]] = true;
         }
-
-        // Emit event
-        emit AddKeepersEvent(msg.sender, accounts.length);
     }
 
     /**
@@ -995,9 +1118,72 @@ contract ParetoV1Margin is
             require(keepers[accounts[i]], "removeKeeper: not a keeper");
             keepers[accounts[i]] = false;
         }
+    }
 
-        // Emit event
-        emit RemoveKeepersEvent(msg.sender, accounts.length);
+    /**
+     * @notice Add an address to the whitelist
+     * @dev Add as a list for gas efficiency
+     * @param accounts Addresses to add as keepers
+     */
+    function addToWhitelist(address[] calldata accounts) external onlyOwner {
+        for (uint256 i = 0; i < accounts.length; i++) {
+            require(!whitelist[accounts[i]], "addToWhitelist: already in whitelist");
+            whitelist[accounts[i]] = true;
+        }
+    }
+
+    /**
+     * @notice Remove an address from the whitelist
+     * @dev Add as a list for gas efficiency
+     * @param accounts Addresses to remove as keepers
+     */
+    function removeFromWhitelist(address[] calldata accounts) external onlyOwner {
+        for (uint256 i = 0; i < accounts.length; i++) {
+            require(whitelist[accounts[i]], "removeFromWhitelist: not in whitelist");
+            whitelist[accounts[i]] = false;
+        }
+    }
+
+    /**
+     * @notice Sets insurance fund address
+     */
+    function setInsurance(address newInsurance) external onlyOwner {
+        require(insurance != newInsurance, "setInsuranceFund: must be new address");
+        insurance = newInsurance;
+    }
+
+    /**
+     * @notice Sets fee recipient address
+     */
+    function setFeeRecipient(address newFeeRecipient) external onlyOwner {
+        require(feeRecipient != newFeeRecipient, "setFeeRecipient: must be new fee recipient");
+        feeRecipient = newFeeRecipient;
+    }
+
+    /**
+     * @notice Active an underlying so users can make trades on it
+     * @param underlying Enum for the underlying token
+     * @param spotOracle Address for an oracle for spot prices
+     * @param markOracle Address for an oracle for mark prices
+     * @param minQuantity Minimum order quantity for underlying
+     */
+    function activateUnderlying(
+        Derivative.Underlying underlying,
+        address spotOracle,
+        address markOracle,
+        uint256 minQuantity
+    ) 
+        external
+        onlyOwner
+    {
+        require(
+            !isActiveUnderlying[underlying], 
+            "activateUnderlying: underlying must not yet be active"
+        );
+        newUnderlying(underlying, spotOracle, markOracle, minQuantity);
+
+        // Emit event 
+        emit NewUnderlyingEvent(msg.sender, underlying, spotOracle, markOracle, minQuantity);
     }
 
     /**
@@ -1011,15 +1197,25 @@ contract ParetoV1Margin is
         external
         onlyOwner 
     {
-        if (spotOracles[underlying] == address(0) || markOracles[underlying] == address(0)) {
-            // Brand new oracle
-            newUnderlying(underlying, spotOracle, markOracle);
-        } else {
-            // Existing underlying, overwrite oracle
-            spotOracles[underlying] = spotOracle;
-            markOracles[underlying] = markOracle;
-        }
+        require(isActiveUnderlying[underlying], "setOracle: underlying must already be active");
+        // Existing underlying, overwrite oracle
+        spotOracles[underlying] = spotOracle;
+        markOracles[underlying] = markOracle;
     }
+
+    /**
+     * @notice Set the maximum notional for an underlying token
+     * @param underlying Enum for the underlying token
+     * @param minQuantity Minimum order quantity for underlying
+     */
+    function setMinQuantity(Derivative.Underlying underlying, uint256 minQuantity) 
+        external
+        onlyOwner
+    {
+        require(isActiveUnderlying[underlying], "setMinQuantity: underlying must already be active");
+        require(minQuantity > 0, "setMinQuantity: min quantity must be > 0");
+        minQuantityPerUnderlying[underlying] = minQuantity;
+    }   
 
     /**
      * @notice Set the maximum amount to be insured
@@ -1037,6 +1233,15 @@ contract ParetoV1Margin is
         require(perc <= 10**4, "setMinMarginPerc: must be <= 10**4");
         minMarginPerc = perc;
         emit MinMarginPercEvent(msg.sender, perc);
+    }
+
+    /**
+     * @notice Set the maximum balance cap allowed in margin accounts
+     */
+    function setMaxBalanceCap(uint256 maxBalance) external onlyOwner {
+        require(maxBalance > 0, "setMaxBalanceCap: must be > 0");
+        maxBalanceCap = maxBalance;
+        emit MaxBalanceCapEvent(msg.sender, maxBalance);
     }
 
     /**
@@ -1072,7 +1277,7 @@ contract ParetoV1Margin is
         roundSettled = false;
 
         // Loop through underlying tokens
-        for (uint256 i = 0; i < Derivative.NumUnderlying; i++) {
+        for (uint256 i = 0; i < Derivative.NUM_UNDERLYING; i++) {
             Derivative.Underlying underlying = Derivative.Underlying(i);
 
             // Some underlying may be planned but not active
@@ -1134,6 +1339,26 @@ contract ParetoV1Margin is
             quantity,
             Derivative.Option(isCall, strikeLevel, strike, activeExpiry, underlying, decimals)
         );
+
+        // Check we are not below minimum notional
+        require(order.quantity >= minQuantityPerUnderlying[underlying], "addPosition: below min quantity");
+
+        // Charge fees
+        (uint256 takerFees, uint256 makerFees) = getFees(order);
+
+        // If the maker is whitelisted, set to zero
+        if (whitelist[order.seller]) {
+            makerFees = 0;
+        }
+
+        // Check that buyers and sellers have enough to pay fees
+        require(balances[order.buyer] >= takerFees, "addPosition: taker cannot pay fees");
+        require(balances[order.seller] >= makerFees, "addPosition: maker cannot pay fees");
+
+        // Make fee transfers
+        balances[order.buyer] -= takerFees;
+        balances[order.seller] -= makerFees;
+        balances[feeRecipient] += (takerFees + makerFees);
 
         // Save position to mapping by expiry
         roundPositions.push(order);

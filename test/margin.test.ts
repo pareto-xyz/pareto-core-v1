@@ -1,7 +1,7 @@
 import { ethers, upgrades } from "hardhat";
 import { fromBn, toBn } from "evm-bn";
 import { expect } from "chai";
-import { Contract } from "ethers";
+import { Contract, BigNumber } from "ethers";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { getFixedGasSigners } from "./utils/helpers";
 
@@ -15,13 +15,33 @@ let keeper: SignerWithAddress;
 let buyer: SignerWithAddress;
 let seller: SignerWithAddress;
 let insurance: SignerWithAddress;
+let feeRecipient: SignerWithAddress;
 
 const ONEUSDC = toBn("1", 18);
+
+/**
+ * Function to compute fees from order information
+ * @param quantity Number of units in contract
+ * @param tradePrice Price of the contract
+ * @returns Array of length two: the taker and maker fees in BigNumbers
+ */
+async function getFees(
+  quantity: number,
+  tradePrice: number,
+): Promise<[BigNumber, BigNumber]> {
+  const [,spotBn,] = await spotFeed.latestRoundData();
+  const spot = parseFloat(fromBn(spotBn, 18));
+  const makerFee = Math.min(0.0003 * spot * quantity, 0.1 * tradePrice);
+  const takerFee = Math.min(0.0006 * spot * quantity, 0.1 * tradePrice);
+  const makerFeeBn = toBn(makerFee.toString(), 18);
+  const takerFeeBn = toBn(takerFee.toString(), 18);
+  return [takerFeeBn, makerFeeBn];
+}
 
 describe("ParetoMargin Contract", () => {
   beforeEach(async () => {
     const wallets = await getFixedGasSigners(10000000);
-    [deployer, keeper, buyer, seller, insurance] = wallets;
+    [deployer, keeper, buyer, seller, insurance, feeRecipient] = wallets;
   
     // Deploy a MockERC20 contract to mimic USDC
     const MockERC20 = await ethers.getContractFactory("MockERC20", deployer);
@@ -65,9 +85,11 @@ describe("ParetoMargin Contract", () => {
       [
         usdc.address,
         insurance.address,
+        feeRecipient.address,
         0,
         spotFeed.address,
-        markFeed.address
+        markFeed.address,
+        toBn("0.5", 4),
       ]
     );
     await paretoMargin.deployed();
@@ -97,6 +119,18 @@ describe("ParetoMargin Contract", () => {
     });
     it("Correct insurance address", async () => {
       expect(await paretoMargin.insurance()).to.be.equal(insurance.address);
+    });
+    it("Correct fee recipient address", async () => {
+      expect(await paretoMargin.feeRecipient()).to.be.equal(feeRecipient.address);
+    });
+    it("Correct max balance cap", async () => {
+      expect(await paretoMargin.maxBalanceCap()).to.be.equal(toBn("2000", 18));
+    });
+    it("Correct max insured percentage", async () => {
+      expect(await paretoMargin.maxInsuredPerc()).to.be.equal(toBn("0.5", 4));
+    });
+    it("Correct min margin percentage", async () => {
+      expect(await paretoMargin.minMarginPerc()).to.be.equal(toBn("0.01", 4));
     });
     it("Correct default round counter", async () => {
       expect(await paretoMargin.curRound()).to.be.equal(1);
@@ -161,6 +195,17 @@ describe("ParetoMargin Contract", () => {
       await expect(paretoMargin.connect(buyer).deposit(0))
         .to.be.revertedWith("deposit: `amount` must be > 0");
     });
+    it("Cannot deposit more than max cap", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(2500));
+      await expect(paretoMargin.connect(buyer).deposit(ONEUSDC.mul(2500)))
+        .to.be.revertedWith("deposit: exceeds maximum");
+    })
+    it("Cannot deposit twice to exceed max cap", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(2500));
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1500));
+      await expect(paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000)))
+        .to.be.revertedWith("deposit: exceeds maximum");
+    });
   });
 
   /****************************************
@@ -177,6 +222,17 @@ describe("ParetoMargin Contract", () => {
       await usdc.connect(buyer).approve(paretoMargin.address, 1);
       await paretoMargin.connect(buyer).deposit(1);
       expect(await paretoMargin.connect(buyer).getBalance()).to.be.equal("1");
+    });
+    it("Owner can check balance for anyone", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, 1);
+      await paretoMargin.connect(buyer).deposit(1);
+      expect(await paretoMargin.connect(deployer).getBalanceOf(buyer.address)).to.be.equal("1");
+    });
+    it("EOA cannot check balance for another EOA", async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, 1);
+      await paretoMargin.connect(buyer).deposit(1);
+      await expect(paretoMargin.connect(seller).getBalanceOf(buyer.address))
+        .to.be.revertedWith("Ownable: caller is not the owner")
     });
   });
 
@@ -197,7 +253,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         7,
         0,
@@ -210,7 +266,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         7,
         0,
@@ -224,7 +280,7 @@ describe("ParetoMargin Contract", () => {
           buyer.address,
           seller.address,
           ONEUSDC,
-          1,
+          toBn("1", 4),
           true,
           7,
           0,
@@ -239,14 +295,14 @@ describe("ParetoMargin Contract", () => {
           buyer.address,
           seller.address,
           ONEUSDC,
-          1,
+          toBn("1", 4),
           true,
           7,
           0,
         )
       )
         .to.emit(paretoMargin, "RecordPositionEvent")
-        .withArgs(ONEUSDC, 1, true, 0, 7, expiry);
+        .withArgs(ONEUSDC, toBn("1", 4), true, 0, 7, expiry);
     });
     it("Buyer passes margin check after position added", async () => {
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
@@ -255,7 +311,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         7,
         0,
@@ -270,7 +326,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         7,
         0,
@@ -300,11 +356,12 @@ describe("ParetoMargin Contract", () => {
       }
       await newMarkFeed.connect(deployer).setLatestPrices(callPrices, putPrices);
       
-      // Add oracles to Pareto, making a new underlying
-      await paretoMargin.connect(deployer).setOracle(
+      // Making a new underlying
+      await paretoMargin.connect(deployer).activateUnderlying(
         1, 
         newSpotFeed.address, 
         newMarkFeed.address,
+        toBn("1", 3),
       );
 
       // Now make a new position for said underlying
@@ -314,11 +371,26 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         7,
         1,
       );
+    });
+    it("Cannot add position under the minimum quantity", async () => {
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      await expect(
+        paretoMargin.connect(deployer).addPosition(
+          buyer.address,
+          seller.address,
+          ONEUSDC,
+          toBn("0.1", 4),
+          true,
+          7,
+          0,
+        )
+      ).to.be.revertedWith("addPosition: below min quantity");
     });
     it("Cannot add position with trade price 0", async () => {
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
@@ -328,7 +400,7 @@ describe("ParetoMargin Contract", () => {
           buyer.address,
           seller.address,
           0,
-          1,
+          toBn("1", 4),
           true,
           7,
           0
@@ -353,12 +425,16 @@ describe("ParetoMargin Contract", () => {
     it("Cannot add position if buyer below margin", async () => {
       // seller puts in 1k usdc into margin account but buyer does not
       await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+      // buyer needs to put in minimum amount for fees
+      const [takerFee,] = await getFees(1, 1);
+      await paretoMargin.connect(buyer).deposit(takerFee);
+
       await expect(
         paretoMargin.connect(deployer).addPosition(
           buyer.address,
           seller.address,
           ONEUSDC,
-          1,
+          toBn("1", 4),
           true,
           7,
           0,
@@ -368,12 +444,14 @@ describe("ParetoMargin Contract", () => {
     it("Cannot add position if seller below margin", async () => {
       // buyer puts in 1k usdc into margin account but seller does not
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      const [,makerFee] = await getFees(1, 1);
+      await paretoMargin.connect(seller).deposit(makerFee);
       await expect(
         paretoMargin.connect(deployer).addPosition(
           buyer.address,
           seller.address,
           ONEUSDC,
-          1,
+          toBn("1", 4),
           true,
           7,
           0,
@@ -382,14 +460,14 @@ describe("ParetoMargin Contract", () => {
     });
     it("Check opposite orders cancel", async () => {
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
-      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));      
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
 
       // Buy a call position
       await paretoMargin.connect(deployer).addPosition(
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         7,
         0,
@@ -399,32 +477,32 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         buyer.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         7,
         0,
       );
-      const [marginA,] = await paretoMargin.checkMargin(buyer.address, false);
-      const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
+      const [buyerMargin,] = await paretoMargin.checkMargin(buyer.address, false);
+      const [sellerMargin,] = await paretoMargin.checkMargin(seller.address, false);
 
       // Get balance for the two individuals
       const buyerBalance = await paretoMargin.connect(buyer).getBalance();
       const sellerBalance = await paretoMargin.connect(seller).getBalance();
 
       // Both should be netted to be zero since orders cancel
-      expect(marginA).to.be.equal(buyerBalance);
-      expect(marginB).to.be.equal(sellerBalance);
+      expect(buyerMargin).to.be.equal(buyerBalance);
+      expect(sellerMargin).to.be.equal(sellerBalance);
     });
     it("Check opposite orders of different strikes do not cancel", async () => {
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
-      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));      
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
 
       // Buy a call position
       await paretoMargin.connect(deployer).addPosition(
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         7,
         0,
@@ -434,21 +512,21 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         buyer.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         6,
         0,
       );
-      const [marginA,] = await paretoMargin.checkMargin(buyer.address, false);
-      const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
+      const [buyerMargin,] = await paretoMargin.checkMargin(buyer.address, false);
+      const [sellerMargin,] = await paretoMargin.checkMargin(seller.address, false);
       
       // Get balance for the two individuals
       const buyerBalance = await paretoMargin.connect(buyer).getBalance();
       const sellerBalance = await paretoMargin.connect(seller).getBalance();
 
       // Margin should be less for both
-      expect(marginA).to.be.lessThan(buyerBalance);
-      expect(marginB).to.be.lessThan(sellerBalance);
+      expect(buyerMargin).to.be.lessThan(buyerBalance);
+      expect(sellerMargin).to.be.lessThan(sellerBalance);
     });
     it("Check opposite orders of put & call do not cancel", async () => {
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
@@ -459,7 +537,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         7,
         0,
@@ -469,23 +547,25 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         buyer.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         false,
         7,
         0,
       );
-      const [marginA,] = await paretoMargin.checkMargin(buyer.address, false);
-      const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
+      const [buyerMargin,] = await paretoMargin.checkMargin(buyer.address, false);
+      const [sellerMargin,] = await paretoMargin.checkMargin(seller.address, false);
       
       // Get balance for the two individuals
       const buyerBalance = await paretoMargin.connect(buyer).getBalance();
       const sellerBalance = await paretoMargin.connect(seller).getBalance();
 
       // Margin should be less for both
-      expect(marginA).to.be.lessThan(buyerBalance);
-      expect(marginB).to.be.lessThan(sellerBalance);
+      expect(buyerMargin).to.be.lessThan(buyerBalance);
+      expect(sellerMargin).to.be.lessThan(sellerBalance);
     });
     it("Check opposite orders of different quantities partially cancel", async () => {
+      await paretoMargin.connect(deployer).setMaxBalanceCap(ONEUSDC.mul(5000));
+
       await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(5000));
       await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(5000));
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(5000));
@@ -497,12 +577,16 @@ describe("ParetoMargin Contract", () => {
       await paretoMargin.connect(deployer).deposit(ONEUSDC.mul(5000));
       await paretoMargin.connect(keeper).deposit(ONEUSDC.mul(5000));
 
+      const [takerFees5, makerFees5] = await getFees(5, 1);
+      const [takerFees2, makerFees2] = await getFees(2, 1);
+      const [takerFees7, makerFees7] = await getFees(7, 1);
+
       // Buy five call positions
       await paretoMargin.connect(deployer).addPosition(
         buyer.address,
         seller.address,
         ONEUSDC,
-        5,
+        toBn("5", 4),
         true,
         7,
         0,
@@ -512,32 +596,40 @@ describe("ParetoMargin Contract", () => {
         seller.address,
         buyer.address,
         ONEUSDC,
-        2,
+        toBn("2", 4),
         true,
         7,
         0,
       );
+
+      const buyerFees = takerFees5.add(makerFees2);
+      const sellerFees = makerFees5.add(takerFees2);
       
       // Separately deployer buys 3 call positions
       await paretoMargin.connect(deployer).addPosition(
         deployer.address,
         keeper.address,
         ONEUSDC,
-        3,
+        toBn("3", 4),
         true,
         7,
         0,
       );
 
-      const [marginA,] = await paretoMargin.checkMargin(buyer.address, false);
-      const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
-      const [marginC,] = await paretoMargin.checkMargin(deployer.address, false);
-      const [marginD,] = await paretoMargin.checkMargin(keeper.address, false);
+      const deployerFees = takerFees7;
+      const keeperFees = makerFees7;
 
-      expect(marginA).to.be.equal(marginC);
-      expect(marginB).to.be.equal(marginD);
+      const [buyerMargin,] = await paretoMargin.checkMargin(buyer.address, false);
+      const [sellerMargin,] = await paretoMargin.checkMargin(seller.address, false);
+      const [deployerMargin,] = await paretoMargin.checkMargin(deployer.address, false);
+      const [keeperMargin,] = await paretoMargin.checkMargin(keeper.address, false);
+
+      expect(buyerMargin.add(buyerFees)).to.be.equal(deployerMargin.add(deployerFees));
+      expect(sellerMargin.add(sellerFees)).to.be.equal(keeperMargin.add(keeperFees));
     });
     it("Check opposite orders of lots of quantities partially cancel", async () => {
+      await paretoMargin.connect(deployer).setMaxBalanceCap(ONEUSDC.mul(5000));
+
       await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(5000));
       await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(5000));
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(5000));
@@ -549,69 +641,166 @@ describe("ParetoMargin Contract", () => {
       await paretoMargin.connect(deployer).deposit(ONEUSDC.mul(5000));
       await paretoMargin.connect(keeper).deposit(ONEUSDC.mul(5000));
 
+      const [takerFees3, makerFees3] = await getFees(3, 1);
+      const [takerFees2, makerFees2] = await getFees(2, 1);
+      const [takerFees1, makerFees1] = await getFees(1, 1);
+
       await paretoMargin.connect(deployer).addPosition(
         buyer.address,
         seller.address,
         ONEUSDC,
+        toBn("3", 4),
+        true,
+        7,
+        0,
+      );
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        toBn("2", 4),
+        true,
+        7,
+        0,
+      );
+      await paretoMargin.connect(deployer).addPosition(
+        seller.address,
+        buyer.address,
+        ONEUSDC,
+        toBn("1", 4),
+        true,
+        7,
+        0,
+      );
+      await paretoMargin.connect(deployer).addPosition(
+        seller.address,
+        buyer.address,
+        ONEUSDC,
+        toBn("1", 4),
+        true,
+        7,
+        0,
+      );
+
+      const buyerFees = takerFees3.add(takerFees2).add(makerFees1).add(makerFees1);
+      const sellerFees = makerFees3.add(makerFees2).add(takerFees1).add(takerFees1);
+
+      await paretoMargin.connect(deployer).addPosition(
+        deployer.address,
+        keeper.address,
+        ONEUSDC,
+        toBn("2", 4),
+        true,
+        7,
+        0,
+      );
+      await paretoMargin.connect(deployer).addPosition(
+        deployer.address,
+        keeper.address,
+        ONEUSDC,
+        toBn("1", 4),
+        true,
+        7,
+        0,
+      );
+
+      const deployerFees = takerFees2.add(takerFees1);
+      const keeperFees = makerFees2.add(makerFees1);
+
+      const [buyerMargin,] = await paretoMargin.checkMargin(buyer.address, false);
+      const [sellerMargin,] = await paretoMargin.checkMargin(seller.address, false);
+      const [deployerMargin,] = await paretoMargin.checkMargin(deployer.address, false);
+      const [keeperMargin,] = await paretoMargin.checkMargin(keeper.address, false);
+
+      expect(buyerMargin.add(buyerFees)).to.be.equal(deployerMargin.add(deployerFees));
+      expect(sellerMargin.add(sellerFees)).to.be.equal(keeperMargin.add(keeperFees));
+    });
+    it("Seller who is whitelisted takes no fees", async () => {
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+
+      const sellerBalancePre = await paretoMargin.connect(seller).getBalance();
+      const buyerBalancePre = await paretoMargin.connect(buyer).getBalance();
+
+      // Add seller to white so no fees
+      await paretoMargin.connect(deployer).addToWhitelist([seller.address]);
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        toBn("1", 4),
+        true,
+        7,
+        0,
+      );
+
+      const sellerBalancePost = await paretoMargin.connect(seller).getBalance();
+      const buyerBalancePost = await paretoMargin.connect(buyer).getBalance();
+
+      expect(buyerBalancePre).to.be.greaterThan(buyerBalancePost);
+      expect(sellerBalancePre).to.be.equal(sellerBalancePost);
+    });
+  });
+
+  /****************************************
+   * Fetching positions
+   ****************************************/  
+  describe("Checking positions", () => {
+    beforeEach(async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+    });
+    it("User can check empty positions", async () => {
+      const positions = await paretoMargin.connect(buyer).getPositions();
+      expect(positions.length).to.be.equal(0);
+    });
+    it("User can check one position", async () => {
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        toBn("1", 4),
+        true,
+        7,
+        0,
+      );
+      const positions = await paretoMargin.connect(buyer).getPositions();
+      expect(positions.length).to.be.equal(1);
+      expect(positions[0].buyer).to.be.equal(buyer.address);
+      expect(positions[0].seller).to.be.equal(seller.address);
+      expect(positions[0].tradePrice).to.be.equal(ONEUSDC);
+      expect(positions[0].quantity).to.be.equal(toBn("1", 4));
+      expect(positions[0].option.strikeLevel).to.be.equal(7);
+      expect(positions[0].option.isCall).to.be.equal(true);
+      expect(positions[0].option.underlying).to.be.equal(0);
+    });
+    it("User can check multiple positions", async () => {
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        toBn("1", 4),
+        true,
+        7,
+        0,
+      );
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC,
+        toBn("1", 4),
+        false,
         3,
-        true,
-        7,
         0,
       );
-      await paretoMargin.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        2,
-        true,
-        7,
-        0,
-      );
-      await paretoMargin.connect(deployer).addPosition(
-        seller.address,
-        buyer.address,
-        ONEUSDC,
-        1,
-        true,
-        7,
-        0,
-      );
-      await paretoMargin.connect(deployer).addPosition(
-        seller.address,
-        buyer.address,
-        ONEUSDC,
-        1,
-        true,
-        7,
-        0,
-      );
-
-      await paretoMargin.connect(deployer).addPosition(
-        deployer.address,
-        keeper.address,
-        ONEUSDC,
-        2,
-        true,
-        7,
-        0,
-      );
-      await paretoMargin.connect(deployer).addPosition(
-        deployer.address,
-        keeper.address,
-        ONEUSDC,
-        1,
-        true,
-        7,
-        0,
-      );
-
-      const [marginA,] = await paretoMargin.checkMargin(buyer.address, false);
-      const [marginB,] = await paretoMargin.checkMargin(seller.address, false);
-      const [marginC,] = await paretoMargin.checkMargin(deployer.address, false);
-      const [marginD,] = await paretoMargin.checkMargin(keeper.address, false);
-
-      expect(marginA).to.be.equal(marginC);
-      expect(marginB).to.be.equal(marginD);
+      const positions = await paretoMargin.connect(buyer).getPositions();
+      expect(positions.length).to.be.equal(2);
+      expect(positions[0].option.strikeLevel).to.be.equal(7);
+      expect(positions[0].option.isCall).to.be.equal(true);
+      expect(positions[1].option.strikeLevel).to.be.equal(3);
+      expect(positions[1].option.isCall).to.be.equal(false);
     });
   });
 
@@ -637,13 +826,16 @@ describe("ParetoMargin Contract", () => {
     });
     it("Person can fail margin check after entering a position", async () => {
       await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(10));
+      await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(10));
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(10));
+      const [,makerFee] = await getFees(1, 1);
+      await paretoMargin.connect(seller).deposit(makerFee);
       await expect(
         paretoMargin.connect(deployer).addPosition(
           buyer.address,
           seller.address,
           ONEUSDC,
-          1,
+          toBn("1", 4),
           true,
           7,
           0,
@@ -652,7 +844,7 @@ describe("ParetoMargin Contract", () => {
     });
   });
 
-  /****************************************
+  /***********************************toBn("*****", 4)
    * Withdrawal
    ****************************************/  
   describe("Withdrawing USDC", () => {
@@ -720,7 +912,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         5,
         0,
@@ -738,7 +930,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         5,
         0,
@@ -802,7 +994,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         7,
         0,
@@ -871,7 +1063,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         7,
         0,
@@ -908,7 +1100,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         7,
         0,
@@ -945,7 +1137,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         3,
         0,
@@ -982,7 +1174,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         3,
         0,
@@ -1019,7 +1211,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         7,
         0,
@@ -1029,7 +1221,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         6,
         0,
@@ -1051,6 +1243,8 @@ describe("ParetoMargin Contract", () => {
       expect(sellerPre).to.be.greaterThan(sellerPost);
     });
     it("balances change for five call, one put; buyer wins calls, loses put, wins overall", async () => {
+        await paretoMargin.connect(deployer).setMaxBalanceCap(ONEUSDC.mul(10000));
+
        // Buyer purchases a call
        await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(10000));
        await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(10000));
@@ -1066,7 +1260,7 @@ describe("ParetoMargin Contract", () => {
          buyer.address,
          seller.address,
          ONEUSDC,
-         5,
+         toBn("5", 4),
          0,
          7,
          0,
@@ -1075,7 +1269,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         3,
         0,
@@ -1112,7 +1306,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        1,
+        toBn("1", 4),
         true,
         7,
         0,
@@ -1163,7 +1357,7 @@ describe("ParetoMargin Contract", () => {
         buyer.address,
         seller.address,
         ONEUSDC,
-        2,
+        toBn("2", 4),
         false,
         7,
         0,
@@ -1195,6 +1389,169 @@ describe("ParetoMargin Contract", () => {
       await expect(
         paretoMargin.connect(deployer).liquidate(buyer.address)
       ).to.be.revertedWith("liquidate: user passes margin check");
+    });
+    it("Cannot add another position", async () => {
+      await expect(
+        paretoMargin.connect(deployer).addPosition(
+          seller.address,
+          buyer.address,
+          ONEUSDC,
+          toBn("2", 4),
+          true,
+          7,
+          0,
+        )
+      ).to.be.revertedWith("addPosition: seller failed margin check");
+    });
+  });
+
+  describe("Liquidation: Edge Cases", () => {
+    beforeEach(async () => {
+      await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(1000));
+      await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(1000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(1000));
+    })
+    it("Liquidates short positions before long positions", async () => {
+      // raise max balance so deployer can handle the liquidation of a bad position
+      await paretoMargin.connect(deployer).setMaxBalanceCap(ONEUSDC.mul(100000));
+      await usdc.connect(deployer).approve(paretoMargin.address, ONEUSDC.mul(100000));
+      await paretoMargin.connect(deployer).deposit(ONEUSDC.mul(100000));
+
+      // Add a call position
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC.mul(100),
+        toBn("0.5", 4),  // small position
+        true,
+        6,
+        0,
+      );
+      // Add another call at a different strike, switch buyer and seller rolls
+      await paretoMargin.connect(deployer).addPosition(
+        seller.address,
+        buyer.address,
+        ONEUSDC.mul(100),
+        toBn("10", 4),  // much larger position
+        true,
+        7,
+        0,
+      );  
+      // Let the price rise a lot: now the buyer who sold the second strike 
+      // will be liquidated
+      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
+
+      // Call liquidate
+      await paretoMargin.connect(deployer).liquidate(buyer.address);
+
+      // Get positions
+      const buyerPositions = await paretoMargin.connect(buyer).getPositions();
+      expect(buyerPositions.length).to.be.equal(1); 
+      // Check that this position is the long position
+      expect(buyerPositions[0].buyer).to.be.equal(buyer.address);
+      expect(buyerPositions[0].seller).to.be.equal(seller.address);
+
+      const sellerPositions = await paretoMargin.connect(seller).getPositions();
+      // Seller is still in two positions
+      expect(sellerPositions.length).to.be.equal(2); 
+      
+      const liquidatorPositions = await paretoMargin.connect(deployer).getPositions();
+      // Check liquidator is now in a position
+      expect(liquidatorPositions.length).to.be.equal(1); 
+    });
+    it("If counterparty liquidates, order is netted", async () => {
+      // raise max balance so seller can handle the liquidation of a bad position
+      await paretoMargin.connect(deployer).setMaxBalanceCap(ONEUSDC.mul(200000));
+      await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(100000));
+      await paretoMargin.connect(seller).deposit(ONEUSDC.mul(100000));
+
+      // Add a call position
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC.mul(100),
+        toBn("0.5", 4),  // small position
+        true,
+        6,
+        0,
+      );
+      // Add another call at a different strike, switch buyer and seller rolls
+      await paretoMargin.connect(deployer).addPosition(
+        seller.address,
+        buyer.address,
+        ONEUSDC.mul(100),
+        toBn("10", 4),  // much larger position
+        true,
+        7,
+        0,
+      );  
+      // Let the price rise a lot: now the buyer who sold the second strike 
+      // will be liquidated
+      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
+
+      // Call liquidate from the seller
+      await paretoMargin.connect(seller).liquidate(buyer.address);
+
+      const buyerPositions = await paretoMargin.connect(buyer).getPositions();
+      const sellerPositions = await paretoMargin.connect(seller).getPositions();
+      const deployerPositions = await paretoMargin.connect(deployer).getPositions();
+
+      // Both buyer and seller have only one position b/c netted
+      expect(buyerPositions.length).to.be.equal(1); 
+      expect(sellerPositions.length).to.be.equal(1); 
+
+      // deployer has nothing to do with this so no positions
+      expect(deployerPositions.length).to.be.equal(0);
+    });
+    it("If liquidator falls below margin, everything is reset", async () => {
+      // Add a call position
+      await paretoMargin.connect(deployer).addPosition(
+        buyer.address,
+        seller.address,
+        ONEUSDC.mul(100),
+        toBn("0.5", 4),  // small position
+        true,
+        6,
+        0,
+      );
+      // Add another call at a different strike, switch buyer and seller rolls
+      await paretoMargin.connect(deployer).addPosition(
+        seller.address,
+        buyer.address,
+        ONEUSDC.mul(100),
+        toBn("10", 4),  // much larger position
+        true,
+        7,
+        0,
+      );  
+      // Let the price rise a lot: now the buyer who sold the second strike 
+      // will be liquidated
+      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
+
+      // Check margin of liquidator (deployer) and buyer
+      const [liquidatorMarginPre, liquidatorSatisfiedPre] = await paretoMargin.checkMargin(deployer.address, false);
+      const [buyerMarginPre, buyerSatisfiedPre] = await paretoMargin.checkMargin(buyer.address, false);
+
+      expect(liquidatorSatisfiedPre).to.be.true;
+      expect(buyerSatisfiedPre).to.be.false;
+
+      // This will fail though not return anythng
+      await paretoMargin.connect(deployer).liquidate(buyer.address);
+
+      // Check buyer still has both positions
+      const positions = await paretoMargin.connect(buyer).getPositions();
+      expect(positions.length).to.be.equal(2); 
+
+      // Check margin and it should be the same (this implicitly checks balance)
+      const [liquidatorMarginPost, liquidatorSatisfiedPost] = await paretoMargin.checkMargin(deployer.address, false);
+      const [buyerMarginPost, buyerSatisfiedPost] = await paretoMargin.checkMargin(buyer.address, false);
+      expect(liquidatorMarginPost).to.be.equal(liquidatorMarginPre);
+      expect(buyerMarginPost).to.be.equal(buyerMarginPre);
+
+      // Buyer should still be under margin
+      expect(liquidatorSatisfiedPost).to.be.true;
+      expect(buyerSatisfiedPost).to.be.false;
     });
   });
 
@@ -1240,6 +1597,47 @@ describe("ParetoMargin Contract", () => {
   });
 
   /****************************************
+   * Whitelist management
+   ****************************************/  
+  describe("Managing whitelist", () => {
+    it("Owner can add to whitelist", async () => {
+      await paretoMargin.connect(deployer).addToWhitelist([buyer.address]);
+    });
+    it("Cannot add whitelist twice", async () => {
+      await paretoMargin.connect(deployer).addToWhitelist([buyer.address]);
+      await expect(
+        paretoMargin.connect(deployer).addToWhitelist([buyer.address])
+      ).to.be.revertedWith("addToWhitelist: already in whitelist");
+    });
+    it("Owner can add multiple addresses to whitelist at once", async () => {
+      await paretoMargin.connect(deployer).addToWhitelist([buyer.address, seller.address]);
+    });
+    it("Owner can remove whitelist", async () => {
+      await paretoMargin.connect(deployer).removeKeepers([keeper.address]);
+    });
+    it("Keeper cannot add whitelist", async () => {
+      await expect(
+        paretoMargin.connect(keeper).addToWhitelist([buyer.address])
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("Keeper cannot remove whitelist", async () => {
+      await expect(
+        paretoMargin.connect(keeper).removeKeepers([keeper.address])
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("User cannot add whitelist", async () => {
+      await expect(
+        paretoMargin.connect(buyer).addToWhitelist([seller.address])
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("User cannot remove whitelist", async () => {
+      await expect(
+        paretoMargin.connect(buyer).removeKeepers([keeper.address])
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+  });
+
+  /****************************************
    * Oracle management
    ****************************************/  
   describe("Managing oracles", () => {
@@ -1270,22 +1668,22 @@ describe("ParetoMargin Contract", () => {
 
       expect(await paretoMargin.isActiveUnderlying(0)).to.be.true;
       expect(await paretoMargin.isActiveUnderlying(1)).to.be.false;
-      await paretoMargin.connect(deployer).setOracle(1, newSpotFeed.address, newMarkFeed.address);
+      await paretoMargin.connect(deployer).activateUnderlying(
+        1,
+        newSpotFeed.address,
+        newMarkFeed.address,
+        toBn("1", 3),
+      );
       expect(await paretoMargin.isActiveUnderlying(1)).to.be.true;
     });
-    it("Owner cannot set oracle if spot price zero", async () => {
+    it("Keeper cannot set oracle for existing underlying", async () => {
       await expect(
-          paretoMargin.connect(deployer).setOracle(1, newSpotFeed.address, newMarkFeed.address)
-      ).to.be.revertedWith("getStrikeMenu: Spot price too small");
-    });
-    it("Keeper cannot set oracle for new underlying", async () => {
-      await expect(
-        paretoMargin.connect(keeper).setOracle(1, newSpotFeed.address, newMarkFeed.address)
+        paretoMargin.connect(keeper).setOracle(0, newSpotFeed.address, newMarkFeed.address)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
-    it("User cannot set oracle for new underlying", async () => {
+    it("User cannot set oracle for existing underlying", async () => {
       await expect(
-        paretoMargin.connect(buyer).setOracle(1, newSpotFeed.address, newMarkFeed.address)
+        paretoMargin.connect(buyer).setOracle(0, newSpotFeed.address, newMarkFeed.address)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
   });
@@ -1372,6 +1770,24 @@ describe("ParetoMargin Contract", () => {
     });
     it("User cannot set min margin percent", async () => {
       await expect(paretoMargin.connect(buyer).setMinMarginPerc(500))
+        .to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("Owner can set max balance cap", async () => {
+      expect(await paretoMargin.maxBalanceCap()).to.be.equal(toBn("2000", 18));
+      await paretoMargin.connect(deployer).setMaxBalanceCap(toBn("3000", 18));
+      expect(await paretoMargin.maxBalanceCap()).to.be.equal(toBn("3000", 18));
+    });
+    it("Setting max balance cap % emits event", async () => {
+      await expect(paretoMargin.connect(deployer).setMaxBalanceCap(toBn("3000", 18)))
+        .to.emit(paretoMargin, "MaxBalanceCapEvent")
+        .withArgs(deployer.address, toBn("3000", 18));
+    });
+    it("Keeper cannot set max balance cap", async () => {
+      await expect(paretoMargin.connect(keeper).setMaxBalanceCap(toBn("3000", 18)))
+        .to.be.revertedWith("Ownable: caller is not the owner");
+    });
+    it("User cannot set max balance cap", async () => {
+      await expect(paretoMargin.connect(buyer).setMaxBalanceCap(toBn("3000", 18)))
         .to.be.revertedWith("Ownable: caller is not the owner");
     });
   });

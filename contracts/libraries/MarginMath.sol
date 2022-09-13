@@ -297,7 +297,7 @@ library MarginMath {
             payoff *= -1;
         }
 
-        // Multiply payoff by the order size
-        payoff = payoff * int256(order.quantity);
+        // Multiply payoff by the order size (divide by decimals of quantity)
+        payoff = payoff * int256(order.quantity) / int256(10**Derivative.QUANTITY_DECIMALS);
     }
 }

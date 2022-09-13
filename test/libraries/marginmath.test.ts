@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 import { BigNumber } from "ethers";
-import { fromBn } from "evm-bn";
+import { fromBn, toBn } from "evm-bn";
 import type { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { Contract } from "ethers";
@@ -51,7 +51,7 @@ describe("MarginMath Library", () => {
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(11).div(100),
-        quantity: 5,
+        quantity: toBn("5", 4),
         option: {
           isCall: true,
           strikeLevel: 6,
@@ -73,7 +73,7 @@ describe("MarginMath Library", () => {
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(11).div(100),
-        quantity: 5,
+        quantity: toBn("5", 4),
         option: {
           isCall: true,
           strikeLevel: 6,
@@ -95,7 +95,7 @@ describe("MarginMath Library", () => {
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(9).div(100),
-        quantity: 5,
+        quantity: toBn("5", 4),
         option: {
           isCall: false,
           strikeLevel: 4,
@@ -117,7 +117,7 @@ describe("MarginMath Library", () => {
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(9).div(100),
-        quantity: 5,
+        quantity: toBn("5", 4),
         option: {
           isCall: false,
           strikeLevel: 4,
@@ -140,7 +140,7 @@ describe("MarginMath Library", () => {
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(9).div(100),
-        quantity: 5,
+        quantity: toBn("5", 4),
         option: {
           isCall: true,
           strikeLevel: 4,
@@ -162,7 +162,7 @@ describe("MarginMath Library", () => {
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(9).div(100),
-        quantity: 5,
+        quantity: toBn("5", 4),
         option: {
           isCall: true,
           strikeLevel: 4,
@@ -184,7 +184,7 @@ describe("MarginMath Library", () => {
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(11).div(100),
-        quantity: 5,
+        quantity: toBn("5", 4),
         option: {
           isCall: false,
           strikeLevel: 6,
@@ -206,7 +206,7 @@ describe("MarginMath Library", () => {
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(11).div(100),
-        quantity: 5,
+        quantity: toBn("5", 4),
         option: {
           isCall: false,
           strikeLevel: 6,
@@ -228,7 +228,7 @@ describe("MarginMath Library", () => {
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.div(10),
-        quantity: 5,
+        quantity: toBn("5", 4),
         option: {
           isCall: true,
           strikeLevel: 5,
@@ -250,7 +250,7 @@ describe("MarginMath Library", () => {
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.div(10),
-        quantity: 5,
+        quantity: toBn("5", 4),
         option: {
           isCall: true,
           strikeLevel: 5,
@@ -272,7 +272,7 @@ describe("MarginMath Library", () => {
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.div(10),
-        quantity: 5,
+        quantity: toBn("5", 4),
         option: {
           isCall: false,
           strikeLevel: 5,
@@ -294,7 +294,7 @@ describe("MarginMath Library", () => {
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.div(10),
-        quantity: 5,
+        quantity: toBn("5", 4),
         option: {
           isCall: false,
           strikeLevel: 5,
