@@ -17,8 +17,6 @@ let seller: SignerWithAddress;
 let insurance: SignerWithAddress;
 
 const ONEUSDC = toBn("1", 18);
-const ONEETH = toBn("1", 18);
-const ONEBTC = toBn("1", 18);
 
 describe("ParetoMargin Contract", () => {
   beforeEach(async () => {
@@ -70,7 +68,7 @@ describe("ParetoMargin Contract", () => {
         0,
         spotFeed.address,
         markFeed.address,
-        ONEETH,
+        ONEUSDC.mul(1500).div(10),  // spot/10
       ]
     );
     await paretoMargin.deployed();
@@ -308,7 +306,7 @@ describe("ParetoMargin Contract", () => {
         1, 
         newSpotFeed.address, 
         newMarkFeed.address,
-        ONEBTC.div(10),
+        ONEUSDC.mul(1500).div(10),  // spot/10
       );
 
       // Now make a new position for said underlying
@@ -490,6 +488,8 @@ describe("ParetoMargin Contract", () => {
       expect(marginB).to.be.lessThan(sellerBalance);
     });
     it("Check opposite orders of different quantities partially cancel", async () => {
+      await paretoMargin.connect(deployer).setMaxBalanceCap(ONEUSDC.mul(5000));
+
       await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(5000));
       await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(5000));
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(5000));
@@ -542,6 +542,8 @@ describe("ParetoMargin Contract", () => {
       expect(marginB).to.be.equal(marginD);
     });
     it("Check opposite orders of lots of quantities partially cancel", async () => {
+      await paretoMargin.connect(deployer).setMaxBalanceCap(ONEUSDC.mul(5000));
+
       await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(5000));
       await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(5000));
       await paretoMargin.connect(buyer).deposit(ONEUSDC.mul(5000));
@@ -1055,6 +1057,8 @@ describe("ParetoMargin Contract", () => {
       expect(sellerPre).to.be.greaterThan(sellerPost);
     });
     it("balances change for five call, one put; buyer wins calls, loses put, wins overall", async () => {
+        await paretoMargin.connect(deployer).setMaxBalanceCap(ONEUSDC.mul(10000));
+
        // Buyer purchases a call
        await usdc.connect(buyer).approve(paretoMargin.address, ONEUSDC.mul(10000));
        await usdc.connect(seller).approve(paretoMargin.address, ONEUSDC.mul(10000));
@@ -1275,7 +1279,11 @@ describe("ParetoMargin Contract", () => {
       expect(await paretoMargin.isActiveUnderlying(0)).to.be.true;
       expect(await paretoMargin.isActiveUnderlying(1)).to.be.false;
       await paretoMargin.connect(deployer).activateUnderlying(
-        1, newSpotFeed.address, newMarkFeed.address, ONEBTC.div(10));
+        1,
+        newSpotFeed.address,
+        newMarkFeed.address,
+        ONEUSDC.mul(1500).div(10),  // spot/10
+      );
       expect(await paretoMargin.isActiveUnderlying(1)).to.be.true;
     });
     it("Keeper cannot set oracle for existing underlying", async () => {

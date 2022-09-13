@@ -53,7 +53,7 @@ contract ParetoV1Margin is
     uint256 public maxBalanceCap; 
 
     /// @notice Maximum notional value allowed in order
-    mapping(Derivative.Underlying => uint256) maxNotionalPerUnderlying;
+    mapping(Derivative.Underlying => uint256) minNotionalPerUnderlying;
 
     /// @notice Maximum percentage the insurance fund can payoff for a single position in USDC
     uint256 public maxInsuredPerc;
@@ -115,7 +115,7 @@ contract ParetoV1Margin is
      * @param underlying_ Name of underlying token to support at deployment
      * @param spotOracle_ Address of spot oracle for the underlying
      * @param markOracle_ Address of mark price oracle for the underlying
-     * @param maxNotional_ Max notional value for underlying
+     * @param minNotional_ Max notional value for underlying
      */
     function initialize(
         address usdc_,
@@ -123,7 +123,7 @@ contract ParetoV1Margin is
         Derivative.Underlying underlying_,
         address spotOracle_,
         address markOracle_,
-        uint256 maxNotional_
+        uint256 minNotional_
     )
         public
         initializer 
@@ -158,7 +158,7 @@ contract ParetoV1Margin is
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
 
         // Create a new underlying (handles strike and smile creation)
-        newUnderlying(underlying_, spotOracle_, markOracle_, maxNotional_);
+        newUnderlying(underlying_, spotOracle_, markOracle_, minNotional_);
     }
 
     /**
@@ -259,14 +259,14 @@ contract ParetoV1Margin is
      * @param underlying Underlying enum
      * @param spotOracle Address for spot oracle
      * @param markOracle Address for mark oracle
-     * @param maxNotional Maximum amount of notional allowed for underlying
+     * @param minNotional Maximum amount of notional allowed for underlying
      */
     event NewUnderlyingEvent(
         address indexed owner,
         Derivative.Underlying underlying,
         address spotOracle,
         address markOracle,
-        uint256 maxNotional
+        uint256 minNotional
     );
 
     /************************************************
@@ -284,8 +284,10 @@ contract ParetoV1Margin is
         // Increment counters
         balances[msg.sender] += amount;
 
-        // In the beginning we set a maximum cap
-        require(balances[msg.sender] <= maxBalanceCap, "deposit: exceeds maxCap");
+        // In the beginning we set a maximum cap. Insurance fund needs to break cap
+        if (msg.sender != insurance) {
+            require(balances[msg.sender] <= maxBalanceCap, "deposit: exceeds maxCap");
+        }
 
         // Pull resources from sender to this contract
         IERC20Upgradeable(usdc).safeTransferFrom(msg.sender, address(this), amount);
@@ -979,23 +981,23 @@ contract ParetoV1Margin is
      * @param underlying Enum for the underlying token
      * @param spotOracle Address for an oracle for spot prices
      * @param markOracle Address for an oracle for mark prices
-     * @param maxNotional Maximum notional for underlying
+     * @param minNotional Maximum notional for underlying
      */
     function newUnderlying(
         Derivative.Underlying underlying,
         address spotOracle,
         address markOracle,
-        uint256 maxNotional
+        uint256 minNotional
     ) internal {
         require(!isActiveUnderlying[underlying], "newUnderlying: underlying already active");
-        require(maxNotional > 0, "newUnderlying: max notional must be > 0");
+        require(minNotional > 0, "newUnderlying: max notional must be > 0");
 
         // Set oracles for underlying
         spotOracles[underlying] = spotOracle;
         markOracles[underlying] = markOracle;
         
         // Set maximum notional values
-        maxNotionalPerUnderlying[underlying] = maxNotional;
+        minNotionalPerUnderlying[underlying] = minNotional;
 
         // Compute strikes for underlying
         roundStrikes[underlying] = getStrikeMenu(underlying);
@@ -1070,13 +1072,13 @@ contract ParetoV1Margin is
      * @param underlying Enum for the underlying token
      * @param spotOracle Address for an oracle for spot prices
      * @param markOracle Address for an oracle for mark prices
-     * @param maxNotional Maximum amount of notional for underlying
+     * @param minNotional Maximum amount of notional for underlying
      */
     function activateUnderlying(
         Derivative.Underlying underlying,
         address spotOracle,
         address markOracle,
-        uint256 maxNotional
+        uint256 minNotional
     ) 
         external
         onlyOwner
@@ -1085,10 +1087,10 @@ contract ParetoV1Margin is
             !isActiveUnderlying[underlying], 
             "activateUnderlying: underlying must not yet be active"
         );
-        newUnderlying(underlying, spotOracle, markOracle, maxNotional);
+        newUnderlying(underlying, spotOracle, markOracle, minNotional);
 
         // Emit event 
-        emit NewUnderlyingEvent(msg.sender, underlying, spotOracle, markOracle, maxNotional);
+        emit NewUnderlyingEvent(msg.sender, underlying, spotOracle, markOracle, minNotional);
     }
 
     /**
@@ -1111,15 +1113,15 @@ contract ParetoV1Margin is
     /**
      * @notice Set the maximum notional for an underlying token
      * @param underlying Enum for the underlying token
-     * @param maxNotional Maximum notional in the decimals of the underlying
+     * @param minNotional Maximum notional in the decimals of the underlying
      */
-    function setMaxNotional(Derivative.Underlying underlying, uint256 maxNotional) 
+    function setMinNotional(Derivative.Underlying underlying, uint256 minNotional) 
         external
         onlyOwner
     {
-        require(isActiveUnderlying[underlying], "setMaxNotional: underlying must already be active");
-        require(maxNotional > 0, "setMaxNotional: max notional must be > 0");
-        maxNotionalPerUnderlying[underlying] = maxNotional;
+        require(isActiveUnderlying[underlying], "setMinNotional: underlying must already be active");
+        require(minNotional > 0, "setMinNotional: max notional must be > 0");
+        minNotionalPerUnderlying[underlying] = minNotional;
     }   
 
     /**
@@ -1247,8 +1249,8 @@ contract ParetoV1Margin is
 
         // Check we did not exceed max notional
         require(
-            getNotional(order) <= maxNotionalPerUnderlying[underlying],
-            "addPosition: exceeds max notional"
+            getNotional(order) >= minNotionalPerUnderlying[underlying],
+            "addPosition: below min notional"
         );
 
         // Save position to mapping by expiry
