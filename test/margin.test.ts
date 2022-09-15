@@ -148,12 +148,12 @@ describe("MarginV1 Contract", () => {
    ****************************************/  
   describe("Upgradeability", () => {
     it("Can upgrade", async () => {
-      const marginV1V2 = await ethers.getContractFactory("ParetoV1Margin", deployer);
-      await upgrades.upgradeProxy(marginV1.address, marginV1V2);
+      const marginV2 = await ethers.getContractFactory("MarginV1", deployer);
+      await upgrades.upgradeProxy(marginV1.address, marginV2);
     });
     it("Non-owner cannot upgrade", async () => {
-      const marginV1V2 = await ethers.getContractFactory("ParetoV1Margin", keeper);
-      await expect(upgrades.upgradeProxy(marginV1.address, marginV1V2))
+      const marginV2 = await ethers.getContractFactory("MarginV1", keeper);
+      await expect(upgrades.upgradeProxy(marginV1.address, marginV2))
         .to.be.revertedWith("Ownable: caller is not the owner");
     });
   });
