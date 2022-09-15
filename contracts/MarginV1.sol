@@ -14,8 +14,6 @@ import "./libraries/Derivative.sol";
 import "./libraries/MarginMath.sol";
 import "./libraries/DateMath.sol";
 
-import "hardhat/console.sol";
-
 /**
  * @notice Contract acting as the margin account for a Pareto trader.
  * Users will send collateral in USDC to this contract to satisfy 
@@ -28,7 +26,7 @@ import "hardhat/console.sol";
  * https://docs.openzeppelin.com/upgrades-plugins/1.x/writing-upgradeable
  * https://blog.logrocket.com/using-uups-proxy-pattern-upgrade-smart-contracts/
  */
-contract ParetoV1Margin is
+contract MarginV1 is
     Initializable,
     UUPSUpgradeable,
     ReentrancyGuardUpgradeable,
