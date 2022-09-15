@@ -16,7 +16,7 @@ For those interested in local development.
 
 ### Installation
 
-`npx hardhat install`
+`npm install`
 
 ### Compile Contracts
 
