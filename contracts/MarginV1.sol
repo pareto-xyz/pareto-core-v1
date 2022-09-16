@@ -704,6 +704,15 @@ contract MarginV1 is
         return orders;
     }
 
+    /**
+     * @notice Get strikes for the current round
+     * @param underlying Enum for the underlying token
+     * @return strikes 11 strikes for the current round
+     */
+    function getStrikes(Derivative.Underlying underlying) external view returns (uint256[11] memory) {
+        return roundStrikes[underlying];
+    }
+
     /************************************************
      * Internal functions
      ***********************************************/
