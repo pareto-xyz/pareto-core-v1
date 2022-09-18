@@ -249,57 +249,65 @@ describe("MarginV1 Contract", () => {
     it("Owner can add a new position", async () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
     });
     it("Keeper can add a new position", async () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
-      await marginV1.connect(keeper).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(keeper).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
     });
     it("User cannot add a new position", async () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await expect(
-        marginV1.connect(buyer).addPosition(
-          buyer.address,
-          seller.address,
-          ONEUSDC,
-          toBn("1", 4),
-          true,
-          7,
-          0,
-        )
+        marginV1.connect(buyer).addPosition({
+          buyer: buyer.address,
+          seller: seller.address,
+          tradePrice: ONEUSDC,
+          quantity: toBn("1", 4),
+          isCall: true,
+          strikeLevel: 7,
+          underlying: 0,
+          isBuyerMaker: false,
+          isSellerMaker: true,
+        })
       ).to.be.revertedWith("onlyKeeper: caller is not a keeper");
     });
     it("Emits event when adding a position", async () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await expect(
-        marginV1.connect(keeper).addPosition(
-          buyer.address,
-          seller.address,
-          ONEUSDC,
-          toBn("1", 4),
-          true,
-          7,
-          0,
-        )
+        marginV1.connect(keeper).addPosition({
+          buyer: buyer.address,
+          seller: seller.address,
+          tradePrice: ONEUSDC,
+          quantity: toBn("1", 4),
+          isCall: true,
+          strikeLevel: 7,
+          underlying: 0,
+          isBuyerMaker: false,
+          isSellerMaker: true,
+        })
       )
         .to.emit(marginV1, "RecordPositionEvent")
         .withArgs(ONEUSDC, toBn("1", 4), true, 0, 7, expiry);
@@ -307,30 +315,34 @@ describe("MarginV1 Contract", () => {
     it("Buyer passes margin check after position added", async () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       const [, satisfied] = await marginV1.checkMargin(buyer.address, false);
       expect(satisfied).to.be.true;
     });
     it("Seller passes margin check after position added", async () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       const [, satisfied] = await marginV1.checkMargin(seller.address, false);
       expect(satisfied).to.be.true;
     });
@@ -367,59 +379,67 @@ describe("MarginV1 Contract", () => {
       // Now make a new position for said underlying
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        1,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 1,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
     });
     it("Cannot add position under the minimum quantity", async () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await expect(
-        marginV1.connect(deployer).addPosition(
-          buyer.address,
-          seller.address,
-          ONEUSDC,
-          toBn("0.1", 4),
-          true,
-          7,
-          0,
-        )
+        marginV1.connect(deployer).addPosition({
+          buyer: buyer.address,
+          seller: seller.address,
+          tradePrice: ONEUSDC,
+          quantity: toBn("0.1", 4),
+          isCall: true,
+          strikeLevel: 7,
+          underlying: 0,
+          isBuyerMaker: false,
+          isSellerMaker: true,
+        })
       ).to.be.revertedWith("addPosition: below min quantity");
     });
     it("Cannot add position with trade price 0", async () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await expect(
-        marginV1.connect(deployer).addPosition(
-          buyer.address,
-          seller.address,
-          0,
-          toBn("1", 4),
-          true,
-          7,
-          0
-        )
+        marginV1.connect(deployer).addPosition({
+          buyer: buyer.address,
+          seller: seller.address,
+          tradePrice: 0,
+          quantity: toBn("1", 4),
+          isCall: true,
+          strikeLevel: 7,
+          underlying: 0,
+          isBuyerMaker: false,
+          isSellerMaker: true,
+        })
       ).to.be.revertedWith("addPosition: tradePrice must be > 0");
     });
     it("Cannot add position with quantity 0", async () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await expect(
-        marginV1.connect(deployer).addPosition(
-          buyer.address,
-          seller.address,
-          ONEUSDC,
-          0,
-          true,
-          7,
-          0
-        )
+        marginV1.connect(deployer).addPosition({
+          buyer: buyer.address,
+          seller: seller.address,
+          tradePrice: ONEUSDC,
+          quantity: 0,
+          isCall: true,
+          strikeLevel: 7,
+          underlying: 0,
+          isBuyerMaker: false,
+          isSellerMaker: true,
+        })
       ).to.be.revertedWith("addPosition: quantity must be > 0");
     });
     it("Cannot add position if buyer below margin", async () => {
@@ -430,15 +450,17 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(buyer).deposit(takerFee);
 
       await expect(
-        marginV1.connect(deployer).addPosition(
-          buyer.address,
-          seller.address,
-          ONEUSDC,
-          toBn("1", 4),
-          true,
-          7,
-          0,
-        )
+        marginV1.connect(deployer).addPosition({
+          buyer: buyer.address,
+          seller: seller.address,
+          tradePrice: ONEUSDC,
+          quantity: toBn("1", 4),
+          isCall: true,
+          strikeLevel: 7,
+          underlying: 0,
+          isBuyerMaker: false,
+          isSellerMaker: true,
+        })
       ).to.be.revertedWith("addPosition: buyer failed margin check");
     });
     it("Cannot add position if seller below margin", async () => {
@@ -447,15 +469,17 @@ describe("MarginV1 Contract", () => {
       const [,makerFee] = await getFees(1, 1);
       await marginV1.connect(seller).deposit(makerFee);
       await expect(
-        marginV1.connect(deployer).addPosition(
-          buyer.address,
-          seller.address,
-          ONEUSDC,
-          toBn("1", 4),
-          true,
-          7,
-          0,
-        )
+        marginV1.connect(deployer).addPosition({
+          buyer: buyer.address,
+          seller: seller.address,
+          tradePrice: ONEUSDC,
+          quantity: toBn("1", 4),
+          isCall: true,
+          strikeLevel: 7,
+          underlying: 0,
+          isBuyerMaker: false,
+          isSellerMaker: true,
+        })
       ).to.be.revertedWith("addPosition: seller failed margin check");
     });
     it("Check opposite orders cancel", async () => {
@@ -463,25 +487,29 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
 
       // Buy a call position
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       // Sell the call position
-      await marginV1.connect(deployer).addPosition(
-        seller.address,
-        buyer.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: seller.address,
+        seller: buyer.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       const [buyerMargin,] = await marginV1.checkMargin(buyer.address, false);
       const [sellerMargin,] = await marginV1.checkMargin(seller.address, false);
 
@@ -498,25 +526,29 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
 
       // Buy a call position
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       // Sell the call position
-      await marginV1.connect(deployer).addPosition(
-        seller.address,
-        buyer.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        6,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: seller.address,
+        seller: buyer.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 6,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       const [buyerMargin,] = await marginV1.checkMargin(buyer.address, false);
       const [sellerMargin,] = await marginV1.checkMargin(seller.address, false);
       
@@ -533,25 +565,29 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));      
 
       // Buy a call position
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       // Sell the put position
-      await marginV1.connect(deployer).addPosition(
-        seller.address,
-        buyer.address,
-        ONEUSDC,
-        toBn("1", 4),
-        false,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: seller.address,
+        seller: buyer.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: false,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       const [buyerMargin,] = await marginV1.checkMargin(buyer.address, false);
       const [sellerMargin,] = await marginV1.checkMargin(seller.address, false);
       
@@ -582,39 +618,45 @@ describe("MarginV1 Contract", () => {
       const [takerFees7, makerFees7] = await getFees(7, 1);
 
       // Buy five call positions
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("5", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("5", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       // Sell two call positions
-      await marginV1.connect(deployer).addPosition(
-        seller.address,
-        buyer.address,
-        ONEUSDC,
-        toBn("2", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: seller.address,
+        seller: buyer.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("2", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
 
       const buyerFees = takerFees5.add(makerFees2);
       const sellerFees = makerFees5.add(takerFees2);
       
       // Separately deployer buys 3 call positions
-      await marginV1.connect(deployer).addPosition(
-        deployer.address,
-        keeper.address,
-        ONEUSDC,
-        toBn("3", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: deployer.address,
+        seller: keeper.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("3", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
 
       const deployerFees = takerFees7;
       const keeperFees = makerFees7;
@@ -645,64 +687,76 @@ describe("MarginV1 Contract", () => {
       const [takerFees2, makerFees2] = await getFees(2, 1);
       const [takerFees1, makerFees1] = await getFees(1, 1);
 
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("3", 4),
-        true,
-        7,
-        0,
-      );
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("2", 4),
-        true,
-        7,
-        0,
-      );
-      await marginV1.connect(deployer).addPosition(
-        seller.address,
-        buyer.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
-      await marginV1.connect(deployer).addPosition(
-        seller.address,
-        buyer.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("3", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("2", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
+      await marginV1.connect(deployer).addPosition({
+        buyer: seller.address,
+        seller: buyer.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
+      await marginV1.connect(deployer).addPosition({
+        buyer: seller.address,
+        seller: buyer.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
 
       const buyerFees = takerFees3.add(takerFees2).add(makerFees1).add(makerFees1);
       const sellerFees = makerFees3.add(makerFees2).add(takerFees1).add(takerFees1);
 
-      await marginV1.connect(deployer).addPosition(
-        deployer.address,
-        keeper.address,
-        ONEUSDC,
-        toBn("2", 4),
-        true,
-        7,
-        0,
-      );
-      await marginV1.connect(deployer).addPosition(
-        deployer.address,
-        keeper.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: deployer.address,
+        seller: keeper.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("2", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
+      await marginV1.connect(deployer).addPosition({
+        buyer: deployer.address,
+        seller: keeper.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
 
       const deployerFees = takerFees2.add(takerFees1);
       const keeperFees = makerFees2.add(makerFees1);
@@ -724,15 +778,17 @@ describe("MarginV1 Contract", () => {
 
       // Add seller to white so no fees
       await marginV1.connect(deployer).addToWhitelist([seller.address]);
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
 
       const sellerBalancePost = await marginV1.connect(seller).getBalance();
       const buyerBalancePost = await marginV1.connect(buyer).getBalance();
@@ -757,15 +813,17 @@ describe("MarginV1 Contract", () => {
       expect(positions.length).to.be.equal(0);
     });
     it("User can check one position", async () => {
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       const positions = await marginV1.connect(buyer).getPositions();
       expect(positions.length).to.be.equal(1);
       expect(positions[0].buyer).to.be.equal(buyer.address);
@@ -777,24 +835,28 @@ describe("MarginV1 Contract", () => {
       expect(positions[0].option.underlying).to.be.equal(0);
     });
     it("User can check multiple positions", async () => {
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        false,
-        3,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: false,
+        strikeLevel: 3,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       const positions = await marginV1.connect(buyer).getPositions();
       expect(positions.length).to.be.equal(2);
       expect(positions[0].option.strikeLevel).to.be.equal(7);
@@ -831,15 +893,17 @@ describe("MarginV1 Contract", () => {
       const [,makerFee] = await getFees(1, 1);
       await marginV1.connect(seller).deposit(makerFee);
       await expect(
-        marginV1.connect(deployer).addPosition(
-          buyer.address,
-          seller.address,
-          ONEUSDC,
-          toBn("1", 4),
-          true,
-          7,
-          0,
-        )
+        marginV1.connect(deployer).addPosition({
+          buyer: buyer.address,
+          seller: seller.address,
+          tradePrice: ONEUSDC,
+          quantity: toBn("1", 4),
+          isCall: true,
+          strikeLevel: 7,
+          underlying: 0,
+          isBuyerMaker: false,
+          isSellerMaker: true,
+        })
       ).to.be.revertedWith("addPosition: buyer failed margin check");
     });
   });
@@ -908,15 +972,17 @@ describe("MarginV1 Contract", () => {
       await usdc.connect(seller).approve(marginV1.address, ONEUSDC.mul(1000));
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        5,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 5,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       await expect(
         marginV1.connect(buyer).withdraw(ONEUSDC.mul(1000))
       ).to.be.revertedWith("withdraw: margin check failed");
@@ -926,15 +992,17 @@ describe("MarginV1 Contract", () => {
       await usdc.connect(seller).approve(marginV1.address, ONEUSDC.mul(1000));
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        5,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 5,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       await expect(
         marginV1.connect(buyer).withdrawAll()
       ).to.be.revertedWith("withdraw: margin check failed");
@@ -990,15 +1058,17 @@ describe("MarginV1 Contract", () => {
       await usdc.connect(seller).approve(marginV1.address, ONEUSDC.mul(1000));
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
-      await marginV1.connect(keeper).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(keeper).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       const expiry = (await marginV1.activeExpiry()).toNumber();
       await ethers.provider.send("evm_mine", [expiry+1]);
       await marginV1.settle();
@@ -1059,15 +1129,17 @@ describe("MarginV1 Contract", () => {
       const sellerPre = await marginV1.connect(seller).getBalance();
 
       // Enter the position
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
 
       // Let the price rise a lot so buyer wins
       await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(2000));
@@ -1096,15 +1168,17 @@ describe("MarginV1 Contract", () => {
       const sellerPre = await marginV1.connect(seller).getBalance();
 
       // Enter the position
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
 
       // Let the price drop a lot so seller wins
       await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(1000));
@@ -1133,15 +1207,17 @@ describe("MarginV1 Contract", () => {
       const sellerPre = await marginV1.connect(seller).getBalance();
 
       // Enter the position
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        3,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 3,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       
       // Let the price drop a lot so buyer wins
       await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(1000));
@@ -1170,15 +1246,17 @@ describe("MarginV1 Contract", () => {
       const sellerPre = await marginV1.connect(seller).getBalance();
 
       // Enter the position
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        3,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 3,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       
       // Let the price rise a lot so seller wins
       await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(2000));
@@ -1207,25 +1285,29 @@ describe("MarginV1 Contract", () => {
       const sellerPre = await marginV1.connect(seller).getBalance();
 
       // Enter the position
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
 
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        6,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 6,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
 
       // Let the price rise a lot so buyer wins
       await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(2000));
@@ -1256,24 +1338,28 @@ describe("MarginV1 Contract", () => {
        const sellerPre = await marginV1.connect(seller).getBalance();
  
        // Enter the position
-       await marginV1.connect(deployer).addPosition(
-         buyer.address,
-         seller.address,
-         ONEUSDC,
-         toBn("5", 4),
-         0,
-         7,
-         0,
-       );
-       await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        3,
-        0,
-      );
+       await marginV1.connect(deployer).addPosition({
+         buyer: buyer.address,
+         seller: seller.address,
+         tradePrice: ONEUSDC,
+         quantity: toBn("5", 4),
+         isCall: 0,
+         strikeLevel: 7,
+         underlying: 0,
+         isBuyerMaker: false,
+         isSellerMaker: true,
+       });
+       await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 3,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
 
       // Let the price rise a lot 
       await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(2000));
@@ -1302,15 +1388,17 @@ describe("MarginV1 Contract", () => {
       const sellerPre = parseFloat(fromBn(await marginV1.connect(seller).getBalance(), 18));
 
       // Enter the position
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("1", 4),
-        true,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("1", 4),
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
 
       // Let the price rise a lot so much that seller should get liquidated
       await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
@@ -1353,15 +1441,17 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
 
       // Enter the position
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC,
-        toBn("2", 4),
-        false,
-        7,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC,
+        quantity: toBn("2", 4),
+        isCall: false,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
 
       // Let the price rise a lot so much that seller should get liquidated
       await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
@@ -1392,15 +1482,17 @@ describe("MarginV1 Contract", () => {
     });
     it("Cannot add another position", async () => {
       await expect(
-        marginV1.connect(deployer).addPosition(
-          seller.address,
-          buyer.address,
-          ONEUSDC,
-          toBn("2", 4),
-          true,
-          7,
-          0,
-        )
+        marginV1.connect(deployer).addPosition({
+          buyer: seller.address,
+          seller: buyer.address,
+          tradePrice: ONEUSDC,
+          quantity: toBn("2", 4),
+          isCall: true,
+          strikeLevel: 7,
+          underlying: 0,
+          isBuyerMaker: false,
+          isSellerMaker: true,
+        })
       ).to.be.revertedWith("addPosition: seller failed margin check");
     });
   });
@@ -1419,25 +1511,29 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(deployer).deposit(ONEUSDC.mul(100000));
 
       // Add a call position
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC.mul(100),
-        toBn("0.5", 4),  // small position
-        true,
-        6,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC.mul(100),
+        quantity: toBn("0.5", 4),  // small position
+        isCall: true,
+        strikeLevel: 6,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       // Add another call at a different strike, switch buyer and seller rolls
-      await marginV1.connect(deployer).addPosition(
-        seller.address,
-        buyer.address,
-        ONEUSDC.mul(100),
-        toBn("10", 4),  // much larger position
-        true,
-        7,
-        0,
-      );  
+      await marginV1.connect(deployer).addPosition({
+        buyer: seller.address,
+        seller: buyer.address,
+        tradePrice: ONEUSDC.mul(100),
+        quantity: toBn("10", 4),  // much larger position
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });  
       // Let the price rise a lot: now the buyer who sold the second strike 
       // will be liquidated
       await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
@@ -1467,25 +1563,29 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(seller).deposit(ONEUSDC.mul(100000));
 
       // Add a call position
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC.mul(100),
-        toBn("0.5", 4),  // small position
-        true,
-        6,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC.mul(100),
+        quantity: toBn("0.5", 4),  // small position
+        isCall: true,
+        strikeLevel: 6,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       // Add another call at a different strike, switch buyer and seller rolls
-      await marginV1.connect(deployer).addPosition(
-        seller.address,
-        buyer.address,
-        ONEUSDC.mul(100),
-        toBn("10", 4),  // much larger position
-        true,
-        7,
-        0,
-      );  
+      await marginV1.connect(deployer).addPosition({
+        buyer: seller.address,
+        seller: buyer.address,
+        tradePrice: ONEUSDC.mul(100),
+        quantity: toBn("10", 4),  // much larger position
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });  
       // Let the price rise a lot: now the buyer who sold the second strike 
       // will be liquidated
       await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
@@ -1506,25 +1606,29 @@ describe("MarginV1 Contract", () => {
     });
     it("If liquidator falls below margin, everything is reset", async () => {
       // Add a call position
-      await marginV1.connect(deployer).addPosition(
-        buyer.address,
-        seller.address,
-        ONEUSDC.mul(100),
-        toBn("0.5", 4),  // small position
-        true,
-        6,
-        0,
-      );
+      await marginV1.connect(deployer).addPosition({
+        buyer: buyer.address,
+        seller: seller.address,
+        tradePrice: ONEUSDC.mul(100),
+        quantity: toBn("0.5", 4),  // small position
+        isCall: true,
+        strikeLevel: 6,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });
       // Add another call at a different strike, switch buyer and seller rolls
-      await marginV1.connect(deployer).addPosition(
-        seller.address,
-        buyer.address,
-        ONEUSDC.mul(100),
-        toBn("10", 4),  // much larger position
-        true,
-        7,
-        0,
-      );  
+      await marginV1.connect(deployer).addPosition({
+        buyer: seller.address,
+        seller: buyer.address,
+        tradePrice: ONEUSDC.mul(100),
+        quantity: toBn("10", 4),  // much larger position
+        isCall: true,
+        strikeLevel: 7,
+        underlying: 0,
+        isBuyerMaker: false,
+        isSellerMaker: true,
+      });  
       // Let the price rise a lot: now the buyer who sold the second strike 
       // will be liquidated
       await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));

@@ -65,6 +65,30 @@ library Derivative {
     }
 
     /**
+     * @notice Parameters to add a position
+     * @param buyer Address of the order buyer
+     * @param seller Address of the order seller
+     * @param tradePrice Premium for the option
+     * @param quantity Number of units in order
+     * @param isCall Whether option is a call or put
+     * @param strikeLevel Choice of strike from 11 levels
+     * @param underlying Enum for the underlying token
+     * @param isBuyerMaker Whether the buyer is a maker or taker
+     * @param isSellerMaker Whether the seller is a maker or taker
+     */
+    struct PositionParams {
+        address buyer;
+        address seller;
+        uint256 tradePrice;
+        uint256 quantity;
+        bool isCall;
+        StrikeLevel strikeLevel;
+        Underlying underlying;
+        bool isBuyerMaker;
+        bool isSellerMaker;
+    }
+
+    /**
      * @notice Hash order into byte string
      * @param order Order object 
      * @param hash_ SHA-3 hash of the Order object
