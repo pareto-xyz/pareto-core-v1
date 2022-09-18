@@ -155,8 +155,7 @@ contract MarginV1 is
 
         // The spot of the underlying will be in terms of decimals
         // Users cannot deposit more than 2000 USDC
-        uint8 decimals = IERC20Upgradeable(usdc).decimals();
-        maxBalanceCap = 2000 * 10**decimals;
+        maxBalanceCap = 2000 * 10**getCollateralDecimals();
     
         // Set the expiry to the next friday
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
@@ -713,6 +712,14 @@ contract MarginV1 is
         return roundStrikes[underlying];
     }
 
+    /**
+     * @notice Get decimals for the underlying derivative
+     * @return decimals Unsigned integer with 8 bits
+     */
+    function getCollateralDecimals() public view returns (uint8) {
+        return IERC20Upgradeable(usdc).decimals();
+    }
+
     /************************************************
      * Internal functions
      ***********************************************/
@@ -776,7 +783,7 @@ contract MarginV1 is
         require(activeExpiry > block.timestamp, "getStrikeMenu: expiry in the past");
 
         // The spot of the underlying will be in terms of decimals
-        uint8 decimals = IERC20Upgradeable(usdc).decimals();
+        uint8 decimals = getCollateralDecimals();
 
         // Fetch the spot price
         uint256 spot = getSpot(underlying);
@@ -1332,7 +1339,7 @@ contract MarginV1 is
         require(buyer != seller, "addPosition: cannot enter a position with yourself");
 
         // USDC decimals will be used for spot/strike calculations
-        uint8 decimals = IERC20Upgradeable(usdc).decimals();
+        uint8 decimals = getCollateralDecimals();
 
         // Get strike at chosen level from current round strikes
         uint256 strike = roundStrikes[underlying][uint8(strikeLevel)];
