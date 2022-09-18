@@ -1342,10 +1342,6 @@ contract MarginV1 is
         require(params.quantity > 0, "addPosition: quantity must be > 0");
         require(spotOracles[params.underlying] != address(0), "addPosition: no oracle for underlying");
         require(params.buyer != params.seller, "addPosition: cannot enter a position with yourself");
-        require(
-            !params.isBuyerMaker && !params.isTakerMaker, 
-            "addPosition: buyer and seller cannot both be makers"
-        );
 
         // USDC decimals will be used for spot/strike calculations
         uint8 decimals = getCollateralDecimals();
@@ -1380,7 +1376,7 @@ contract MarginV1 is
         (uint256 buyerFee, uint256 sellerFee) = getFees(
             order,
             params.isBuyerMaker,
-            params.isTakerMaker
+            params.isSellerMaker
         );
 
         // Check that buyers and sellers have enough to pay fees

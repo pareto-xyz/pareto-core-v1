@@ -85,7 +85,7 @@ library Derivative {
         StrikeLevel strikeLevel;
         Underlying underlying;
         bool isBuyerMaker;
-        bool isTakerMaker;
+        bool isSellerMaker;
     }
 
     /**
