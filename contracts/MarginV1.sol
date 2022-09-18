@@ -1077,25 +1077,38 @@ contract MarginV1 is
      * @dev Taker fees: min(0.06% of notional, 10% options prices)
      * @dev Maker fees: min(0.03% of notional, 10% of the options price)
      * @param order Object representing an order
-     * @return takerFees Fees for takers
-     * @return makerFees Fees for makers
+     * @param isBuyerMaker True if buyer placed a limit order, else false if market order
+     * @param isSellerMaker True if seller placed a limit orde,r else false if market order
+     * @return buyerFee Fees for buyers
+     * @return sellerFee Fees for sellers
      */
-    function getFees(Derivative.Order memory order) 
+    function getFees(Derivative.Order memory order, bool isBuyerMaker, bool isSellerMaker) 
         internal
         view
-        returns (uint256 takerFees, uint256 makerFees)
+        returns (uint256 buyerFee, uint256 sellerFee)
     {
         uint256 notional = getNotional(order);
         uint256 price = order.tradePrice;
         // min(0.06% of notional, 10% options prices)
         // min(0.0006 * notional, 0.1 * price)
         // min(6 * notional, 1000 * price) / 10000
-        takerFees = BasicMath.min(6 * notional, 1000 * price) / 10**4;
+        uint256 takerFee = BasicMath.min(6 * notional, 1000 * price) / 10**4;
         // min(0.03% of notional, 10% options prices)
         // min(0.0003 * notional, 0.1 * price)
         // min(3 * notional, 1000 * price) / 10000
-        makerFees = BasicMath.min(3 * notional, 1000 * price) / 10**4;
-    } 
+        uint256 makerFee = BasicMath.min(3 * notional, 1000 * price) / 10**4;
+
+        if (isBuyerMaker) {
+            buyerFee = whitelist[order.buyer] ? 0 : makerFee;
+        } else {
+            buyerFee = takerFee;
+        }
+        if (isSellerMaker) {
+            sellerFee = whitelist[order.seller] ? 0 : makerFee;
+        } else {
+            sellerFee = takerFee;
+        }
+    }
 
     /************************************************
      * Admin functions
@@ -1320,59 +1333,64 @@ contract MarginV1 is
      * @dev This function does not explicitly check that the same position is not added
      * twice. This is hard to do efficiently on-chain and will be done off-chain
      */
-    function addPosition(
-        address buyer,
-        address seller,
-        uint256 tradePrice,
-        uint256 quantity,
-        bool isCall,
-        Derivative.StrikeLevel strikeLevel,
-        Derivative.Underlying underlying
-    ) 
+    function addPosition(Derivative.PositionParams calldata params)
         external
         nonReentrant
         onlyKeeper 
     {
-        require(tradePrice > 0, "addPosition: tradePrice must be > 0");
-        require(quantity > 0, "addPosition: quantity must be > 0");
-        require(spotOracles[underlying] != address(0), "addPosition: no oracle for underlying");
-        require(buyer != seller, "addPosition: cannot enter a position with yourself");
+        require(params.tradePrice > 0, "addPosition: tradePrice must be > 0");
+        require(params.quantity > 0, "addPosition: quantity must be > 0");
+        require(spotOracles[params.underlying] != address(0), "addPosition: no oracle for underlying");
+        require(params.buyer != params.seller, "addPosition: cannot enter a position with yourself");
+        require(
+            !params.isBuyerMaker && !params.isTakerMaker, 
+            "addPosition: buyer and seller cannot both be makers"
+        );
 
         // USDC decimals will be used for spot/strike calculations
         uint8 decimals = getCollateralDecimals();
 
         // Get strike at chosen level from current round strikes
-        uint256 strike = roundStrikes[underlying][uint8(strikeLevel)];
+        uint256 strike = roundStrikes[params.underlying][uint8(params.strikeLevel)];
         require(strike > 0, "addPosition: no strike for underlying");
 
         // Build an order object
         Derivative.Order memory order = Derivative.Order(
-            buyer,
-            seller,
-            tradePrice,
-            quantity,
-            Derivative.Option(isCall, strikeLevel, strike, activeExpiry, underlying, decimals)
+            params.buyer,
+            params.seller,
+            params.tradePrice,
+            params.quantity,
+            Derivative.Option(
+                params.isCall,
+                params.strikeLevel,
+                strike,
+                activeExpiry,
+                params.underlying,
+                decimals
+            )
         );
 
         // Check we are not below minimum notional
-        require(order.quantity >= minQuantityPerUnderlying[underlying], "addPosition: below min quantity");
+        require(
+            order.quantity >= minQuantityPerUnderlying[params.underlying],
+            "addPosition: below min quantity"
+        );
 
         // Charge fees
-        (uint256 takerFees, uint256 makerFees) = getFees(order);
-
-        // If the maker is whitelisted, set to zero
-        if (whitelist[order.seller]) {
-            makerFees = 0;
-        }
+        (uint256 buyerFee, uint256 sellerFee) = getFees(
+            order,
+            params.isBuyerMaker,
+            params.isTakerMaker
+        );
 
         // Check that buyers and sellers have enough to pay fees
-        require(balances[order.buyer] >= takerFees, "addPosition: taker cannot pay fees");
-        require(balances[order.seller] >= makerFees, "addPosition: maker cannot pay fees");
+        require(balances[order.buyer] >= buyerFee, "addPosition: buyer cannot pay fees");
+        require(balances[order.seller] >= sellerFee, "addPosition: seller cannot pay fees");
 
         // Make fee transfers
-        balances[order.buyer] -= takerFees;
-        balances[order.seller] -= makerFees;
-        balances[feeRecipient] += (takerFees + makerFees);
+        balances[order.buyer] -= buyerFee;
+        balances[order.seller] -= sellerFee;
+        balances[feeRecipient] += (buyerFee + sellerFee);
 
         // Save position to mapping by expiry
         roundPositions.push(order);
@@ -1381,33 +1399,33 @@ contract MarginV1 is
         uint16 orderIndex = uint16(roundPositions.length - 1);
 
         // Sanity checks for buyer/seller positions
-        require(userRoundIxs[buyer].length == userRoundIxsIsActive[buyer].length);
-        require(userRoundIxs[seller].length == userRoundIxsIsActive[seller].length);
-        require(userRoundIxs[buyer].length >= userRoundCount[buyer]);
-        require(userRoundIxs[seller].length >= userRoundCount[seller]);
+        require(userRoundIxs[order.buyer].length == userRoundIxsIsActive[order.buyer].length);
+        require(userRoundIxs[order.seller].length == userRoundIxsIsActive[order.seller].length);
+        require(userRoundIxs[order.buyer].length >= userRoundCount[order.buyer]);
+        require(userRoundIxs[order.seller].length >= userRoundCount[order.seller]);
 
         // Save that the buyer/seller have this position
-        userRoundIxs[buyer].push(orderIndex);
-        userRoundIxs[seller].push(orderIndex);
-        userRoundIxsIsActive[buyer].push(true);
-        userRoundIxsIsActive[seller].push(true);
-        userRoundCount[buyer]++;
-        userRoundCount[seller]++;
+        userRoundIxs[order.buyer].push(orderIndex);
+        userRoundIxs[order.seller].push(orderIndex);
+        userRoundIxsIsActive[order.buyer].push(true);
+        userRoundIxsIsActive[order.seller].push(true);
+        userRoundCount[order.buyer]++;
+        userRoundCount[order.seller]++;
 
         // Check margin for buyer and seller
-        (, bool checkBuyerMargin) = checkMargin(buyer, false);
-        (, bool checkSellerMargin) = checkMargin(seller, false);
+        (, bool checkBuyerMargin) = checkMargin(order.buyer, false);
+        (, bool checkSellerMargin) = checkMargin(order.seller, false);
 
         require(checkBuyerMargin, "addPosition: buyer failed margin check");
         require(checkSellerMargin, "addPosition: seller failed margin check");
 
         // Emit event 
         emit RecordPositionEvent(
-            tradePrice,
-            quantity,
-            isCall,
-            underlying,
-            strikeLevel,
+            params.tradePrice,
+            params.quantity,
+            params.isCall,
+            params.underlying,
+            params.strikeLevel,
             activeExpiry
         );
     }
