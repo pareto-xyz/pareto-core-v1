@@ -125,6 +125,12 @@ contract MarginV1 is
         public
         initializer 
     {
+        require(usdc_ != address(0));
+        require(insurance_ != address(0));
+        require(feeRecipient_ != address(0));
+        require(oracle_ != address(0));
+        require(minQuantity_ > 0);
+
         usdc = usdc_;
         insurance = insurance_;
         feeRecipient = feeRecipient_;
