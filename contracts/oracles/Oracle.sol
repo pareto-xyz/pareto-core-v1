@@ -14,14 +14,12 @@ contract Oracle is IOracle, Ownable {
     uint256[11] public callMarks;
     uint256[11] public putMarks;
     uint80 public roundId;
-    string public description;
     uint256 public roundTimestamp;
 
     /// @notice Stores admin addresses who can publish to price feed
     mapping(address => bool) public isAdmin;
 
-    constructor(string memory description_, address[] memory admins_) {
-        description = description_;
+    constructor(address[] memory admins_) {
         _transferOwnership(msg.sender);
 
         // Set admins
@@ -48,12 +46,20 @@ contract Oracle is IOracle, Ownable {
         isAdmin[account_] = isAdmin_;
     }
 
-    /// @notice Set the latest oracle price
+    /// @notice Set the latest oracle data. Must set all data at once
     /// @dev Only callable by admin
-    function setLatestPrice(uint256 spot_) external onlyAdmin {
+    function setLatestData(
+        uint256 spot_,
+        uint256 rate_,
+        uint256[11] memory callMarks_,
+        uint256[11] memory putMarks_
+    ) external onlyAdmin {
         roundId = roundId + 1;
         roundTimestamp = block.timestamp;
         spot = spot_;
+        rate = rate_;
+        callMarks = callMarks_;
+        putMarks = putMarks_;
     }
 
     /// @dev See `../interfaces/IOracle.sol`

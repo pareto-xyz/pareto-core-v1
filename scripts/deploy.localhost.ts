@@ -32,7 +32,7 @@ async function main() {
   console.log("Minted 1M mock USDC for users");
   
   const OracleFactory = await ethers.getContractFactory("Oracle");
-  const oracle = await OracleFactory.deploy("ETH oracle", [keeper.address]);
+  const oracle = await OracleFactory.deploy([keeper.address]);
   await oracle.deployed();
   console.log("Deployed ETH oracle: ", oracle.address);
 
