@@ -846,7 +846,6 @@ contract MarginV1 is
     function getPayoff(address user, bool onlyLoss)
         public
         view
-        onlyKeeper
         returns (int256) 
     {
         if (userRoundCount[user] == 0) {
@@ -907,7 +906,6 @@ contract MarginV1 is
     function getMargin(address user, bool useInitialMargin)
         public
         view
-        onlyKeeper
         returns (uint256) 
     {
         if (userRoundIxs[user].length == 0) {
