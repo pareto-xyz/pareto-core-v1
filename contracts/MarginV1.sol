@@ -844,7 +844,7 @@ contract MarginV1 is
      * @return payoff The payoff summed for all positions (can be negative)
      */
     function getPayoff(address user, bool onlyLoss)
-        internal
+        public
         view
         returns (int256) 
     {
@@ -903,7 +903,11 @@ contract MarginV1 is
      * @param useInitialMargin By default, computes MM; if true, compute IM
      * @return margin The maintainence margin summed for all positions
      */
-    function getMargin(address user, bool useInitialMargin) internal view returns (uint256) {
+    function getMargin(address user, bool useInitialMargin)
+        public
+        view
+        returns (uint256) 
+    {
         if (userRoundIxs[user].length == 0) {
             return 0;
         }
