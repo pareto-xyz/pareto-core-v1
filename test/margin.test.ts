@@ -228,11 +228,10 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(buyer).deposit(1);
       expect(await marginV1.connect(deployer).getBalanceOf(buyer.address)).to.be.equal("1");
     });
-    it("EOA cannot check balance for another EOA", async () => {
+    it("EOA can check balance for another EOA", async () => {
       await usdc.connect(buyer).approve(marginV1.address, 1);
       await marginV1.connect(buyer).deposit(1);
-      await expect(marginV1.connect(seller).getBalanceOf(buyer.address))
-        .to.be.revertedWith("Ownable: caller is not the owner")
+      expect(await marginV1.connect(deployer).getBalanceOf(buyer.address)).to.be.equal("1");
     });
   });
 
