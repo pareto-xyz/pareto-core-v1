@@ -674,15 +674,6 @@ contract MarginV1 is
     }
 
     /**
-     * @notice Get balance for user
-     * @dev Intended so callers can only get their own balance
-     * @return balance Amount of USDC
-     */
-    function getBalanceOf(address user) external view returns (uint256) {
-        return balances[user];
-    }
-
-    /**
      * @notice Get all positions that the user is participating in
      */
     function getPositions() external view returns (Derivative.Order[] memory) {
@@ -1115,6 +1106,15 @@ contract MarginV1 is
     /************************************************
      * Admin functions
      ***********************************************/
+
+    /**
+     * @notice Get balance for user as an admin
+     * @dev Intended so callers can only get their own balance
+     * @return balance Amount of USDC
+     */
+    function getBalanceOf(address user) external view onlyOwner returns (uint256) {
+        return balances[user];
+    }
 
     /**
      * @notice Add a keeper
