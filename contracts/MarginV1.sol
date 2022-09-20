@@ -7,8 +7,7 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
 import "./interfaces/IERC20Upgradeable.sol";
-import "./interfaces/ISpotFeed.sol";
-import "./interfaces/IMarkFeed.sol";
+import "./interfaces/IOracle.sol";
 import "./utils/SafeERC20Upgradeable.sol";
 import "./libraries/Derivative.sol";
 import "./libraries/MarginMath.sol";
@@ -76,11 +75,8 @@ contract MarginV1 is
     /// @notice Tracks if the last round has been settled
     bool private roundSettled;
 
-    /// @notice Stores addresses for spot oracles of each underlying
-    mapping(Derivative.Underlying => address) private spotOracles;
-
-    /// @notice Stores addresses for mark price oracles of each underlying
-    mapping(Derivative.Underlying => address) private markOracles;
+    /// @notice Stores addresses for oracles of each underlying
+    mapping(Derivative.Underlying => address) private oracles;
 
     /// @notice Stores active underlyings
     mapping(Derivative.Underlying => bool) public isActiveUnderlying;
@@ -115,8 +111,7 @@ contract MarginV1 is
      * @param insurance_ Address for the insurance fund
      * @param feeRecipient_ Address to receive fees
      * @param underlying_ Name of underlying token to support at deployment
-     * @param spotOracle_ Address of spot oracle for the underlying
-     * @param markOracle_ Address of mark price oracle for the underlying
+     * @param oracle_ Address of oracle for the underlying
      * @param minQuantity_ Minimum quantity in option for underlying
      */
     function initialize(
@@ -124,8 +119,7 @@ contract MarginV1 is
         address insurance_,
         address feeRecipient_,
         Derivative.Underlying underlying_,
-        address spotOracle_,
-        address markOracle_,
+        address oracle_,
         uint256 minQuantity_
     )
         public
@@ -161,7 +155,7 @@ contract MarginV1 is
         activeExpiry = DateMath.getNextExpiry(block.timestamp);
 
         // Create a new underlying (handles strike and smile creation)
-        newUnderlying(underlying_, spotOracle_, markOracle_, minQuantity_);
+        newUnderlying(underlying_, oracle_, minQuantity_);
     }
 
     /**
@@ -260,15 +254,13 @@ contract MarginV1 is
      * @notice Event when the maximum balance cap is updated
      * @param owner Address who called the activate underlying function
      * @param underlying Underlying enum
-     * @param spotOracle Address for spot oracle
-     * @param markOracle Address for mark oracle
+     * @param oracle Address for oracle    
      * @param minQuantity Minimum quantity for order allowed for underlying
      */
     event NewUnderlyingEvent(
         address indexed owner,
         Derivative.Underlying underlying,
-        address spotOracle,
-        address markOracle,
+        address oracle,
         uint256 minQuantity
     );
 
@@ -739,8 +731,8 @@ contract MarginV1 is
      * @return answer Latest price for underlying
      */
     function getSpot(Derivative.Underlying underlying) internal view returns (uint256) {
-        require(spotOracles[underlying] != address(0), "getSpot: missing oracle");
-        (,uint256 answer,) = ISpotFeed(spotOracles[underlying]).latestRoundData();
+        require(oracles[underlying] != address(0), "getSpot: missing oracle");
+        (,uint256 answer,) = IOracle(oracles[underlying]).latestRoundSpot();
         return answer;
     }
 
@@ -760,8 +752,8 @@ contract MarginV1 is
         view
         returns (uint256 answer) 
     {
-        require(markOracles[underlying] != address(0), "getMark: missing oracle");
-        (,answer,) = IMarkFeed(markOracles[underlying]).latestRoundData(isCall, uint8(strikeLevel));
+        require(oracles[underlying] != address(0), "getMark: missing oracle");
+        (,answer,) = IOracle(oracles[underlying]).latestRoundMark(isCall, uint8(strikeLevel));
         return answer;
     }
 
@@ -1058,22 +1050,19 @@ contract MarginV1 is
      * @notice Add a new underlying
      * @dev For code reuse
      * @param underlying Enum for the underlying token
-     * @param spotOracle Address for an oracle for spot prices
-     * @param markOracle Address for an oracle for mark prices
+     * @param oracle Address for an oracle for an underlying
      * @param minQuantity Maximum notional for underlying
      */
     function newUnderlying(
         Derivative.Underlying underlying,
-        address spotOracle,
-        address markOracle,
+        address oracle,
         uint256 minQuantity
     ) internal {
         require(!isActiveUnderlying[underlying], "newUnderlying: underlying already active");
         require(minQuantity > 0, "newUnderlying: max notional must be > 0");
 
         // Set oracles for underlying
-        spotOracles[underlying] = spotOracle;
-        markOracles[underlying] = markOracle;
+        oracles[underlying] = oracle;
         
         // Set maximum notional values
         minQuantityPerUnderlying[underlying] = minQuantity;
@@ -1194,14 +1183,12 @@ contract MarginV1 is
     /**
      * @notice Active an underlying so users can make trades on it
      * @param underlying Enum for the underlying token
-     * @param spotOracle Address for an oracle for spot prices
-     * @param markOracle Address for an oracle for mark prices
+     * @param oracle Address for an oracle for spot/mark/rate prices
      * @param minQuantity Minimum order quantity for underlying
      */
     function activateUnderlying(
         Derivative.Underlying underlying,
-        address spotOracle,
-        address markOracle,
+        address oracle,
         uint256 minQuantity
     ) 
         external
@@ -1211,27 +1198,25 @@ contract MarginV1 is
             !isActiveUnderlying[underlying], 
             "activateUnderlying: underlying must not yet be active"
         );
-        newUnderlying(underlying, spotOracle, markOracle, minQuantity);
+        newUnderlying(underlying, oracle, minQuantity);
 
         // Emit event 
-        emit NewUnderlyingEvent(msg.sender, underlying, spotOracle, markOracle, minQuantity);
+        emit NewUnderlyingEvent(msg.sender, underlying, oracle, minQuantity);
     }
 
     /**
      * @notice Set the oracle for an underlying token
      * @dev This function can also be used to replace or delete spotOracles
      * @param underlying Enum for the underlying token
-     * @param spotOracle Address for an oracle for spot prices
-     * @param markOracle Address for an oracle for mark prices
+     * @param oracle Address for an oracle for spot/mark/rate prices
      */
-    function setOracle(Derivative.Underlying underlying, address spotOracle, address markOracle) 
+    function setOracle(Derivative.Underlying underlying, address oracle) 
         external
         onlyOwner 
     {
         require(isActiveUnderlying[underlying], "setOracle: underlying must already be active");
         // Existing underlying, overwrite oracle
-        spotOracles[underlying] = spotOracle;
-        markOracles[underlying] = markOracle;
+        oracles[underlying] = oracle;
     }
 
     /**
@@ -1344,7 +1329,7 @@ contract MarginV1 is
     {
         require(params.tradePrice > 0, "addPosition: tradePrice must be > 0");
         require(params.quantity > 0, "addPosition: quantity must be > 0");
-        require(spotOracles[params.underlying] != address(0), "addPosition: no oracle for underlying");
+        require(oracles[params.underlying] != address(0), "addPosition: no oracle for underlying");
         require(params.buyer != params.seller, "addPosition: cannot enter a position with yourself");
 
         // USDC decimals will be used for spot/strike calculations

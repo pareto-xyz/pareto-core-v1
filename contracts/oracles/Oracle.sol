@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.9;
 
-import "../interfaces/ISpotFeed.sol";
+import "../interfaces/IOracle.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @notice Since chainlink updates too slowly, we opt to use a custom oracle.
  * @dev This does not store past round data
  */
-contract SpotFeed is ISpotFeed, Ownable {
+contract Oracle is IOracle, Ownable {
     uint256 public spot;
+    uint256 public rate;
+    uint256[11] public callMarks;
+    uint256[11] public putMarks;
     uint80 public roundId;
     string public description;
     uint256 public roundTimestamp;
@@ -53,15 +56,62 @@ contract SpotFeed is ISpotFeed, Ownable {
         spot = spot_;
     }
 
-    /**
-     * @notice See `interfaces/IOracle.sol`
-     */
-    function latestRoundData()
+    /// @dev See `../interfaces/IOracle.sol`
+    function latestRoundSpot()
         external
-        override
         view
+        override
         returns (uint80, uint256, uint256)
     {
         return (roundId, spot, roundTimestamp);
+    }
+
+    /// @dev See `../interfaces/IOracle.sol`
+    function latestRoundRate()
+        external
+        view
+        override
+        returns (uint80, uint256, uint256)
+    {
+        return (roundId, rate, roundTimestamp);
+    }
+
+    /// @dev See `../interfaces/IOracle.sol`
+    function latestRoundMark(bool isCall, uint8 strikeLevel)
+        external
+        view
+        override
+        returns (uint80, uint256, uint256)
+    {
+        require(strikeLevel < 11);
+        if (isCall) {
+            return (roundId, callMarks[strikeLevel], roundTimestamp);
+        } else {
+            return (roundId, putMarks[strikeLevel], roundTimestamp);
+        }
+    }
+
+    /// @dev See `../interfaces/IOracle.sol`
+    function latestRoundMarks(bool isCall)
+        external
+        view
+        override
+        returns (uint80, uint256[11] memory, uint256)
+    {
+        if (isCall) {
+            return (roundId, callMarks, roundTimestamp);
+        } else {
+            return (roundId, putMarks, roundTimestamp);
+        }
+    }
+
+    /// @dev See `../interfaces/IOracle.sol`
+    function latestRoundData() 
+        external
+        view
+        override
+        returns (uint80, uint256, uint256, uint256[11] memory, uint256[11] memory, uint256)
+    {
+        return (roundId, spot, rate, callMarks, putMarks, roundTimestamp);
     }
 }
