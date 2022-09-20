@@ -8,8 +8,7 @@ import { getFixedGasSigners } from "./utils/helpers";
 let usdc: Contract;
 let derivative: Contract;
 let marginV1: Contract;
-let spotFeed: Contract;
-let markFeed: Contract;
+let oracle: Contract;
 let deployer: SignerWithAddress;
 let keeper: SignerWithAddress;
 let buyer: SignerWithAddress;
@@ -18,6 +17,14 @@ let insurance: SignerWithAddress;
 let feeRecipient: SignerWithAddress;
 
 const ONEUSDC = toBn("1", 18);
+var DEFAULT_CALL_PRICES: BigNumber[] = [];
+var DEFAULT_PUT_PRICES: BigNumber[] = [];
+for (var i = 0; i < 11; i++) {
+  DEFAULT_CALL_PRICES.push(ONEUSDC.mul(150));
+  DEFAULT_PUT_PRICES.push(ONEUSDC.mul(150));
+}
+const DEFAULT_INTEREST_RATE = 0;
+const DEFAULT_SPOT_PRICE = ONEUSDC.mul(1500);
 
 /**
  * Function to compute fees from order information
@@ -29,7 +36,7 @@ async function getFees(
   quantity: number,
   tradePrice: number,
 ): Promise<[BigNumber, BigNumber]> {
-  const [,spotBn,] = await spotFeed.latestRoundData();
+  const [,spotBn,] = await oracle.latestRoundSpot();
   const spot = parseFloat(fromBn(spotBn, 18));
   const makerFee = Math.min(0.0003 * spot * quantity, 0.1 * tradePrice);
   const takerFee = Math.min(0.0006 * spot * quantity, 0.1 * tradePrice);
@@ -55,28 +62,21 @@ describe("MarginV1 Contract", () => {
     await usdc.mint(insurance.address, ONEUSDC.mul(1e6));
 
     // Deploy a spot feed
-    const SpotFeedFactory = await ethers.getContractFactory("SpotFeed");
+    const OracleFactory = await ethers.getContractFactory("Oracle");
 
     // Create spot oracle, assign keeper as admin
-    spotFeed = await SpotFeedFactory.deploy("ETH spot", [keeper.address]);
-    await spotFeed.deployed();
+    oracle = await OracleFactory.deploy([keeper.address]);
+    await oracle.deployed();
 
     // Set spot price to 1500 USDC, with 18 decimals
-    await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(1500));
-
-    // Create mark price oracle, assign keeper as admin
-    const MarkFeedFactory = await ethers.getContractFactory("MarkFeed");
-    markFeed = await MarkFeedFactory.deploy("ETH mark", [keeper.address]);
-    await markFeed.deployed();
-
     // Set mark price to (spot / 10) all around
-    var callPrices = [];
-    var putPrices = [];
-    for (var i = 0; i < 11; i++) {
-      callPrices.push(ONEUSDC.mul(150));
-      putPrices.push(ONEUSDC.mul(150));
-    }
-    await markFeed.connect(deployer).setLatestPrices(callPrices, putPrices);
+    // Set rate to 0
+    await oracle.connect(deployer).setLatestData(
+        DEFAULT_SPOT_PRICE,
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+    );
 
     // Deploy upgradeable Pareto margin contract
     const MarginV1Factory = await ethers.getContractFactory("MarginV1", deployer);
@@ -87,8 +87,7 @@ describe("MarginV1 Contract", () => {
         insurance.address,
         feeRecipient.address,
         0,
-        spotFeed.address,
-        markFeed.address,
+        oracle.address,
         toBn("0.5", 4),
       ]
     );
@@ -347,31 +346,21 @@ describe("MarginV1 Contract", () => {
     });
     it("Can add position for brand new underlying", async () => {
       // Deploy new oracle contracts
-      const SpotFeedFactory = await ethers.getContractFactory("SpotFeed");
-      const newSpotFeed = await SpotFeedFactory.deploy("BTC spot", [keeper.address]);
-      await newSpotFeed.deployed();
+      const OracleFactory = await ethers.getContractFactory("Oracle");
+      const newOracle = await OracleFactory.deploy([keeper.address]);
+      await newOracle.deployed();
 
-      const MarkFeedFactory = await ethers.getContractFactory("MarkFeed");
-      const newMarkFeed = await MarkFeedFactory.deploy("BTC mark", [keeper.address]);
-      newMarkFeed.deployed();
+      await newOracle.connect(deployer).setLatestData(
+        DEFAULT_SPOT_PRICE,
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+      );
 
-      // Set spot price
-      await newSpotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(1500));
-
-      // Set mark price
-      var callPrices = [];
-      var putPrices = [];
-      for (var i = 0; i < 11; i++) {
-        callPrices.push(ONEUSDC.mul(150));
-        putPrices.push(ONEUSDC.mul(150));
-      }
-      await newMarkFeed.connect(deployer).setLatestPrices(callPrices, putPrices);
-      
       // Making a new underlying
       await marginV1.connect(deployer).activateUnderlying(
         1, 
-        newSpotFeed.address, 
-        newMarkFeed.address,
+        newOracle.address, 
         toBn("1", 3),
       );
 
@@ -1141,7 +1130,12 @@ describe("MarginV1 Contract", () => {
       });
 
       // Let the price rise a lot so buyer wins
-      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(2000));
+      await oracle.connect(deployer).setLatestData(
+        ONEUSDC.mul(2000),
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+      );
 
       // Settle positions
       const expiry = (await marginV1.activeExpiry()).toNumber();
@@ -1180,7 +1174,12 @@ describe("MarginV1 Contract", () => {
       });
 
       // Let the price drop a lot so seller wins
-      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(1000));
+      await oracle.connect(deployer).setLatestData(
+        ONEUSDC.mul(1000),
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+      );
 
       // Settle positions
       const expiry = (await marginV1.activeExpiry()).toNumber();
@@ -1219,7 +1218,12 @@ describe("MarginV1 Contract", () => {
       });
       
       // Let the price drop a lot so buyer wins
-      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(1000));
+      await oracle.connect(deployer).setLatestData(
+        ONEUSDC.mul(1000),
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+      );
 
       // Settle positions
       const expiry = (await marginV1.activeExpiry()).toNumber();
@@ -1258,7 +1262,12 @@ describe("MarginV1 Contract", () => {
       });
       
       // Let the price rise a lot so seller wins
-      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(2000));
+      await oracle.connect(deployer).setLatestData(
+        ONEUSDC.mul(2000),
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+      );
 
       // Settle positions
       const expiry = (await marginV1.activeExpiry()).toNumber();
@@ -1309,7 +1318,12 @@ describe("MarginV1 Contract", () => {
       });
 
       // Let the price rise a lot so buyer wins
-      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(2000));
+      await oracle.connect(deployer).setLatestData(
+        ONEUSDC.mul(2000),
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+      );
 
       // Settle positions
       const expiry = (await marginV1.activeExpiry()).toNumber();
@@ -1361,7 +1375,12 @@ describe("MarginV1 Contract", () => {
       });
 
       // Let the price rise a lot 
-      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(2000));
+      await oracle.connect(deployer).setLatestData(
+        ONEUSDC.mul(2000),
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+      );
 
       // Settle positions
       const expiry = (await marginV1.activeExpiry()).toNumber();
@@ -1400,7 +1419,12 @@ describe("MarginV1 Contract", () => {
       });
 
       // Let the price rise a lot so much that seller should get liquidated
-      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
+      await oracle.connect(deployer).setLatestData(
+        ONEUSDC.mul(10000),
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+      );
 
       // Settle positions
       const expiry = (await marginV1.activeExpiry()).toNumber();
@@ -1453,7 +1477,12 @@ describe("MarginV1 Contract", () => {
       });
 
       // Let the price rise a lot so much that seller should get liquidated
-      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
+      await oracle.connect(deployer).setLatestData(
+        ONEUSDC.mul(10000),
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+      );
     });
     it("Owner can liquidate", async () => {
       await marginV1.connect(deployer).liquidate(seller.address);
@@ -1535,7 +1564,12 @@ describe("MarginV1 Contract", () => {
       });  
       // Let the price rise a lot: now the buyer who sold the second strike 
       // will be liquidated
-      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
+      await oracle.connect(deployer).setLatestData(
+        ONEUSDC.mul(10000),
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+      );
 
       // Call liquidate
       await marginV1.connect(deployer).liquidate(buyer.address);
@@ -1587,7 +1621,12 @@ describe("MarginV1 Contract", () => {
       });  
       // Let the price rise a lot: now the buyer who sold the second strike 
       // will be liquidated
-      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
+      await oracle.connect(deployer).setLatestData(
+        ONEUSDC.mul(10000),
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+      );
 
       // Call liquidate from the seller
       await marginV1.connect(seller).liquidate(buyer.address);
@@ -1630,7 +1669,12 @@ describe("MarginV1 Contract", () => {
       });  
       // Let the price rise a lot: now the buyer who sold the second strike 
       // will be liquidated
-      await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(10000));
+      await oracle.connect(deployer).setLatestData(
+        ONEUSDC.mul(10000),
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+      );
 
       // Check margin of liquidator (deployer) and buyer
       const [liquidatorMarginPre, liquidatorSatisfiedPre] = await marginV1.checkMargin(deployer.address, false);
@@ -1744,49 +1788,38 @@ describe("MarginV1 Contract", () => {
    * Oracle management
    ****************************************/  
   describe("Managing oracles", () => {
-    let newSpotFeed: Contract;
-    let newMarkFeed: Contract;
+    let newOracle: Contract;
 
     beforeEach(async () => {
-      const SpotFeedFactory = await ethers.getContractFactory("SpotFeed");
-      newSpotFeed = await SpotFeedFactory.deploy("BTC spot", [keeper.address]);
-      await newSpotFeed.deployed();
-
-      const MarkFeedFactory = await ethers.getContractFactory("MarkFeed");
-      newMarkFeed = await MarkFeedFactory.deploy("BTC mark", [keeper.address]);
-      await newMarkFeed.deployed();
+      const OracleFactory = await ethers.getContractFactory("Oracle");
+      newOracle = await OracleFactory.deploy([keeper.address]);
+      await newOracle.deployed();
     });
     it("Owner can set oracle for new underlying", async () => {
       // Initialize the spot feed
-      await newSpotFeed.setLatestPrice(toBn("1", 18));
-
-      // Initialize the mark feed
-      var callPrices = [];
-      var putPrices = [];
-      for (var i = 0; i < 11; i++) {
-        callPrices.push(ONEUSDC.mul(150));
-        putPrices.push(ONEUSDC.mul(150));
-      }
-      await newMarkFeed.setLatestPrices(callPrices, putPrices);
-
+      await newOracle.setLatestData(
+        toBn("1", 18),
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+      );
       expect(await marginV1.isActiveUnderlying(0)).to.be.true;
       expect(await marginV1.isActiveUnderlying(1)).to.be.false;
       await marginV1.connect(deployer).activateUnderlying(
         1,
-        newSpotFeed.address,
-        newMarkFeed.address,
+        newOracle.address,
         toBn("1", 3),
       );
       expect(await marginV1.isActiveUnderlying(1)).to.be.true;
     });
     it("Keeper cannot set oracle for existing underlying", async () => {
       await expect(
-        marginV1.connect(keeper).setOracle(0, newSpotFeed.address, newMarkFeed.address)
+        marginV1.connect(keeper).setOracle(0, newOracle.address)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
     it("User cannot set oracle for existing underlying", async () => {
       await expect(
-        marginV1.connect(buyer).setOracle(0, newSpotFeed.address, newMarkFeed.address)
+        marginV1.connect(buyer).setOracle(0, newOracle.address)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
   });

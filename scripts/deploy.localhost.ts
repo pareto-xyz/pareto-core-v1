@@ -31,19 +31,10 @@ async function main() {
   await usdc.mint(insurance.address, ONEUSDC.mul(1e6));
   console.log("Minted 1M mock USDC for users");
   
-  const SpotFeedFactory = await ethers.getContractFactory("SpotFeed");
-  const spotFeed = await SpotFeedFactory.deploy("ETH spot", [keeper.address]);
-  await spotFeed.deployed();
-  console.log("Deployed ETH spot oracle: ", spotFeed.address);
-
-  await spotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(1600));
-  console.log("Set ETH spot oracle to 1600 USDC");
-
-  const MarkFeedFactory = await ethers.getContractFactory("MarkFeed");
-  const markFeed = await MarkFeedFactory.deploy("ETH mark", [keeper.address]);
-  await markFeed.deployed();
-  console.log("Deployed ETH mark oracle: ", markFeed.address);
-  console.log("Mark prices unintialized. It is up to you to do so.")
+  const OracleFactory = await ethers.getContractFactory("Oracle");
+  const oracle = await OracleFactory.deploy([keeper.address]);
+  await oracle.deployed();
+  console.log("Deployed ETH oracle: ", oracle.address);
 
   const MarginV1Factory = await ethers.getContractFactory("MarginV1", deployer);
   const marginV1 = await upgrades.deployProxy(
@@ -53,8 +44,7 @@ async function main() {
       insurance.address,
       feeRecipient.address,
       0,
-      spotFeed.address,
-      markFeed.address,
+      oracle.address,
       toBn("0.5", 4),
     ]
   );
