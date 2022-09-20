@@ -33,7 +33,7 @@ describe("Oracle Library", () => {
         putMarks.push(ONE_ETH);
     }
     await oracle.connect(owner).setLatestData(ONE_ETH, ONE_ETH, callMarks, putMarks);
-    const [roundId, spot,] = await oracle.latestRoundSpot();
+    const [roundId, spot,,] = await oracle.latestRoundSpot();
     expect(roundId).to.be.equal(1);
     expect(spot).to.be.equal(ONE_ETH);
   });
@@ -45,7 +45,7 @@ describe("Oracle Library", () => {
         putMarks.push(ONE_ETH);
     }
     await oracle.connect(admin).setLatestData(ONE_ETH, ONE_ETH, callMarks, putMarks);
-    const [roundId, spot,] = await oracle.latestRoundSpot();
+    const [roundId, spot,,] = await oracle.latestRoundSpot();
     expect(roundId).to.be.equal(1);
     expect(spot).to.be.equal(ONE_ETH);
   });
@@ -82,7 +82,7 @@ describe("Oracle Library", () => {
     }
     await oracle.connect(admin).setLatestData(
         ONE_ETH.mul(11).div(10), ONE_ETH, callMarks, putMarks);
-    const [,spot,] = await oracle.latestRoundSpot();
+    const [,spot,,] = await oracle.latestRoundSpot();
     expect(spot).to.be.equal(ONE_ETH.mul(11).div(10));
   });
   it("can get latest round", async () => {
@@ -96,7 +96,7 @@ describe("Oracle Library", () => {
         ONE_ETH.mul(11).div(10), ONE_ETH, callMarks, putMarks);
     await oracle.connect(admin).setLatestData(
         ONE_ETH.mul(11).div(10), ONE_ETH, callMarks, putMarks);
-    const [roundId,,] = await oracle.latestRoundSpot();
+    const [roundId,,,] = await oracle.latestRoundSpot();
     expect(roundId).to.be.equal(2);
   });
 });

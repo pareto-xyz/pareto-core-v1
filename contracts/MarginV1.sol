@@ -723,7 +723,7 @@ contract MarginV1 is
      */
     function getSpot(Derivative.Underlying underlying) internal view returns (uint256) {
         require(oracles[underlying] != address(0), "getSpot: missing oracle");
-        (,uint256 answer,) = IOracle(oracles[underlying]).latestRoundSpot();
+        (,uint256 answer,,) = IOracle(oracles[underlying]).latestRoundSpot();
         return answer;
     }
 
@@ -744,7 +744,7 @@ contract MarginV1 is
         returns (uint256 answer) 
     {
         require(oracles[underlying] != address(0), "getMark: missing oracle");
-        (,answer,) = IOracle(oracles[underlying]).latestRoundMark(isCall, uint8(strikeLevel));
+        (,answer,,) = IOracle(oracles[underlying]).latestRoundMark(isCall, uint8(strikeLevel));
         return answer;
     }
 

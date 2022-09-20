@@ -36,7 +36,7 @@ async function getFees(
   quantity: number,
   tradePrice: number,
 ): Promise<[BigNumber, BigNumber]> {
-  const [,spotBn,] = await oracle.latestRoundSpot();
+  const [,spotBn,,] = await oracle.latestRoundSpot();
   const spot = parseFloat(fromBn(spotBn, 18));
   const makerFee = Math.min(0.0003 * spot * quantity, 0.1 * tradePrice);
   const takerFee = Math.min(0.0006 * spot * quantity, 0.1 * tradePrice);

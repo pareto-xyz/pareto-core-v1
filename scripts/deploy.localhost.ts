@@ -36,6 +36,22 @@ async function main() {
   await oracle.deployed();
   console.log("Deployed ETH oracle: ", oracle.address);
 
+  let callMarks = [];
+  let putMarks = [];
+  for (var i = 0; i < 11; i++) {
+    callMarks.push(ONEUSDC.mul(130))
+    putMarks.push(ONEUSDC.mul(130))
+  }
+
+  // Important to set spot price. For others, we make up numbers
+  // We expect this to be updated soon after deployment
+  await oracle.connect(deployer).setLatestData(
+    ONEUSDC.mul(1300),
+    0,
+    callMarks,
+    putMarks,
+  );
+
   const MarginV1Factory = await ethers.getContractFactory("MarginV1", deployer);
   const marginV1 = await upgrades.deployProxy(
     MarginV1Factory,

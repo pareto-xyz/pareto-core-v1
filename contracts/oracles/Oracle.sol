@@ -16,6 +16,10 @@ contract Oracle is IOracle, Ownable {
     uint80 public roundId;
     uint256 public roundTimestamp;
 
+    uint8 constant public SPOT_DECIMALS = 18;
+    uint8 constant public MARK_DECIMALS = 18;
+    uint8 constant public RATE_DECIMALS = 4;
+
     /// @notice Stores admin addresses who can publish to price feed
     mapping(address => bool) public isAdmin;
 
@@ -67,9 +71,9 @@ contract Oracle is IOracle, Ownable {
         external
         view
         override
-        returns (uint80, uint256, uint256)
+        returns (uint80, uint256, uint256, uint8)
     {
-        return (roundId, spot, roundTimestamp);
+        return (roundId, spot, roundTimestamp, SPOT_DECIMALS);
     }
 
     /// @dev See `../interfaces/IOracle.sol`
@@ -77,9 +81,9 @@ contract Oracle is IOracle, Ownable {
         external
         view
         override
-        returns (uint80, uint256, uint256)
+        returns (uint80, uint256, uint256, uint8)
     {
-        return (roundId, rate, roundTimestamp);
+        return (roundId, rate, roundTimestamp, RATE_DECIMALS);
     }
 
     /// @dev See `../interfaces/IOracle.sol`
@@ -87,13 +91,13 @@ contract Oracle is IOracle, Ownable {
         external
         view
         override
-        returns (uint80, uint256, uint256)
+        returns (uint80, uint256, uint256, uint8)
     {
         require(strikeLevel < 11);
         if (isCall) {
-            return (roundId, callMarks[strikeLevel], roundTimestamp);
+            return (roundId, callMarks[strikeLevel], roundTimestamp, MARK_DECIMALS);
         } else {
-            return (roundId, putMarks[strikeLevel], roundTimestamp);
+            return (roundId, putMarks[strikeLevel], roundTimestamp, MARK_DECIMALS);
         }
     }
 
@@ -102,22 +106,12 @@ contract Oracle is IOracle, Ownable {
         external
         view
         override
-        returns (uint80, uint256[11] memory, uint256)
+        returns (uint80, uint256[11] memory, uint256, uint8)
     {
         if (isCall) {
-            return (roundId, callMarks, roundTimestamp);
+            return (roundId, callMarks, roundTimestamp, MARK_DECIMALS);
         } else {
-            return (roundId, putMarks, roundTimestamp);
+            return (roundId, putMarks, roundTimestamp, MARK_DECIMALS);
         }
-    }
-
-    /// @dev See `../interfaces/IOracle.sol`
-    function latestRoundData() 
-        external
-        view
-        override
-        returns (uint80, uint256, uint256, uint256[11] memory, uint256[11] memory, uint256)
-    {
-        return (roundId, spot, rate, callMarks, putMarks, roundTimestamp);
     }
 }
