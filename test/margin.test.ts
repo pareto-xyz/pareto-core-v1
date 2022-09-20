@@ -346,31 +346,21 @@ describe("MarginV1 Contract", () => {
     });
     it("Can add position for brand new underlying", async () => {
       // Deploy new oracle contracts
-      const SpotFeedFactory = await ethers.getContractFactory("SpotFeed");
-      const newSpotFeed = await SpotFeedFactory.deploy("BTC spot", [keeper.address]);
-      await newSpotFeed.deployed();
+      const OracleFactory = await ethers.getContractFactory("Oracle");
+      const newOracle = await OracleFactory.deploy([keeper.address]);
+      await newOracle.deployed();
 
-      const MarkFeedFactory = await ethers.getContractFactory("MarkFeed");
-      const newMarkFeed = await MarkFeedFactory.deploy("BTC mark", [keeper.address]);
-      newMarkFeed.deployed();
+      await newOracle.connect(deployer).setLatestData(
+        DEFAULT_SPOT_PRICE,
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+      );
 
-      // Set spot price
-      await newSpotFeed.connect(deployer).setLatestPrice(ONEUSDC.mul(1500));
-
-      // Set mark price
-      var callPrices = [];
-      var putPrices = [];
-      for (var i = 0; i < 11; i++) {
-        callPrices.push(ONEUSDC.mul(150));
-        putPrices.push(ONEUSDC.mul(150));
-      }
-      await newMarkFeed.connect(deployer).setLatestPrices(callPrices, putPrices);
-      
       // Making a new underlying
       await marginV1.connect(deployer).activateUnderlying(
         1, 
-        newSpotFeed.address, 
-        newMarkFeed.address,
+        newOracle.address, 
         toBn("1", 3),
       );
 
@@ -1798,49 +1788,38 @@ describe("MarginV1 Contract", () => {
    * Oracle management
    ****************************************/  
   describe("Managing oracles", () => {
-    let newSpotFeed: Contract;
-    let newMarkFeed: Contract;
+    let newOracle: Contract;
 
     beforeEach(async () => {
-      const SpotFeedFactory = await ethers.getContractFactory("SpotFeed");
-      newSpotFeed = await SpotFeedFactory.deploy("BTC spot", [keeper.address]);
-      await newSpotFeed.deployed();
-
-      const MarkFeedFactory = await ethers.getContractFactory("MarkFeed");
-      newMarkFeed = await MarkFeedFactory.deploy("BTC mark", [keeper.address]);
-      await newMarkFeed.deployed();
+      const OracleFactory = await ethers.getContractFactory("Oracle");
+      newOracle = await OracleFactory.deploy([keeper.address]);
+      await newOracle.deployed();
     });
     it("Owner can set oracle for new underlying", async () => {
       // Initialize the spot feed
-      await newSpotFeed.setLatestPrice(toBn("1", 18));
-
-      // Initialize the mark feed
-      var callPrices = [];
-      var putPrices = [];
-      for (var i = 0; i < 11; i++) {
-        callPrices.push(ONEUSDC.mul(150));
-        putPrices.push(ONEUSDC.mul(150));
-      }
-      await newMarkFeed.setLatestPrices(callPrices, putPrices);
-
+      await newOracle.setLatestData(
+        toBn("1", 18),
+        DEFAULT_INTEREST_RATE,
+        DEFAULT_CALL_PRICES,
+        DEFAULT_PUT_PRICES,
+      );
       expect(await marginV1.isActiveUnderlying(0)).to.be.true;
       expect(await marginV1.isActiveUnderlying(1)).to.be.false;
       await marginV1.connect(deployer).activateUnderlying(
         1,
-        newSpotFeed.address,
-        newMarkFeed.address,
+        newOracle.address,
         toBn("1", 3),
       );
       expect(await marginV1.isActiveUnderlying(1)).to.be.true;
     });
     it("Keeper cannot set oracle for existing underlying", async () => {
       await expect(
-        marginV1.connect(keeper).setOracle(0, newSpotFeed.address, newMarkFeed.address)
+        marginV1.connect(keeper).setOracle(0, newOracle.address)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
     it("User cannot set oracle for existing underlying", async () => {
       await expect(
-        marginV1.connect(buyer).setOracle(0, newSpotFeed.address, newMarkFeed.address)
+        marginV1.connect(buyer).setOracle(0, newOracle.address)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
   });
