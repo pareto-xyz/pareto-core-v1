@@ -360,7 +360,7 @@ contract MarginV1 is
 
         // if diff > 0, then satisfied = true
         /// @dev Equality is fail
-        bool satisfied = (diff > 0);
+        bool satisfied = (diff >= 0);
 
         return (diff, satisfied);
     }
@@ -1039,7 +1039,7 @@ contract MarginV1 is
         int256 total = margin - int256(amount);
 
         // Satisfied if position
-        bool satisfied = total > 0;
+        bool satisfied = total >= 0;
 
         return (total, satisfied);
     }
