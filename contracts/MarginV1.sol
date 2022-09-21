@@ -358,8 +358,9 @@ contract MarginV1 is
         // Compute `balance + PnL`
         int256 diff = int256(balance) + pnl - int256(maintainence);
 
-        // if diff >= 0, then satisfied = true
-        bool satisfied = (diff >= 0);
+        // if diff > 0, then satisfied = true
+        /// @dev Equality is fail
+        bool satisfied = (diff > 0);
 
         return (diff, satisfied);
     }
@@ -1037,8 +1038,8 @@ contract MarginV1 is
         // Subtract the withdraw
         int256 total = margin - int256(amount);
 
-        // Satisfied if not negative
-        bool satisfied = total >= 0;
+        // Satisfied if position
+        bool satisfied = total > 0;
 
         return (total, satisfied);
     }
