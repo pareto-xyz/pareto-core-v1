@@ -69,6 +69,19 @@ async function main() {
 
   await marginV1.connect(deployer).addKeepers([keeper.address]);
   console.log("Added keeper to margin contract");
+
+  await usdc.connect(deployer).approve(marginV1.address, ONEUSDC.mul(1e6));
+  await usdc.connect(keeper).approve(marginV1.address, ONEUSDC.mul(1e6));
+  await usdc.connect(buyer).approve(marginV1.address, ONEUSDC.mul(1e6));
+  await usdc.connect(seller).approve(marginV1.address, ONEUSDC.mul(1e6));
+  console.log("Raise approval limit for deployer, keeper, buyer, and seller");
+
+  // Have deployer, keeper, buyer, seller all deposit 1000 USDC
+  await marginV1.connect(deployer).deposit(toBn("1000", 18))
+  await marginV1.connect(keeper).deposit(toBn("1000", 18))
+  await marginV1.connect(buyer).deposit(toBn("1000", 18))
+  await marginV1.connect(seller).deposit(toBn("1000", 18))
+  console.log("Depositing 1k USDC deployer, keeper, buyer, and seller");
 }
 
 const runMain = async () => {
