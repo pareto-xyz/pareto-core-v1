@@ -690,9 +690,9 @@ contract MarginV1 is
     }
 
     /**
-     * @notice Get all positions that the user is participating in
+     * @notice Get all positions that the user is participating in of a certain underlying
      */
-    function getPositions() external view returns (Derivative.Order[] memory) {
+    function getPositions(Derivative.Underlying underlying) external view returns (Derivative.Order[] memory) {
         Derivative.Order[] memory orders = new Derivative.Order[](userRoundCount[msg.sender]);
         uint256 count = 0;
         for (uint256 i = 0; i < userRoundIxs[msg.sender].length; i++) {
@@ -703,7 +703,11 @@ contract MarginV1 is
             Derivative.Order storage order = roundPositions[userRoundIxs[msg.sender][i]];
             // Ignore orders that have already been netted
             if (order.quantity == 0) {
-              continue;
+                continue;
+            }
+            // Ignore orders not of the same underlying
+            if (order.option.underlying != underlying) {
+                continue;
             }
             orders[count] = order;
             count++;

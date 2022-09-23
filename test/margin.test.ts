@@ -797,7 +797,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
     });
     it("User can check empty positions", async () => {
-      const positions = await marginV1.connect(buyer).getPositions();
+      const positions = await marginV1.connect(buyer).getPositions(0);
       expect(positions.length).to.be.equal(0);
     });
     it("User can check one position", async () => {
@@ -812,7 +812,7 @@ describe("MarginV1 Contract", () => {
         isBuyerMaker: false,
         isSellerMaker: true,
       });
-      const positions = await marginV1.connect(buyer).getPositions();
+      const positions = await marginV1.connect(buyer).getPositions(0);
       expect(positions.length).to.be.equal(1);
       expect(positions[0].buyer).to.be.equal(buyer.address);
       expect(positions[0].seller).to.be.equal(seller.address);
@@ -845,7 +845,7 @@ describe("MarginV1 Contract", () => {
         isBuyerMaker: false,
         isSellerMaker: true,
       });
-      const positions = await marginV1.connect(buyer).getPositions();
+      const positions = await marginV1.connect(buyer).getPositions(0);
       expect(positions.length).to.be.equal(2);
       expect(positions[0].option.strikeLevel).to.be.equal(7);
       expect(positions[0].option.isCall).to.be.equal(true);
@@ -1575,17 +1575,17 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(deployer).liquidate(buyer.address);
 
       // Get positions
-      const buyerPositions = await marginV1.connect(buyer).getPositions();
+      const buyerPositions = await marginV1.connect(buyer).getPositions(0);
       expect(buyerPositions.length).to.be.equal(1); 
       // Check that this position is the long position
       expect(buyerPositions[0].buyer).to.be.equal(buyer.address);
       expect(buyerPositions[0].seller).to.be.equal(seller.address);
 
-      const sellerPositions = await marginV1.connect(seller).getPositions();
+      const sellerPositions = await marginV1.connect(seller).getPositions(0);
       // Seller is still in two positions
       expect(sellerPositions.length).to.be.equal(2); 
       
-      const liquidatorPositions = await marginV1.connect(deployer).getPositions();
+      const liquidatorPositions = await marginV1.connect(deployer).getPositions(0);
       // Check liquidator is now in a position
       expect(liquidatorPositions.length).to.be.equal(1); 
     });
@@ -1631,9 +1631,9 @@ describe("MarginV1 Contract", () => {
       // Call liquidate from the seller
       await marginV1.connect(seller).liquidate(buyer.address);
 
-      const buyerPositions = await marginV1.connect(buyer).getPositions();
-      const sellerPositions = await marginV1.connect(seller).getPositions();
-      const deployerPositions = await marginV1.connect(deployer).getPositions();
+      const buyerPositions = await marginV1.connect(buyer).getPositions(0);
+      const sellerPositions = await marginV1.connect(seller).getPositions(0);
+      const deployerPositions = await marginV1.connect(deployer).getPositions(0);
 
       // Both buyer and seller have only one position b/c netted
       expect(buyerPositions.length).to.be.equal(1); 
@@ -1687,7 +1687,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(deployer).liquidate(buyer.address);
 
       // Check buyer still has both positions
-      const positions = await marginV1.connect(buyer).getPositions();
+      const positions = await marginV1.connect(buyer).getPositions(0);
       expect(positions.length).to.be.equal(2); 
 
       // Check margin and it should be the same (this implicitly checks balance)
