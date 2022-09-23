@@ -13,7 +13,7 @@ library Derivative {
     /**
      * @notice Number of underlying tokens
      */
-    uint8 constant NUM_UNDERLYING = 4;
+    uint8 constant public NUM_UNDERLYING = 4;
 
     /**
      * @notice Different strike levels, 5 ITM, 1 ATM, 5 OTM
@@ -23,13 +23,13 @@ library Derivative {
     /**
      * @notice Number of strike levels
      */
-    uint8 constant NUM_STRIKE_LEVEL = 11;
+    uint8 constant public NUM_STRIKE_LEVEL = 11;
 
     /**
      * @notice Decimals for quantity in an order
      * @dev 5000 => 0.5 (x 10**4)
      */
-    uint8 constant QUANTITY_DECIMALS = 4;
+    uint8 constant public QUANTITY_DECIMALS = 4;
 
     /**
      * @notice A matched order from the Pareto orderbook
