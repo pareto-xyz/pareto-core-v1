@@ -732,6 +732,14 @@ contract MarginV1 is
         return IERC20Upgradeable(usdc).decimals();
     }
 
+    /**
+     * @notice Get decimals for the quantity term
+     * @return decimals Unsigned integer with 8 bits
+     */
+    function getQuantityDecimals() external pure returns (uint8) {
+        return Derivative.QUANTITY_DECIMALS;
+    }
+
     /************************************************
      * Internal functions
      ***********************************************/
