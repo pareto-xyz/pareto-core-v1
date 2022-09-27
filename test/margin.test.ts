@@ -125,17 +125,11 @@ describe("MarginV1 Contract", () => {
     it("Correct max balance cap", async () => {
       expect(await marginV1.maxBalanceCap()).to.be.equal(toBn("2000", 18));
     });
-    it("Correct max insured percentage", async () => {
-      expect(await marginV1.maxInsuredPerc()).to.be.equal(toBn("0.5", 4));
-    });
     it("Correct min margin percentage", async () => {
       expect(await marginV1.minMarginPerc()).to.be.equal(toBn("0.01", 4));
     });
     it("Correct default round counter", async () => {
       expect(await marginV1.curRound()).to.be.equal(1);
-    });
-    it("Correct default max % for insurance", async () => {
-      expect(fromBn(await marginV1.maxInsuredPerc(), 4)).to.be.equal("0.5");
     });
     it("Correct default min % for margin", async () => {
       expect(fromBn(await marginV1.minMarginPerc(), 4)).to.be.equal("0.01");
@@ -1401,10 +1395,6 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(500));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(500));
 
-      const insurancePre = parseFloat(fromBn(await marginV1.connect(insurance).getBalance(), 18));
-      const buyerPre = parseFloat(fromBn(await marginV1.connect(buyer).getBalance(), 18));
-      const sellerPre = parseFloat(fromBn(await marginV1.connect(seller).getBalance(), 18));
-
       // Enter the position
       await marginV1.connect(deployer).addPosition({
         buyer: buyer.address,
@@ -1417,6 +1407,10 @@ describe("MarginV1 Contract", () => {
         isBuyerMaker: false,
         isSellerMaker: true,
       });
+
+      const insurancePre = parseFloat(fromBn(await marginV1.connect(insurance).getBalance(), 18));
+      const buyerPre = parseFloat(fromBn(await marginV1.connect(buyer).getBalance(), 18));
+      const sellerPre = parseFloat(fromBn(await marginV1.connect(seller).getBalance(), 18));
 
       // Let the price rise a lot so much that seller should get liquidated
       await oracle.connect(deployer).setLatestData(
@@ -1441,8 +1435,8 @@ describe("MarginV1 Contract", () => {
       expect(sellerPost).to.be.lessThan(sellerPre);
       expect(sellerPost).to.be.equal(0);
 
-      // Insurance is capped though, check it cannot pay the whole fine
-      expect(insurancePre - insurancePost + sellerPre).lessThan(buyerPost - buyerPre);
+      // Check that the amount the insurance paid out is the amount owed
+      expect(insurancePre - insurancePost + buyerPre).closeTo(buyerPost - buyerPre, 1e-4);
     });
     it("can settle even if paused", async () => {
       const expiry = (await marginV1.activeExpiry()).toNumber();

@@ -55,9 +55,6 @@ contract MarginV1 is
     /// @notice Maximum notional value allowed in order
     mapping(Derivative.Underlying => uint256) public minQuantityPerUnderlying;
 
-    /// @notice Maximum percentage the insurance fund can payoff for a single position in USDC
-    uint256 public maxInsuredPerc;
-
     /// @notice Percentage multiplier used to decide alternative minimums
     /// Four decimals so 100 => 1% (0.01), 1000 => 10% (0.1)
     uint256 public minMarginPerc;
@@ -141,10 +138,6 @@ contract MarginV1 is
 
         // The owner is a keeper
         keepers[owner()] = true;
-
-        // Set insurance fund to cover max 50%
-        // Decimals are 4 so 5000 => 0.5
-        maxInsuredPerc = 5000;
 
         // Begin first round
         curRound = 1;
@@ -234,13 +227,6 @@ contract MarginV1 is
      * @param paused Is the contract paused?
      */
     event TogglePauseEvent(address indexed owner, bool paused);
-
-    /**
-     * @notice Event when maximum insured percentage is updated
-     * @param owner Address who called the pause event
-     * @param perc Max percentage for maximum insurance fund
-     */
-    event MaxInsuredPercEvent(address indexed owner, uint256 perc);
 
     /**
      * @notice Event when alternative minimum percent for margin is updated
@@ -407,13 +393,6 @@ contract MarginV1 is
                 // Attempt to make up the difference in the insurance fund
                 uint256 partialAmount = balances[ower];
                 uint256 insuredAmount = absPayoff - partialAmount;
-                uint256 maxInsuredAmount = absPayoff * maxInsuredPerc / 10**4;
-
-                // We cannot payback for more than the max insured amount
-                // Prevents catastrophic depletion of the insurance fund
-                if (insuredAmount > maxInsuredAmount) {
-                    insuredAmount = maxInsuredAmount;
-                }
 
                 if (balances[insurance] >= insuredAmount) {
                     balances[owee] += absPayoff;
@@ -1242,15 +1221,6 @@ contract MarginV1 is
         require(isActiveUnderlying[underlying], "setMinQuantity: underlying must already be active");
         require(minQuantity > 0, "setMinQuantity: min quantity must be > 0");
         minQuantityPerUnderlying[underlying] = minQuantity;
-    }   
-
-    /**
-     * @notice Set the maximum amount to be insured
-     */
-    function setMaxInsuredPerc(uint256 perc) external onlyOwner {
-        require(perc <= 10**4, "setMaxInsuredPerc: must be <= 10**4");
-        maxInsuredPerc = perc;
-        emit MaxInsuredPercEvent(msg.sender, perc);
     }
 
     /**
