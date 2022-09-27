@@ -53,7 +53,7 @@ contract MarginV1 is
     uint256 public maxBalanceCap; 
 
     /// @notice Maximum notional value allowed in order
-    mapping(Derivative.Underlying => uint256) minQuantityPerUnderlying;
+    mapping(Derivative.Underlying => uint256) public minQuantityPerUnderlying;
 
     /// @notice Maximum percentage the insurance fund can payoff for a single position in USDC
     uint256 public maxInsuredPerc;
