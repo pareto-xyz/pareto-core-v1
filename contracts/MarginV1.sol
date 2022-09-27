@@ -66,7 +66,7 @@ contract MarginV1 is
     /// @dev This assumes all underlying has only one expiry.
     uint256 public activeExpiry;
 
-    /// @notice Whitelist for market maker accounts
+    /// @notice Whitelisted accounts pay lower fees
     mapping(address => bool) whitelist;
 
     /// @notice If the contract is paused or not
