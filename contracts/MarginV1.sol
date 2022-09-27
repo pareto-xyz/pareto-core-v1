@@ -72,6 +72,12 @@ contract MarginV1 is
     /// @notice Tracks if the last round has been settled
     bool private roundSettled;
 
+    /// @notice Tracks the amount of backrupcy in the round
+    uint256 private bankrupcyAmount;
+
+    /// @notice Tracks the total deposit amount in the round
+    uint256 private depositAmount;
+
     /// @notice Stores addresses for oracles of each underlying
     mapping(Derivative.Underlying => address) private oracles;
 
@@ -202,11 +208,13 @@ contract MarginV1 is
     /**
      * @notice Event to withdraw tokens 
      * @param user Address of the withdrawer
-     * @param amount Amount of USDC to withdraw
+     * @param amount Amount of USDC requested to withdraw
+     * @param discounted Amount of USDC actually withdrawn due to socialized losses
      */
     event WithdrawEvent(
         address indexed user,
-        uint256 amount
+        uint256 amount,
+        uint256 discounted
     );
 
     /**
@@ -276,6 +284,9 @@ contract MarginV1 is
             require(balances[msg.sender] <= maxBalanceCap, "deposit: exceeds maximum");
         }
 
+        // Increment the total deposits for round
+        depositAmount += amount;
+
         // Pull resources from sender to this contract
         IERC20Upgradeable(usdc).safeTransferFrom(msg.sender, address(this), amount);
 
@@ -293,15 +304,21 @@ contract MarginV1 is
         require(amount > 0, "withdraw: amount must be > 0");
         require(amount <= balances[msg.sender], "withdraw: amount > balance");
 
+        // Socialize losses by reducing the actual amount user receives
+        uint256 discounted = amount * depositAmount / (depositAmount + bankrupcyAmount);
+
         // Check margin post withdrawal
         (, bool satisfied) = checkMarginOnWithdrawal(msg.sender, amount);
         require(satisfied, "withdraw: margin check failed");
 
+        // Perform the withdrawal
+        balances[msg.sender] -= amount;
+
         // Transfer USDC to sender
-        IERC20Upgradeable(usdc).safeTransfer(msg.sender, amount);
+        IERC20Upgradeable(usdc).safeTransfer(msg.sender, discounted);
 
         // Emit event
-        emit WithdrawEvent(msg.sender, amount);
+        emit WithdrawEvent(msg.sender, amount, discounted);
     }
 
     /**
@@ -312,15 +329,21 @@ contract MarginV1 is
         uint256 balance = balances[msg.sender];
         require(balance > 0, "withdraw: empty balance");
 
+        // Socialize losses by reducing the actual amount user receives
+        uint256 discounted = balance * depositAmount / (depositAmount + bankrupcyAmount);
+
         // Check margin post withdrawal
         (, bool satisfied) = checkMarginOnWithdrawal(msg.sender, balance);
         require(satisfied, "withdraw: margin check failed");
 
+        // Perform the withdrawal
+        balances[msg.sender] = 0;
+
         // Transfer USDC to sender
-        IERC20Upgradeable(usdc).safeTransfer(msg.sender, balance);
+        IERC20Upgradeable(usdc).safeTransfer(msg.sender, discounted);
 
         // Emit event
-        emit WithdrawEvent(msg.sender, balance);
+        emit WithdrawEvent(msg.sender, balance, discounted);
     }
 
     /**
@@ -399,9 +422,12 @@ contract MarginV1 is
                     balances[insurance] -= insuredAmount;
                     balances[ower] = 0;
                 } else {
-                    // Do the best we can: the insurance fund cannot help
-                    balances[owee] += partialAmount;
+                    // Socialize losses. Here we pay the owee the full amount but we record
+                    // the bankrupcy amount which impacts everyones withdrawal
+                    balances[owee] += absPayoff;
                     balances[ower] = 0;
+                    // Difference between amount owed and amount the ower has is the bankrupcy amount
+                    bankrupcyAmount += insuredAmount; 
                 }
             }
         }
