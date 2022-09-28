@@ -73,7 +73,7 @@ contract MarginV1 is
     bool private roundSettled;
 
     /// @notice Tracks the amount of backrupcy since deployment
-    uint256 private bankrupcyAmount;
+    uint256 private bankruptcyAmount;
 
     /// @notice Stores addresses for oracles of each underlying
     mapping(Derivative.Underlying => address) private oracles;
@@ -213,6 +213,20 @@ contract MarginV1 is
         uint256 amount,
         uint256 discounted
     );
+    
+    /**
+     * @notice Event when insurance fund cannot cover
+     * @param bankruptUser User who is bankrupt
+     * @param counterpaty User who needs to be made whole
+     * @param bankruptcyAmount Amount that the user owes to counterparty
+     * @param totalBankruptcyAmount Total amount of bankruptcy the contract has assumed
+     */
+    event BankruptyEvent(
+        address indexed bankruptUser,
+        address indexed counterparty,
+        uint256 bankruptcyAmount,
+        uint256 totalBankruptcyAmount
+    );
 
     /**
      * @notice Event when positions are settled
@@ -303,14 +317,14 @@ contract MarginV1 is
         require(amount <= balances[msg.sender], "withdraw: amount > balance");
 
         // Compute the discounted amount factoring for socialized loss
-        uint256 socialized = balances[msg.sender] * bankrupcyAmount / getTotalBalance();
+        uint256 socialized = balances[msg.sender] * bankruptcyAmount / getTotalBalance();
         uint256 discounted = amount > socialized ? (amount - socialized) : 0;
 
         // The user has the full amount withdrawn from balance
         balances[msg.sender] -= amount;
 
         // Remove the piece that was taken from bankruptcy amount
-        bankrupcyAmount -= (amount > socialized) ? socialized : amount;
+        bankruptcyAmount -= (amount > socialized) ? socialized : amount;
 
         // Check margin post withdrawal
         (, bool satisfied) = checkMargin(msg.sender, false);
@@ -335,14 +349,14 @@ contract MarginV1 is
         require(balance > 0, "withdrawAll: empty balance");
 
         // Compute the discounted amount factoring for socialized loss
-        uint256 socialized = balance * bankrupcyAmount / getTotalBalance();
+        uint256 socialized = balance * bankruptcyAmount / getTotalBalance();
         uint256 discounted = balance > socialized ? (balance - socialized) : 0;
 
         // Perform the withdrawal
         balances[msg.sender] = 0;
 
         // Remove the chip that was taken from bankruptcy amount
-        bankrupcyAmount -= (balance > socialized) ? socialized : balance;
+        bankruptcyAmount -= (balance > socialized) ? socialized : balance;
 
         // Check margin post withdrawal
         (, bool satisfied) = checkMargin(msg.sender, false);
@@ -440,7 +454,9 @@ contract MarginV1 is
                     balances[owee] += absPayoff;
                     balances[ower] = 0;
                     // Difference between amount owed and amount the ower has is the bankrupcy amount
-                    bankrupcyAmount += missingAmount; 
+                    bankruptcyAmount += missingAmount; 
+                    // Emit event on bankruptcy
+                    emit BankruptyEvent(ower, owee, missingAmount, bankruptcyAmount);
                 }
             }
         }
