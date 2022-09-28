@@ -61,7 +61,7 @@ async function main() {
       feeRecipient.address,
       0,
       oracle.address,
-      toBn("0.5", 4),
+      toBn("0.1", 4),
     ]
   );
   await marginV1.deployed();
