@@ -297,6 +297,9 @@ contract MarginV1 is
                 (balances[msg.sender] + amount) <= maxBalanceCap,
                 "deposit: exceeds maximum balance cap"
             );
+
+            // Update the total deposited amount
+            depositedAmount += amount;
         }
 
         // Increment counters
