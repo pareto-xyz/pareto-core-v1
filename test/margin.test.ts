@@ -191,13 +191,13 @@ describe("MarginV1 Contract", () => {
     it("Cannot deposit more than max cap", async () => {
       await usdc.connect(buyer).approve(marginV1.address, ONEUSDC.mul(2500));
       await expect(marginV1.connect(buyer).deposit(ONEUSDC.mul(2500)))
-        .to.be.revertedWith("deposit: exceeds maximum");
+        .to.be.revertedWith("deposit: exceeds maximum balance cap");
     })
     it("Cannot deposit twice to exceed max cap", async () => {
       await usdc.connect(buyer).approve(marginV1.address, ONEUSDC.mul(2500));
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1500));
       await expect(marginV1.connect(buyer).deposit(ONEUSDC.mul(1000)))
-        .to.be.revertedWith("deposit: exceeds maximum");
+        .to.be.revertedWith("deposit: exceeds maximum balance cap");
     });
   });
 
@@ -917,7 +917,7 @@ describe("MarginV1 Contract", () => {
     it("Emits an event on withdrawal", async () => {
       await expect(marginV1.connect(buyer).withdraw(ONEUSDC))
         .to.emit(marginV1, "WithdrawEvent")
-        .withArgs(buyer.address, ONEUSDC);
+        .withArgs(buyer.address, ONEUSDC, ONEUSDC);
     });
     it("Can withdraw all after two deposits", async () => {
       await usdc.connect(buyer).approve(marginV1.address, ONEUSDC);
@@ -937,7 +937,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(buyer).deposit(ONEUSDC);
       await expect(marginV1.connect(buyer).withdrawAll())
         .to.emit(marginV1, "WithdrawEvent")
-        .withArgs(buyer.address, ONEUSDC.mul(2));
+        .withArgs(buyer.address, ONEUSDC.mul(2), ONEUSDC.mul(2));
     });
     it("Cannot withdraw 0 amount", async () => {
       await expect(
@@ -987,7 +987,7 @@ describe("MarginV1 Contract", () => {
       });
       await expect(
         marginV1.connect(buyer).withdrawAll()
-      ).to.be.revertedWith("withdraw: margin check failed");
+      ).to.be.revertedWith("withdrawAll: margin check failed");
     });
   });
 
@@ -1856,28 +1856,6 @@ describe("MarginV1 Contract", () => {
     it("User cannot unpause contract", async () => {
       await marginV1.connect(deployer).togglePause();
       await expect(marginV1.connect(buyer).togglePause())
-        .to.be.revertedWith("Ownable: caller is not the owner");
-    });
-    it("Owner can set max insured percent", async () => {
-      expect(await marginV1.maxInsuredPerc()).to.be.equal("5000");
-      await marginV1.connect(deployer).setMaxInsuredPerc(8000);
-      expect(await marginV1.maxInsuredPerc()).to.be.equal("8000");
-    });
-    it("Setting max insured % emits event", async () => {
-      await expect(marginV1.connect(deployer).setMaxInsuredPerc(8000))
-        .to.emit(marginV1, "MaxInsuredPercEvent")
-        .withArgs(deployer.address, 8000);
-    });
-    it("Cannot set max insured percent to be > 10**4", async () => {
-      await expect(marginV1.connect(deployer).setMaxInsuredPerc(10001))
-        .to.be.revertedWith("setMaxInsuredPerc: must be <= 10**4");
-    });
-    it("Keeper cannot set max insured percent", async () => {
-      await expect(marginV1.connect(keeper).setMaxInsuredPerc(8000))
-        .to.be.revertedWith("Ownable: caller is not the owner");
-    });
-    it("User cannot set max insured percent", async () => {
-      await expect(marginV1.connect(buyer).setMaxInsuredPerc(8000))
         .to.be.revertedWith("Ownable: caller is not the owner");
     });
     it("Owner can set min margin percent", async () => {

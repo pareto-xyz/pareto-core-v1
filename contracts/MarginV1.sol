@@ -72,11 +72,8 @@ contract MarginV1 is
     /// @notice Tracks if the last round has been settled
     bool private roundSettled;
 
-    /// @notice Tracks the amount of backrupcy in the round
+    /// @notice Tracks the amount of backrupcy since deployment
     uint256 private bankrupcyAmount;
-
-    /// @notice Tracks the total deposit amount in the round
-    uint256 private depositAmount;
 
     /// @notice Stores addresses for oracles of each underlying
     mapping(Derivative.Underlying => address) private oracles;
@@ -276,16 +273,17 @@ contract MarginV1 is
     function deposit(uint256 amount) external nonReentrant {
         require(amount > 0, "deposit: `amount` must be > 0");
 
-        // Increment counters
-        balances[msg.sender] += amount;
-
-        // In the beginning we set a maximum cap. Insurance fund needs to break cap
+        // In the beginning we set a maximum cap on balance
+        /// @dev Cap does not apply to insurance fund which may need to deposit more
         if (msg.sender != insurance) {
-            require(balances[msg.sender] <= maxBalanceCap, "deposit: exceeds maximum");
+            require(
+                (balances[msg.sender] + amount) <= maxBalanceCap,
+                "deposit: exceeds maximum balance cap"
+            );
         }
 
-        // Increment the total deposits for round
-        depositAmount += amount;
+        // Increment counters
+        balances[msg.sender] += amount;
 
         // Pull resources from sender to this contract
         IERC20Upgradeable(usdc).safeTransferFrom(msg.sender, address(this), amount);
@@ -297,25 +295,31 @@ contract MarginV1 is
     /**
      * @notice Withdraw assets from margin account
      * @dev Only successful if margin accounts remain satisfied post withdraw
-     * @dev Withdrawals are only allowed when user has no open positions
+     * @dev Socialized losses are factored into the withdrawal process
      * @param amount Amount to withdraw
      */
     function withdraw(uint256 amount) external nonReentrant {
         require(amount > 0, "withdraw: amount must be > 0");
         require(amount <= balances[msg.sender], "withdraw: amount > balance");
 
-        // Socialize losses by reducing the actual amount user receives
-        uint256 discounted = amount * depositAmount / (depositAmount + bankrupcyAmount);
+        // Compute the discounted amount factoring for socialized loss
+        uint256 socialized = balances[msg.sender] * bankrupcyAmount / getTotalBalance();
+        uint256 discounted = amount > socialized ? (amount - socialized) : 0;
 
-        // Check margin post withdrawal
-        (, bool satisfied) = checkMarginOnWithdrawal(msg.sender, amount);
-        require(satisfied, "withdraw: margin check failed");
-
-        // Perform the withdrawal
+        // The user has the full amount withdrawn from balance
         balances[msg.sender] -= amount;
 
-        // Transfer USDC to sender
-        IERC20Upgradeable(usdc).safeTransfer(msg.sender, discounted);
+        // Remove the piece that was taken from bankruptcy amount
+        bankrupcyAmount -= (amount > socialized) ? socialized : amount;
+
+        // Check margin post withdrawal
+        (, bool satisfied) = checkMargin(msg.sender, false);
+        require(satisfied, "withdraw: margin check failed");
+
+        if (discounted > 0) {
+            // Transfer USDC to sender. Only the discounted amount is transferred
+            IERC20Upgradeable(usdc).safeTransfer(msg.sender, discounted);
+        }
 
         // Emit event
         emit WithdrawEvent(msg.sender, amount, discounted);
@@ -324,23 +328,30 @@ contract MarginV1 is
     /**
      * @notice Withdraw full balance. 
      * @dev Only successful if margin accounts remain satisfied post withdraw
+     * @dev Socialized losses are factored into the withdrawal process
      */
     function withdrawAll() external nonReentrant {
         uint256 balance = balances[msg.sender];
-        require(balance > 0, "withdraw: empty balance");
+        require(balance > 0, "withdrawAll: empty balance");
 
-        // Socialize losses by reducing the actual amount user receives
-        uint256 discounted = balance * depositAmount / (depositAmount + bankrupcyAmount);
-
-        // Check margin post withdrawal
-        (, bool satisfied) = checkMarginOnWithdrawal(msg.sender, balance);
-        require(satisfied, "withdraw: margin check failed");
+        // Compute the discounted amount factoring for socialized loss
+        uint256 socialized = balance * bankrupcyAmount / getTotalBalance();
+        uint256 discounted = balance > socialized ? (balance - socialized) : 0;
 
         // Perform the withdrawal
         balances[msg.sender] = 0;
 
-        // Transfer USDC to sender
-        IERC20Upgradeable(usdc).safeTransfer(msg.sender, discounted);
+        // Remove the chip that was taken from bankruptcy amount
+        bankrupcyAmount -= (balance > socialized) ? socialized : balance;
+
+        // Check margin post withdrawal
+        (, bool satisfied) = checkMargin(msg.sender, false);
+        require(satisfied, "withdrawAll: margin check failed");
+
+        if (discounted > 0) {
+            // Transfer USDC to sender. Only the discounted amount is transferred
+            IERC20Upgradeable(usdc).safeTransfer(msg.sender, discounted);
+        }
 
         // Emit event
         emit WithdrawEvent(msg.sender, balance, discounted);
@@ -415,19 +426,21 @@ contract MarginV1 is
                 // TODO: can this be frontrun by a withdrawal?
                 // Attempt to make up the difference in the insurance fund
                 uint256 partialAmount = balances[ower];
-                uint256 insuredAmount = absPayoff - partialAmount;
+                // Amount missing that is owned to the other end
+                uint256 missingAmount = absPayoff - partialAmount;
 
-                if (balances[insurance] >= insuredAmount) {
+                // If the insurance fund has enough to cover the missing amount, pay out
+                if (balances[insurance] >= missingAmount) {
                     balances[owee] += absPayoff;
-                    balances[insurance] -= insuredAmount;
+                    balances[insurance] -= missingAmount;
                     balances[ower] = 0;
                 } else {
                     // Socialize losses. Here we pay the owee the full amount but we record
-                    // the bankrupcy amount which impacts everyones withdrawal
+                    // the bankrupcy amount which impacts everyone's withdrawal
                     balances[owee] += absPayoff;
                     balances[ower] = 0;
                     // Difference between amount owed and amount the ower has is the bankrupcy amount
-                    bankrupcyAmount += insuredAmount; 
+                    bankrupcyAmount += missingAmount; 
                 }
             }
         }
@@ -692,6 +705,16 @@ contract MarginV1 is
      */
     function getBalanceOf(address user) external view returns (uint256) {
         return balances[user];
+    }
+
+    /**
+     * @notice Computes the total balance held by users
+     * @dev Does not include USDC from the insurance fund
+     * @return total Amount of USDC in contract (w/o special roles)
+     */
+    function getTotalBalance() internal view returns (uint256) {
+        uint256 total = IERC20Upgradeable(usdc).balanceOf(address(this));
+        return total - balances[insurance];
     }
 
     /**
@@ -1033,36 +1056,6 @@ contract MarginV1 is
     }
 
     /**
-     * @notice Margin check on withdrawal
-     * @dev Definitions:
-     * AB = account balance, UP = unrealized PnL
-     * MM = maintainence margin requirements
-     * @param user Address of the margin account to check
-     * @param amount Amount requesting to be withdrawn from account
-     * @return diff AB - amount + UP - MM, a signed integer
-     * @return satisfied True if non-negative, else false
-     */
-    function checkMarginOnWithdrawal(address user, uint256 amount) 
-        internal
-        view
-        returns (int256, bool) 
-    {
-        require(amount > 0, "checkMarginOnWithdrawal: amount must be > 0");
-        require(amount <= balances[user], "checkMarginOnWithdrawal: amount must be <= balance");
-
-        // Perform standard margin check
-        (int256 margin,) = checkMargin(user, false);
-
-        // Subtract the withdraw
-        int256 total = margin - int256(amount);
-
-        // Satisfied if position
-        bool satisfied = total >= 0;
-
-        return (total, satisfied);
-    }
-
-    /**
      * @notice Add a new underlying
      * @dev For code reuse
      * @param underlying Enum for the underlying token
@@ -1379,10 +1372,9 @@ contract MarginV1 is
         require(balances[order.buyer] >= buyerFee, "addPosition: buyer cannot pay fees");
         require(balances[order.seller] >= sellerFee, "addPosition: seller cannot pay fees");
 
-        // Make fee transfers
+        // Record fee transfers in book
         balances[order.buyer] -= buyerFee;
         balances[order.seller] -= sellerFee;
-        balances[feeRecipient] += (buyerFee + sellerFee);
 
         // Save position to mapping by expiry
         roundPositions.push(order);
@@ -1407,9 +1399,11 @@ contract MarginV1 is
         // Check margin for buyer and seller
         (, bool checkBuyerMargin) = checkMargin(order.buyer, false);
         (, bool checkSellerMargin) = checkMargin(order.seller, false);
-
         require(checkBuyerMargin, "addPosition: buyer failed margin check");
         require(checkSellerMargin, "addPosition: seller failed margin check");
+
+        // Transfer fees to fee recipient. The fee recipient does not live in the book
+        IERC20Upgradeable(usdc).safeTransfer(feeRecipient, buyerFee + sellerFee);
 
         // Emit event 
         emit RecordPositionEvent(
