@@ -72,8 +72,11 @@ contract MarginV1 is
     /// @notice Tracks if the last round has been settled
     bool private roundSettled;
 
-    /// @notice Tracks the amount of backrupcy since deployment
+    /// @notice Tracks the amount of bankruptcy since deployment
     uint256 private bankruptcyAmount;
+
+    /// @notice Tracks the amount of deposited assets since deployment
+    uint256 private depositedAmount;
 
     /// @notice Stores addresses for oracles of each underlying
     mapping(Derivative.Underlying => address) private oracles;
@@ -217,15 +220,15 @@ contract MarginV1 is
     /**
      * @notice Event when insurance fund cannot cover
      * @param bankruptUser User who is bankrupt
-     * @param counterpaty User who needs to be made whole
-     * @param bankruptcyAmount Amount that the user owes to counterparty
-     * @param totalBankruptcyAmount Total amount of bankruptcy the contract has assumed
+     * @param counterparty User who needs to be made whole
+     * @param amount Amount that the user owes to counterparty
+     * @param bankruptcyAmount Total amount of bankruptcy the contract has assumed
      */
-    event BankruptyEvent(
+    event BankruptcyEvent(
         address indexed bankruptUser,
         address indexed counterparty,
-        uint256 bankruptcyAmount,
-        uint256 totalBankruptcyAmount
+        uint256 amount,
+        uint256 bankruptcyAmount
     );
 
     /**
@@ -317,23 +320,20 @@ contract MarginV1 is
         require(amount <= balances[msg.sender], "withdraw: amount > balance");
 
         // Compute the discounted amount factoring for socialized loss
-        uint256 socialized = balances[msg.sender] * bankruptcyAmount / getTotalBalance();
-        uint256 discounted = amount > socialized ? (amount - socialized) : 0;
+        uint256 discounted = amount * depositedAmount / (depositedAmount + bankruptcyAmount);
 
         // The user has the full amount withdrawn from balance
         balances[msg.sender] -= amount;
 
         // Remove the piece that was taken from bankruptcy amount
-        bankruptcyAmount -= (amount > socialized) ? socialized : amount;
+        bankruptcyAmount -= (amount - discounted);
 
         // Check margin post withdrawal
         (, bool satisfied) = checkMargin(msg.sender, false);
         require(satisfied, "withdraw: margin check failed");
 
-        if (discounted > 0) {
-            // Transfer USDC to sender. Only the discounted amount is transferred
-            IERC20Upgradeable(usdc).safeTransfer(msg.sender, discounted);
-        }
+        // Transfer USDC to sender. Only the discounted amount is transferred
+        IERC20Upgradeable(usdc).safeTransfer(msg.sender, discounted);
 
         // Emit event
         emit WithdrawEvent(msg.sender, amount, discounted);
@@ -349,23 +349,20 @@ contract MarginV1 is
         require(balance > 0, "withdrawAll: empty balance");
 
         // Compute the discounted amount factoring for socialized loss
-        uint256 socialized = balance * bankruptcyAmount / getTotalBalance();
-        uint256 discounted = balance > socialized ? (balance - socialized) : 0;
+        uint256 discounted = balance * depositedAmount / (depositedAmount + bankruptcyAmount);
 
         // Perform the withdrawal
         balances[msg.sender] = 0;
 
         // Remove the chip that was taken from bankruptcy amount
-        bankruptcyAmount -= (balance > socialized) ? socialized : balance;
+        bankruptcyAmount -= (balance - discounted);
 
         // Check margin post withdrawal
         (, bool satisfied) = checkMargin(msg.sender, false);
         require(satisfied, "withdrawAll: margin check failed");
 
-        if (discounted > 0) {
-            // Transfer USDC to sender. Only the discounted amount is transferred
-            IERC20Upgradeable(usdc).safeTransfer(msg.sender, discounted);
-        }
+        // Transfer USDC to sender. Only the discounted amount is transferred
+        IERC20Upgradeable(usdc).safeTransfer(msg.sender, discounted);
 
         // Emit event
         emit WithdrawEvent(msg.sender, balance, discounted);
@@ -456,7 +453,7 @@ contract MarginV1 is
                     // Difference between amount owed and amount the ower has is the bankrupcy amount
                     bankruptcyAmount += missingAmount; 
                     // Emit event on bankruptcy
-                    emit BankruptyEvent(ower, owee, missingAmount, bankruptcyAmount);
+                    emit BankruptcyEvent(ower, owee, missingAmount, bankruptcyAmount);
                 }
             }
         }
