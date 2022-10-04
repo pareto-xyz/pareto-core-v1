@@ -47,7 +47,7 @@ describe("MarginMath Library", () => {
     it("Payoff for buying a call: OTM", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order = {
-        orderId: "test",
+        id: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(11).div(100),
@@ -69,7 +69,7 @@ describe("MarginMath Library", () => {
     it("Payoff for selling a call: OTM", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order = {
-        orderId: "test",
+        id: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(11).div(100),
@@ -91,7 +91,7 @@ describe("MarginMath Library", () => {
     it("Payoff for buying a put: OTM", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order = {
-        orderId: "test",
+        id: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(9).div(100),
@@ -113,7 +113,7 @@ describe("MarginMath Library", () => {
     it("Payoff for selling a put: OTM", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order = {
-        orderId: "test",
+        id: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(9).div(100),
@@ -136,7 +136,7 @@ describe("MarginMath Library", () => {
     it("Payoff for buying a call: ITM", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order = {
-        orderId: "test",
+        id: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(9).div(100),
@@ -158,7 +158,7 @@ describe("MarginMath Library", () => {
     it("Payoff for selling a call: ITM", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order = {
-        orderId: "test",
+        id: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(9).div(100),
@@ -180,7 +180,7 @@ describe("MarginMath Library", () => {
     it("Payoff for buying a put: ITM", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order = {
-        orderId: "test",
+        id: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(11).div(100),
@@ -202,7 +202,7 @@ describe("MarginMath Library", () => {
     it("Payoff for selling a put: ITM", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order = {
-        orderId: "test",
+        id: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.mul(11).div(100),
@@ -224,7 +224,7 @@ describe("MarginMath Library", () => {
     it("Payoff for buying a call: ATM", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order = {
-        orderId: "test",
+        id: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.div(10),
@@ -246,7 +246,7 @@ describe("MarginMath Library", () => {
     it("Payoff for selling a call: ATM", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order = {
-        orderId: "test",
+        id: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.div(10),
@@ -268,7 +268,7 @@ describe("MarginMath Library", () => {
     it("Payoff for buying a put: ATM", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order = {
-        orderId: "test",
+        id: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.div(10),
@@ -290,7 +290,7 @@ describe("MarginMath Library", () => {
     it("Payoff for selling a put: ATM", async () => {
       const curTime = Math.floor(Date.now() / 1000);
       const order = {
-        orderId: "test",
+        id: "test",
         buyer: alice.address,
         seller: bob.address,
         tradePrice: ONE_ETH.div(10),

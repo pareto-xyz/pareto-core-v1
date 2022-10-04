@@ -7,14 +7,6 @@ import "../libraries/Derivative.sol";
  * @notice Test contract to wrap around `Derivative.sol`
  */
 contract TestDerivative {
-    function hashOrder(Derivative.Order memory order)
-        external
-        pure
-        returns (bytes32 hash_) 
-    {
-        return Derivative.hashOrder(order);
-    }
-
     function hashOption(Derivative.Option memory option)
         external
         pure
