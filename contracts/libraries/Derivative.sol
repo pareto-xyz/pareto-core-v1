@@ -33,12 +33,15 @@ library Derivative {
 
     /**
      * @notice A matched order from the Pareto orderbook
+     * @param id Identifier for the order
      * @param buyer Address of the buyer; the short position
      * @param seller Address of the seller; the long position
      * @param tradePrice Price of the actual order. Distinct from mark price
      * @param quantity Amount within the order
+     * @param option Object containing option parameters
      */
     struct Order {
+        string id;
         address buyer;
         address seller;
         uint256 tradePrice;
@@ -66,6 +69,7 @@ library Derivative {
 
     /**
      * @notice Parameters to add a position
+     * @param id Identifier for the new position
      * @param buyer Address of the order buyer
      * @param seller Address of the order seller
      * @param tradePrice Premium for the option
@@ -77,6 +81,7 @@ library Derivative {
      * @param isSellerMaker Whether the seller is a maker or taker
      */
     struct PositionParams {
+        string id;
         address buyer;
         address seller;
         uint256 tradePrice;
@@ -86,25 +91,6 @@ library Derivative {
         Underlying underlying;
         bool isBuyerMaker;
         bool isSellerMaker;
-    }
-
-    /**
-     * @notice Hash order into byte string
-     * @param order Order object 
-     * @param hash_ SHA-3 hash of the Order object
-     */
-    function hashOrder(Order memory order)
-        internal
-        pure
-        returns (bytes32 hash_) 
-    {
-        hash_ = keccak256(abi.encodePacked(
-            order.buyer,
-            order.seller,
-            order.tradePrice,
-            order.quantity,
-            hashOption(order.option)
-        ));
     }
 
     /**

@@ -242,6 +242,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(deployer).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -257,6 +258,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(keeper).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -273,6 +275,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await expect(
         marginV1.connect(buyer).addPosition({
+          id: "test",
           buyer: buyer.address,
           seller: seller.address,
           tradePrice: ONEUSDC,
@@ -290,6 +293,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await expect(
         marginV1.connect(keeper).addPosition({
+          id: "test",
           buyer: buyer.address,
           seller: seller.address,
           tradePrice: ONEUSDC,
@@ -302,12 +306,13 @@ describe("MarginV1 Contract", () => {
         })
       )
         .to.emit(marginV1, "RecordPositionEvent")
-        .withArgs(ONEUSDC, toBn("1", 4), true, 0, 7, expiry);
+        .withArgs("test", ONEUSDC, toBn("1", 4), true, 0, 7, expiry);
     });
     it("Buyer passes margin check after position added", async () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(deployer).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -325,6 +330,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(deployer).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -362,6 +368,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(deployer).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -378,6 +385,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await expect(
         marginV1.connect(deployer).addPosition({
+          id: "test",
           buyer: buyer.address,
           seller: seller.address,
           tradePrice: ONEUSDC,
@@ -395,6 +403,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await expect(
         marginV1.connect(deployer).addPosition({
+          id: "test",
           buyer: buyer.address,
           seller: seller.address,
           tradePrice: 0,
@@ -412,6 +421,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await expect(
         marginV1.connect(deployer).addPosition({
+          id: "test",
           buyer: buyer.address,
           seller: seller.address,
           tradePrice: ONEUSDC,
@@ -433,6 +443,7 @@ describe("MarginV1 Contract", () => {
 
       await expect(
         marginV1.connect(deployer).addPosition({
+          id: "test",
           buyer: buyer.address,
           seller: seller.address,
           tradePrice: ONEUSDC,
@@ -452,6 +463,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(seller).deposit(makerFee);
       await expect(
         marginV1.connect(deployer).addPosition({
+          id: "test",
           buyer: buyer.address,
           seller: seller.address,
           tradePrice: ONEUSDC,
@@ -470,6 +482,7 @@ describe("MarginV1 Contract", () => {
 
       // Buy a call position
       await marginV1.connect(deployer).addPosition({
+        id: "test-1",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -482,6 +495,7 @@ describe("MarginV1 Contract", () => {
       });
       // Sell the call position
       await marginV1.connect(deployer).addPosition({
+        id: "test-2",
         buyer: seller.address,
         seller: buyer.address,
         tradePrice: ONEUSDC,
@@ -509,6 +523,7 @@ describe("MarginV1 Contract", () => {
 
       // Buy a call position
       await marginV1.connect(deployer).addPosition({
+        id: "test-1",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -521,6 +536,7 @@ describe("MarginV1 Contract", () => {
       });
       // Sell the call position
       await marginV1.connect(deployer).addPosition({
+        id: "test-2",
         buyer: seller.address,
         seller: buyer.address,
         tradePrice: ONEUSDC,
@@ -548,6 +564,7 @@ describe("MarginV1 Contract", () => {
 
       // Buy a call position
       await marginV1.connect(deployer).addPosition({
+        id: "test-1",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -560,6 +577,7 @@ describe("MarginV1 Contract", () => {
       });
       // Sell the put position
       await marginV1.connect(deployer).addPosition({
+        id: "test-2",
         buyer: seller.address,
         seller: buyer.address,
         tradePrice: ONEUSDC,
@@ -601,6 +619,7 @@ describe("MarginV1 Contract", () => {
 
       // Buy five call positions
       await marginV1.connect(deployer).addPosition({
+        id: "test-1",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -613,6 +632,7 @@ describe("MarginV1 Contract", () => {
       });
       // Sell two call positions
       await marginV1.connect(deployer).addPosition({
+        id: "test-2",
         buyer: seller.address,
         seller: buyer.address,
         tradePrice: ONEUSDC,
@@ -629,6 +649,7 @@ describe("MarginV1 Contract", () => {
       
       // Separately deployer buys 3 call positions
       await marginV1.connect(deployer).addPosition({
+        id: "test-3",
         buyer: deployer.address,
         seller: keeper.address,
         tradePrice: ONEUSDC,
@@ -670,6 +691,7 @@ describe("MarginV1 Contract", () => {
       const [takerFees1, makerFees1] = await getFees(1, 1);
 
       await marginV1.connect(deployer).addPosition({
+        id: "test-1",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -681,6 +703,7 @@ describe("MarginV1 Contract", () => {
         isSellerMaker: true,
       });
       await marginV1.connect(deployer).addPosition({
+        id: "test-2",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -692,6 +715,7 @@ describe("MarginV1 Contract", () => {
         isSellerMaker: true,
       });
       await marginV1.connect(deployer).addPosition({
+        id: "test-3",
         buyer: seller.address,
         seller: buyer.address,
         tradePrice: ONEUSDC,
@@ -703,6 +727,7 @@ describe("MarginV1 Contract", () => {
         isSellerMaker: true,
       });
       await marginV1.connect(deployer).addPosition({
+        id: "test-4",
         buyer: seller.address,
         seller: buyer.address,
         tradePrice: ONEUSDC,
@@ -718,6 +743,7 @@ describe("MarginV1 Contract", () => {
       const sellerFees = makerFees3.add(makerFees2).add(takerFees1).add(takerFees1);
 
       await marginV1.connect(deployer).addPosition({
+        id: "test-5",
         buyer: deployer.address,
         seller: keeper.address,
         tradePrice: ONEUSDC,
@@ -729,6 +755,7 @@ describe("MarginV1 Contract", () => {
         isSellerMaker: true,
       });
       await marginV1.connect(deployer).addPosition({
+        id: "test-6",
         buyer: deployer.address,
         seller: keeper.address,
         tradePrice: ONEUSDC,
@@ -761,6 +788,7 @@ describe("MarginV1 Contract", () => {
       // Add seller to white so no fees
       await marginV1.connect(deployer).addToWhitelist([seller.address]);
       await marginV1.connect(deployer).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -796,6 +824,7 @@ describe("MarginV1 Contract", () => {
     });
     it("User can check one position", async () => {
       await marginV1.connect(deployer).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -818,6 +847,7 @@ describe("MarginV1 Contract", () => {
     });
     it("User can check multiple positions", async () => {
       await marginV1.connect(deployer).addPosition({
+        id: "test-1",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -829,6 +859,7 @@ describe("MarginV1 Contract", () => {
         isSellerMaker: true,
       });
       await marginV1.connect(deployer).addPosition({
+        id: "test-2",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -876,6 +907,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(seller).deposit(makerFee);
       await expect(
         marginV1.connect(deployer).addPosition({
+          id: "test",
           buyer: buyer.address,
           seller: seller.address,
           tradePrice: ONEUSDC,
@@ -955,6 +987,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(deployer).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -975,6 +1008,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(deployer).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -1041,6 +1075,7 @@ describe("MarginV1 Contract", () => {
       await marginV1.connect(buyer).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(seller).deposit(ONEUSDC.mul(1000));
       await marginV1.connect(keeper).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -1112,6 +1147,7 @@ describe("MarginV1 Contract", () => {
 
       // Enter the position
       await marginV1.connect(deployer).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -1156,6 +1192,7 @@ describe("MarginV1 Contract", () => {
 
       // Enter the position
       await marginV1.connect(deployer).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -1200,6 +1237,7 @@ describe("MarginV1 Contract", () => {
 
       // Enter the position
       await marginV1.connect(deployer).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -1244,6 +1282,7 @@ describe("MarginV1 Contract", () => {
 
       // Enter the position
       await marginV1.connect(deployer).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -1288,6 +1327,7 @@ describe("MarginV1 Contract", () => {
 
       // Enter the position
       await marginV1.connect(deployer).addPosition({
+        id: "test-1",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -1300,6 +1340,7 @@ describe("MarginV1 Contract", () => {
       });
 
       await marginV1.connect(deployer).addPosition({
+        id: "test-2",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -1346,6 +1387,7 @@ describe("MarginV1 Contract", () => {
  
        // Enter the position
        await marginV1.connect(deployer).addPosition({
+        id: "test-1",
          buyer: buyer.address,
          seller: seller.address,
          tradePrice: ONEUSDC,
@@ -1357,6 +1399,7 @@ describe("MarginV1 Contract", () => {
          isSellerMaker: true,
        });
        await marginV1.connect(deployer).addPosition({
+        id: "test-2",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -1397,6 +1440,7 @@ describe("MarginV1 Contract", () => {
 
       // Enter the position
       await marginV1.connect(deployer).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -1459,6 +1503,7 @@ describe("MarginV1 Contract", () => {
 
       // Enter the position
       await marginV1.connect(deployer).addPosition({
+        id: "test",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC,
@@ -1505,6 +1550,7 @@ describe("MarginV1 Contract", () => {
     it("Cannot add another position", async () => {
       await expect(
         marginV1.connect(deployer).addPosition({
+          id: "test",
           buyer: seller.address,
           seller: buyer.address,
           tradePrice: ONEUSDC,
@@ -1534,6 +1580,7 @@ describe("MarginV1 Contract", () => {
 
       // Add a call position
       await marginV1.connect(deployer).addPosition({
+        id: "test-1",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC.mul(100),
@@ -1546,6 +1593,7 @@ describe("MarginV1 Contract", () => {
       });
       // Add another call at a different strike, switch buyer and seller rolls
       await marginV1.connect(deployer).addPosition({
+        id: "test-2",
         buyer: seller.address,
         seller: buyer.address,
         tradePrice: ONEUSDC.mul(100),
@@ -1591,6 +1639,7 @@ describe("MarginV1 Contract", () => {
 
       // Add a call position
       await marginV1.connect(deployer).addPosition({
+        id: "test-1",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC.mul(100),
@@ -1603,6 +1652,7 @@ describe("MarginV1 Contract", () => {
       });
       // Add another call at a different strike, switch buyer and seller rolls
       await marginV1.connect(deployer).addPosition({
+        id: "test-2",
         buyer: seller.address,
         seller: buyer.address,
         tradePrice: ONEUSDC.mul(100),
@@ -1639,6 +1689,7 @@ describe("MarginV1 Contract", () => {
     it("If liquidator falls below margin, everything is reset", async () => {
       // Add a call position
       await marginV1.connect(deployer).addPosition({
+        id: "test-1",
         buyer: buyer.address,
         seller: seller.address,
         tradePrice: ONEUSDC.mul(100),
@@ -1651,6 +1702,7 @@ describe("MarginV1 Contract", () => {
       });
       // Add another call at a different strike, switch buyer and seller rolls
       await marginV1.connect(deployer).addPosition({
+        id: "test-2",
         buyer: seller.address,
         seller: buyer.address,
         tradePrice: ONEUSDC.mul(100),

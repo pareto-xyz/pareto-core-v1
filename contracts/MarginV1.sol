@@ -197,6 +197,7 @@ contract MarginV1 is
      * @dev See `Derivative.Order` docs
      */
     event RecordPositionEvent(
+        string id,
         uint256 tradePrice,
         uint256 quantity,
         bool isCall,
@@ -1357,6 +1358,7 @@ contract MarginV1 is
 
         // Build an order object
         Derivative.Order memory order = Derivative.Order(
+            params.id,
             params.buyer,
             params.seller,
             params.tradePrice,
@@ -1423,6 +1425,7 @@ contract MarginV1 is
 
         // Emit event 
         emit RecordPositionEvent(
+            params.id,
             params.tradePrice,
             params.quantity,
             params.isCall,
