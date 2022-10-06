@@ -401,6 +401,25 @@ contract MarginV1 is
     }
 
     /**
+     * @notice Check many user accounts at once to avoid repeated calls
+     * @dev See description in `checkMargin`
+     * @param users List of addresses of the accounts to check
+     * @param useInitialMargin Use IM instead of MM. Recall IM > MM
+     * @return diffs List of differences (AB + UP - MM)
+     * @return satisfieds List of if account passes margin check
+     */
+    function checkMarginBatch(
+        address[] calldata users,
+        bool useInitialMargin
+    ) public view returns (int256[] memory diffs, bool[] memory satisfieds) {
+        for (uint256 i = 0; i < users.length; i++) {
+            (int256 diff, bool satisfied) = checkMargin(users[i], useInitialMargin);
+            diffs[i] = diff;
+            satisfieds[i] = satisfied;
+        }
+    }
+
+    /**
      * @notice Performs settlement for positions of the current round. Transfers amount paid by ower
      * to this contract. Adds amount owed to each user to their margin account
      * @dev Anyone can call this though the burden falls on keepers
