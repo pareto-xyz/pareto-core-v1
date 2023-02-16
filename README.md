@@ -1,10 +1,10 @@
-[![](https://img.shields.io/github/stars/pareto-xyz/pareto-core-v1?style=social)](https://img.shields.io/github/stars/pareto-xyz/pareto-core-v1?style=social)
-![Twitter Follow](https://img.shields.io/twitter/follow/Paretoxyz?style=social)
 [![Tests](https://github.com/pareto-xyz/pareto-core-v1/actions/workflows/ci.yaml/badge.svg)](https://github.com/pareto-xyz/pareto-core-v1/actions/workflows/ci.yaml)
 
-# Pareto V1
+# Pareto Order Book Smart Contracts V1
 
-Core smart contracts of Pareto's Options Platform V1. 
+**[Disclaimer: This repository is no longer maintained and is meant for primarily educational purposes.]**
+
+Core smart contracts of Pareto's Options Platform V1. Part of the series detailed in this [whitepaper](https://github.com/pareto-xyz/pareto-order-book-whitepaper/blob/main/how_to_orderbook.pdf). 
 
 ## Contracts
 
